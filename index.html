@@ -8,24 +8,24 @@
 <style>
 :root{color-scheme:dark;--bg:#0b0d10;--panel:#14181d;--panel2:#1a2027;--text:#f3f6f8;--muted:#9099a3;--line:#262d35;--accent:#73d3a0;--warn:#ffd166;--danger:#ff6b6b;--ok:#6ee7a8}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
-.top{position:sticky;top:0;z-index:10;padding:18px 16px 12px;background:#0b0d10e8;backdrop-filter:blur(12px);border-bottom:1px solid #ffffff0a;display:flex;justify-content:space-between;align-items:center}
-h1,h2,h3,p{margin-top:0}h1{margin-bottom:0;font-size:24px}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:800}
-main{max-width:760px;margin:auto;padding:14px 14px 118px}.view{display:none}.view.active{display:block}
-.card,.item{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.hero{padding:20px;margin-bottom:18px}.heroValue{font-size:42px;font-weight:850;letter-spacing:-.05em;margin:5px 0 7px}
-.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:10px}.section{display:flex;justify-content:space-between;align-items:center;margin:12px 2px}
+.top{position:sticky;top:0;z-index:10;padding:13px 14px 10px;background:#0b0d10e8;backdrop-filter:blur(12px);border-bottom:1px solid #ffffff0a;display:flex;justify-content:space-between;align-items:center}
+h1,h2,h3,p{margin-top:0}h1{margin-bottom:0;font-size:22px}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:800}
+main{max-width:760px;margin:auto;padding:10px 10px 102px}.view{display:none}.view.active{display:block}
+.card,.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 12px}.hero{padding:14px 15px;margin-bottom:12px}.heroValue{font-size:36px;font-weight:850;letter-spacing:-.05em;margin:3px 0 4px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:7px}.section{display:flex;justify-content:space-between;align-items:center;margin:8px 2px}
 button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);color:var(--text);font-weight:750}
 button.primary{background:var(--accent);color:#07130c;border-color:transparent}.danger{color:var(--danger)}.muted{color:var(--muted)}.small{font-size:12px}
-.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.symbol{font-weight:850}.name{color:var(--muted);font-size:13px}.value{font-weight:800;text-align:right}.pnl{font-size:12px;text-align:right}.sourceBadge{display:inline-flex;margin-top:5px;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;letter-spacing:.04em}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.pos{color:var(--ok)}.neg{color:var(--danger)}
-.badge{border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
-.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left}.symbol{font-weight:850;font-size:15px;line-height:1.15}.name{color:var(--muted);font-size:11px;line-height:1.25}.value{font-weight:800;text-align:right;font-size:15px;white-space:nowrap}.pnl{font-size:11px;text-align:right;white-space:nowrap}.sourceBadge{display:inline-flex;margin-left:5px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;letter-spacing:.03em;vertical-align:1px}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.pos{color:var(--ok)}.neg{color:var(--danger)}
+.badge{border-radius:999px;padding:4px 7px;font-size:9px;font-weight:800;white-space:nowrap}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
+.riskMain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.riskMetric{background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px;min-width:0}.riskMetric span{display:block;color:var(--muted);font-size:9px;line-height:1.2}.riskMetric strong{display:block;margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.riskDetails{margin-top:7px;border-top:1px solid var(--line);padding-top:6px}.riskDetails summary{padding:5px 0;font-size:10px;color:var(--muted);font-weight:700;background:transparent;border:0}.riskDetails .kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:11px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
-nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);min-height:68px;padding:7px 8px max(9px,env(safe-area-inset-bottom));background:#0c0f12f5;backdrop-filter:blur(16px);border-top:1px solid var(--line);box-shadow:0 -10px 30px #0005}
-nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:12px;min-height:50px;padding:12px 4px;border-radius:14px}nav button.active{color:var(--text);background:var(--panel2)}
+nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);min-height:62px;padding:5px 7px max(7px,env(safe-area-inset-bottom));background:#0c0f12f5;backdrop-filter:blur(16px);border-top:1px solid var(--line);box-shadow:0 -10px 30px #0005}
+nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:11px;min-height:48px;padding:10px 4px;border-radius:13px}nav button.active{color:var(--text);background:var(--panel2)}
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
 .hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
-.file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:15px 14px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 14px 14px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
-@media(max-width:480px){.grid2{grid-template-columns:1fr}}
+.file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
+.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -41,13 +41,13 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <div id="portfolioValue" class="heroValue">0,00 €</div>
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
-  <div class="section"><h2>Omistukset</h2><button id="addBtn" class="primary">+ Lisää</button></div>
+  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><button id="addBtn" class="primary">+ Lisää</button></div>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
 
 <section id="riskView" class="view">
   <div class="section"><div><div class="eyebrow">SUOJATASOT</div><h2>Riskivahti</h2></div></div>
-  <p class="muted">Manuaalinen stop + trailing-stop + ATR, kun historiadataa saadaan.</p>
+  <p class="muted introCompact">Stopit yhdellä silmäyksellä. Napauta “Lisätiedot” nähdäksesi trailing- ja ATR-tasot.</p>
   <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin omistuksia.</div>
 </section>
 
@@ -91,7 +91,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.3 · kurssidatan tuoreus, päivämuutos ja selkeämpi datatila.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.4 · tiiviimpi mobiilinäkymä, selkeämmät omistus- ja riskikortit.</p>
     </div>
   </details>
 </section>
@@ -170,22 +170,33 @@ function dataState(h){
 }
 
 function render(){
-  $("holdings").innerHTML="";$("risks").innerHTML="";let tv=0,tc=0;
-  $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.length>0);
+  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0;
+  $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   state.holdings.forEach(h=>{
     const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;
     const ds=dataState(h);
     const day=n(h.dayChangePct);
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</div><span class="sourceBadge ${ds.cls}">${ds.label}</span></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="name" style="text-align:right;margin-top:5px">Kurssi ${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="metaLine"><span class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";$("quoteAge").textContent=ago(state.quoteUpdatedAt);
   renderNews();
 }
 function renderRisk(h){
+  if(h.assetType==="fund") return;
   const r=evaluateRisk(h),p=n(h.currentPrice||h.manualPrice),d=document.createElement("div");d.className="card";
   const cls=r.status==="OK"?"ok":r.status==="WATCH"?"watch":"crit";
-  d.innerHTML=`<div class="row"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div></div><span class="badge ${cls}">${r.label}</span></div><div class="kv"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong><span>Aktiivinen stop</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong><span>Etäisyys</span><strong>${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong><span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong><span>Trailing</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong><span>ATR-stop</span><strong>${r.atrStop?money(r.atrStop,h.currency):"—"}</strong></div>`;$("risks").appendChild(d)
+  d.innerHTML=`<div class="riskHead"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div></div><span class="badge ${cls}">${r.label}</span></div>
+  <div class="riskMain">
+    <div class="riskMetric"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong></div>
+    <div class="riskMetric"><span>Stop</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong></div>
+    <div class="riskMetric"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=7?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
+  </div>
+  <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
+    <span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong>
+    <span>Trailing</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong>
+    <span>ATR-stop</span><strong>${r.atrStop?money(r.atrStop,h.currency):"—"}</strong>
+  </div></details>`;$("risks").appendChild(d)
 }
 function evaluateRisk(h){
   const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null};
