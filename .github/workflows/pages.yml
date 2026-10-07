@@ -5,8 +5,8 @@ on:
     branches: ["main"]
   workflow_dispatch:
   schedule:
-    # 15 min välein arkisin. GitHub käyttää UTC-aikaa.
-    - cron: "*/15 6-17 * * 1-5"
+    # 5 min välein arkisin. GitHub käyttää UTC-aikaa.
+    - cron: "*/5 6-17 * * 1-5"
 
 permissions:
   contents: read
@@ -136,50 +136,60 @@ jobs:
               }
 
           def yahoo_quote(ticker):
+              # Intraday 1-minute chart is materially fresher than the daily
+              # snapshot/meta values. We use the latest non-null trade.
               q = urllib.parse.quote(ticker, safe="")
-              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{q}?range=5d&interval=1d"
+              url = (
+                  f"https://query1.finance.yahoo.com/v8/finance/chart/{q}"
+                  "?range=1d&interval=1m&includePrePost=false"
+              )
               data = get_json(url)
 
               result = (((data.get("chart") or {}).get("result") or [None])[0])
               if not result:
-                  raise RuntimeError("Yahoo ei palauttanut dataa")
+                  raise RuntimeError("Yahoo ei palauttanut intraday-dataa")
 
               meta = result.get("meta") or {}
-              price = meta.get("regularMarketPrice")
-              prev = meta.get("chartPreviousClose") or meta.get("previousClose")
-
-              if not isinstance(price, (int, float)):
-                  closes = (
-                      ((result.get("indicators") or {}).get("quote") or [{}])[0]
-                      .get("close") or []
-                  )
-                  price = next(
-                      (x for x in reversed(closes) if isinstance(x, (int, float))),
-                      None,
-                  )
-
-              if not price:
-                  raise RuntimeError("Yahoo-hinta puuttuu")
-
-              change_pct = (
-                  (float(price) - float(prev)) / float(prev) * 100
-                  if prev else 0
+              timestamps = result.get("timestamp") or []
+              closes = (
+                  ((result.get("indicators") or {}).get("quote") or [{}])[0]
+                  .get("close") or []
               )
 
-              ts = meta.get("regularMarketTime")
-              ts = (
-                  int(ts * 1000)
-                  if isinstance(ts, (int, float))
-                  else int(time.time() * 1000)
+              latest_price = None
+              latest_ts = None
+              for ts, price in reversed(list(zip(timestamps, closes))):
+                  if isinstance(price, (int, float)) and isinstance(ts, (int, float)):
+                      latest_price = float(price)
+                      latest_ts = int(ts)
+                      break
+
+              if latest_price is None:
+                  # Fallback to Yahoo's current market value if minute candles
+                  # are temporarily missing.
+                  p = meta.get("regularMarketPrice")
+                  if isinstance(p, (int, float)):
+                      latest_price = float(p)
+                      t = meta.get("regularMarketTime")
+                      latest_ts = int(t) if isinstance(t, (int, float)) else int(time.time())
+
+              if latest_price is None:
+                  raise RuntimeError("Yahoo intraday-hinta puuttuu")
+
+              prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+              change_pct = (
+                  (latest_price - float(prev)) / float(prev) * 100
+                  if isinstance(prev, (int, float)) and prev
+                  else 0
               )
 
               return {
-                  "price": float(price),
+                  "price": latest_price,
                   "change_pct": float(change_pct),
                   "currency": meta.get("currency") or "EUR",
-                  "timestamp": ts,
+                  "timestamp": int(latest_ts * 1000),
                   "realtime": False,
-                  "provider": "Yahoo",
+                  "provider": "Yahoo intraday",
               }
 
           quotes = {}
@@ -187,14 +197,14 @@ jobs:
 
           for symbol, yahoo_ticker in SYMBOLS.items():
               try:
-                  quotes[symbol] = nordnet_quote(symbol)
-              except Exception as nordnet_error:
+                  quotes[symbol] = yahoo_quote(yahoo_ticker)
+              except Exception as yahoo_error:
                   try:
-                      quotes[symbol] = yahoo_quote(yahoo_ticker)
-                  except Exception as yahoo_error:
+                      quotes[symbol] = nordnet_quote(symbol)
+                  except Exception as nordnet_error:
                       errors[symbol] = {
-                          "nordnet": str(nordnet_error),
                           "yahoo": str(yahoo_error),
+                          "nordnet": str(nordnet_error),
                       }
 
           payload = {
