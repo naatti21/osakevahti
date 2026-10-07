@@ -23,6 +23,23 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .riskMain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.riskMetric{background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px;min-width:0}.riskMetric span{display:block;color:var(--muted);font-size:9px;line-height:1.2}.riskMetric strong{display:block;margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.riskDetails{margin-top:7px;border-top:1px solid var(--line);padding-top:6px}.riskDetails summary{padding:5px 0;font-size:10px;color:var(--muted);font-weight:700;background:transparent;border:0}.riskDetails .kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:11px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
+
+.insightTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 10px}
+.insightTab{padding:9px 6px;font-size:11px;background:#0e1216;color:var(--muted)}
+.insightTab.active{background:var(--panel2);color:var(--text);border-color:#3a4652}
+.insightPanel{display:none}.insightPanel.active{display:block}
+.insightHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:7px}
+.insightTitle{font-weight:850;font-size:14px;line-height:1.15}
+.score{font-size:20px;font-weight:900;letter-spacing:-.04em}
+.metricGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px}
+.metricBox{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
+.metricBox span{display:block;color:var(--muted);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metricBox strong{display:block;margin-top:2px;font-size:11px;white-space:nowrap}
+.insightReason{font-size:10px;line-height:1.35;color:#b7bec6;margin-top:7px}
+.rank{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:8px;background:#0e1216;border:1px solid var(--line);font-size:10px;font-weight:900;margin-right:7px}
+.radarHot{color:var(--ok)}.radarWatch{color:var(--warn)}.radarNeutral{color:var(--muted)}
+.insightUpdated{font-size:10px;color:var(--muted);margin:0 2px 8px}
+@media(max-width:480px){.metricGrid{grid-template-columns:repeat(4,minmax(0,1fr))}.insightTab{font-size:10px;padding:9px 3px}}
 nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);min-height:62px;padding:5px 7px max(7px,env(safe-area-inset-bottom));background:#0c0f12f5;backdrop-filter:blur(16px);border-top:1px solid var(--line);box-shadow:0 -10px 30px #0005}
 nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:11px;min-height:48px;padding:10px 4px;border-radius:13px}nav button.active{color:var(--text);background:var(--panel2)}
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
@@ -56,9 +73,35 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 </section>
 
 <section id="newsView" class="view">
-  <div class="section"><h2>Uutiset</h2><button id="newsBtn">Päivitä</button></div>
-  <p class="muted">Vain salkun yhtiöiden uutiset.</p>
-  <div id="news" class="stack"></div><div id="newsEmpty" class="empty">Ei uutisia.</div>
+  <div class="section"><h2>Markkinavahti</h2></div>
+
+  <div class="insightTabs">
+    <button class="insightTab active" data-panel="newsPanel">Uutiset</button>
+    <button class="insightTab" data-panel="dividendPanel">Osinkokoneet</button>
+    <button class="insightTab" data-panel="rocketPanel">Rocket Radar</button>
+  </div>
+
+  <div id="newsPanel" class="insightPanel active">
+    <div class="section"><div><div class="eyebrow">OMAT YHTIÖT</div><h2>Uutiset</h2></div><button id="newsBtn">Päivitä</button></div>
+    <p class="muted introCompact">Vain salkun yhtiöiden uutiset.</p>
+    <div id="news" class="stack"></div><div id="newsEmpty" class="empty">Ei uutisia.</div>
+  </div>
+
+  <div id="dividendPanel" class="insightPanel">
+    <div class="section"><div><div class="eyebrow">SUOMI</div><h2>Osinkokoneet</h2></div><button id="insightsBtn">Päivitä</button></div>
+    <p class="muted introCompact">Seulonta painottaa osinkotuottoa, osingon jatkuvuutta, kurssitrendiä ja pudotusriskiä. Ei henkilökohtainen osto- tai myyntisuositus.</p>
+    <div id="dividendUpdated" class="insightUpdated"></div>
+    <div id="dividendList" class="stack"></div>
+    <div id="dividendEmpty" class="empty">Osinkodata ei ole vielä saatavilla.</div>
+  </div>
+
+  <div id="rocketPanel" class="insightPanel">
+    <div class="section"><div><div class="eyebrow">GLOBAL MOMENTUM</div><h2>Rocket Radar</h2></div></div>
+    <p class="muted introCompact">Globaali momentum-seula: 1/3/6 kk trendi, volyymikiihdytys, etäisyys 52 viikon huipusta ja volatiliteettiriski. Ei osta-nappia — radar nostaa tutkittavat nimet.</p>
+    <div id="rocketUpdated" class="insightUpdated"></div>
+    <div id="rocketList" class="stack"></div>
+    <div id="rocketEmpty" class="empty">Rocket Radar -data ei ole vielä saatavilla.</div>
+  </div>
 </section>
 
 <section id="settingsView" class="view">
@@ -103,7 +146,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.2 · rahastojen NAV verkkosivuilta, hiljaisemmat virheet ja selkeämpi datan päiväys.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.3 · Osinkokoneet ja Rocket Radar.</p>
     </div>
   </details>
 </section>
@@ -144,6 +187,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 <script>
 const KEY="osakevahti.single.v1";
 let state=load();save();
+let insights=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -153,6 +197,13 @@ $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
 $("refreshBtn").onclick=()=>refreshMarket(true);
 $("newsBtn").onclick=refreshNews;
+$("insightsBtn").onclick=()=>loadInsights(true);
+document.querySelectorAll(".insightTab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".insightTab").forEach(x=>x.classList.remove("active"));
+  document.querySelectorAll(".insightPanel").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");$(b.dataset.panel).classList.add("active");
+  if(b.dataset.panel!=="newsPanel"&&!insights) loadInsights(false);
+});
 $("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey;
 $("baseCurrency").onchange=()=>{state.baseCurrency=$("baseCurrency").value;save();refreshMarket()};
 $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
@@ -262,6 +313,7 @@ function render(){
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
   renderNews();
+  renderInsights();
 }
 function renderRisk(h){
   if(h.assetType==="fund") return;
@@ -288,6 +340,60 @@ function evaluateRisk(h){
 function renderNews(){
   $("news").innerHTML="";const items=[...(state.news||[])].sort((a,b)=>b.datetime-a.datetime).slice(0,12);$("newsEmpty").classList.toggle("hidden",items.length>0);
   items.forEach(x=>{const a=document.createElement(x.url?"a":"div");a.className="card news";if(x.url){a.href=x.url;a.target="_blank";a.rel="noopener"}a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${x.datetime?ago(x.datetime*1000):""}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;$("news").appendChild(a)})
+}
+async function loadInsights(force=false){
+  try{
+    const r=await fetch(`./insights.json?t=${Date.now()}`,{cache:"no-store"});
+    if(!r.ok) throw new Error(`insights.json HTTP ${r.status}`);
+    insights=await r.json();
+    renderInsights();
+  }catch(err){
+    if(force) alert(`Radar-data ei latautunut: ${err.message||err}`);
+  }
+}
+function pct(v,d=1){
+  const x=n(v);return `${x>0?"+":""}${x.toFixed(d)} %`;
+}
+function scoreClass(score){
+  return score>=75?"radarHot":score>=60?"radarWatch":"radarNeutral";
+}
+function renderInsights(){
+  const divList=$("dividendList"),rocketList=$("rocketList");
+  if(!divList||!rocketList) return;
+  divList.innerHTML="";rocketList.innerHTML="";
+  const dividends=insights?.dividends||[];
+  const rockets=insights?.rockets||[];
+  $("dividendEmpty").classList.toggle("hidden",dividends.length>0);
+  $("rocketEmpty").classList.toggle("hidden",rockets.length>0);
+  const updated=insights?.generated_at?ago(Date.parse(insights.generated_at)):"";
+  $("dividendUpdated").textContent=updated?`Analyysi päivitetty ${updated}.`:"";
+  $("rocketUpdated").textContent=updated?`Analyysi päivitetty ${updated} · seulottu ${insights?.rocket_universe_count||0} yhtiötä.`:"";
+
+  dividends.forEach((x,i)=>{
+    const d=document.createElement("div");d.className="card";
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+      <div class="metricGrid">
+        <div class="metricBox"><span>Osinkotuotto</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
+        <div class="metricBox"><span>Osinkovuosia</span><strong>${n(x.dividend_years)}/5</strong></div>
+        <div class="metricBox"><span>12 kk</span><strong class="${n(x.return_12m)>=0?"pos":"neg"}">${pct(x.return_12m)}</strong></div>
+        <div class="metricBox"><span>Max pudotus</span><strong class="neg">${pct(x.max_drawdown)}</strong></div>
+      </div>
+      <div class="insightReason">${esc(x.reason||"")}</div>`;
+    divList.appendChild(d);
+  });
+
+  rockets.forEach((x,i)=>{
+    const d=document.createElement("div");d.className="card";
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+      <div class="metricGrid">
+        <div class="metricBox"><span>1 kk</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
+        <div class="metricBox"><span>3 kk</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
+        <div class="metricBox"><span>6 kk</span><strong class="${n(x.m6)>=0?"pos":"neg"}">${pct(x.m6)}</strong></div>
+        <div class="metricBox"><span>Volyymi</span><strong>${n(x.volume_ratio).toFixed(1)}×</strong></div>
+      </div>
+      <div class="insightReason">${esc(x.label||"")} · ${esc(x.reason||"")} · riski ${esc(x.risk||"—")}</div>`;
+    rocketList.appendChild(d);
+  });
 }
 function openDlg(id=null){
   $("form").reset();$("id").value="";$("trailing").value=12;$("riskClass").value="medium";$("currency").value=state.baseCurrency;$("deleteBtn").classList.add("hidden");$("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
@@ -512,6 +618,7 @@ if("caches" in window){
   caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});
 }
 render();
+loadInsights(false).catch(()=>{});
 setTimeout(()=>{
   const last=state.quoteUpdatedAt||0;
   if(state.holdings?.length && Date.now()-last>10*60*1000) refreshMarket(false).catch(()=>{});
