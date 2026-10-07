@@ -1,219 +1,206 @@
 <!doctype html>
 <html lang="fi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d10" />
-  <meta name="description" content="Kevyt henkilökohtainen salkku- ja riskivahti." />
-  <title>Osakevahti</title>
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="icon" href="./icons/icon-192.png" />
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>Osakevahti</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d10;--panel:#14181d;--panel2:#1a2027;--text:#f3f6f8;--muted:#9099a3;--line:#262d35;--accent:#73d3a0;--warn:#ffd166;--danger:#ff6b6b;--ok:#6ee7a8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.top{position:sticky;top:0;z-index:10;padding:18px 16px 12px;background:#0b0d10e8;backdrop-filter:blur(12px);border-bottom:1px solid #ffffff0a;display:flex;justify-content:space-between;align-items:center}
+h1,h2,h3,p{margin-top:0}h1{margin-bottom:0;font-size:24px}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:800}
+main{max-width:760px;margin:auto;padding:14px 14px 100px}.view{display:none}.view.active{display:block}
+.card,.item{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.hero{padding:20px;margin-bottom:18px}.heroValue{font-size:42px;font-weight:850;letter-spacing:-.05em;margin:5px 0 7px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:10px}.section{display:flex;justify-content:space-between;align-items:center;margin:12px 2px}
+button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);color:var(--text);font-weight:750}
+button.primary{background:var(--accent);color:#07130c;border-color:transparent}.danger{color:var(--danger)}.muted{color:var(--muted)}.small{font-size:12px}
+.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.symbol{font-weight:850}.name{color:var(--muted);font-size:13px}.value{font-weight:800;text-align:right}.pnl{font-size:12px;text-align:right}.pos{color:var(--ok)}.neg{color:var(--danger)}
+.badge{border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
+input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);padding:8px;background:#0c0f12f0;border-top:1px solid var(--line)}
+nav button{border:0;background:transparent;color:var(--muted);font-size:11px;padding:8px 4px}nav button.active{color:var(--text);background:var(--panel2)}
+dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
+.hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
+.file input{display:none}
+@media(max-width:480px){.grid2{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <div class="eyebrow">HENKILÖKOHTAINEN SALKKUVAHTI</div>
-      <h1>Osakevahti</h1>
+<header class="top">
+  <div><div class="eyebrow">HENKILÖKOHTAINEN SALKKUVAHTI</div><h1>Osakevahti</h1></div>
+  <button id="refreshBtn" title="Päivitä">↻</button>
+</header>
+
+<main>
+<section id="portfolioView" class="view active">
+  <div class="card hero">
+    <div class="muted">Salkun arvo</div>
+    <div id="portfolioValue" class="heroValue">0,00 €</div>
+    <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
+  </div>
+  <div class="section"><h2>Omistukset</h2><button id="addBtn" class="primary">+ Lisää</button></div>
+  <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
+</section>
+
+<section id="riskView" class="view">
+  <div class="section"><div><div class="eyebrow">SUOJATASOT</div><h2>Riskivahti</h2></div></div>
+  <p class="muted">Manuaalinen stop + trailing-stop + ATR, kun historiadataa saadaan.</p>
+  <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin omistuksia.</div>
+</section>
+
+<section id="newsView" class="view">
+  <div class="section"><h2>Uutiset</h2><button id="newsBtn">Päivitä</button></div>
+  <p class="muted">Vain salkun yhtiöiden uutiset.</p>
+  <div id="news" class="stack"></div><div id="newsEmpty" class="empty">Ei uutisia.</div>
+</section>
+
+<section id="settingsView" class="view">
+  <div class="section"><h2>Asetukset</h2></div>
+  <div class="card">
+    <label class="txt">Perusvaluutta</label>
+    <select id="baseCurrency"><option>EUR</option><option>USD</option><option>SEK</option></select>
+    <label class="txt">Finnhub API -avain</label>
+    <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
+    <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h3>Varmuuskopio</h3>
+    <div class="actions">
+      <button id="exportBtn">Vie JSON</button>
+      <label class="file">Tuo JSON<input id="importBackup" type="file" accept=".json"></label>
     </div>
-    <button id="refreshBtn" class="icon-btn" aria-label="Päivitä markkinadata" title="Päivitä">↻</button>
-  </header>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h3>CSV-tuonti</h3>
+    <label class="file">Valitse CSV<input id="importCsv" type="file" accept=".csv,text/csv"></label>
+    <p class="muted small">Sarakkeet: symbol,name,quantity,buy_price,currency,account,provider_symbol,manual_stop,trailing_pct,risk_class</p>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
+  </div>
+</section>
+</main>
 
-  <main>
-    <section id="portfolioView" class="view active" aria-label="Salkku">
-      <div class="hero card">
-        <div class="muted">Salkun arvo</div>
-        <div id="portfolioValue" class="hero-value">—</div>
-        <div class="hero-row">
-          <span id="portfolioProfit" class="metric">—</span>
-          <span id="quoteAge" class="muted">Ei päivitetty</span>
-        </div>
-      </div>
+<nav>
+  <button class="nav active" data-view="portfolioView">Salkku</button>
+  <button class="nav" data-view="riskView">Riski</button>
+  <button class="nav" data-view="newsView">Uutiset</button>
+  <button class="nav" data-view="settingsView">Asetukset</button>
+</nav>
 
-      <div class="section-head">
-        <h2>Omistukset</h2>
-        <button id="addHoldingBtn" class="primary small">+ Lisää</button>
-      </div>
-      <div id="holdingsList" class="stack"></div>
-      <div id="portfolioEmpty" class="empty hidden">
-        <strong>Salkku on tyhjä.</strong>
-        <span>Lisää omistus tai tuo CSV Asetuksista.</span>
-      </div>
-    </section>
+<dialog id="dlg">
+<form id="form">
+  <div class="row"><h2 id="dlgTitle">Lisää omistus</h2><button type="button" id="closeDlg">×</button></div>
+  <input id="id" type="hidden">
+  <label class="txt">Tikkeri *</label><input id="symbol" required placeholder="AMD tai FORTUM.HE">
+  <label class="txt">Nimi</label><input id="name" placeholder="Advanced Micro Devices">
+  <label class="txt">Finnhub-symboli</label><input id="providerSymbol" placeholder="Usein sama kuin tikkeri">
+  <div class="grid2">
+    <div><label class="txt">Määrä *</label><input id="qty" required type="number" step="any" min="0"></div>
+    <div><label class="txt">Keskihinta *</label><input id="buy" required type="number" step="any" min="0"></div>
+  </div>
+  <div class="grid2">
+    <div><label class="txt">Valuutta</label><select id="currency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
+    <div><label class="txt">Tili</label><input id="account" placeholder="Nordnet / Nordea"></div>
+  </div>
+  <label class="txt">Nykykurssi käsin</label><input id="manualPrice" type="number" step="any" min="0">
+  <div class="grid2">
+    <div><label class="txt">Oma stop</label><input id="manualStop" type="number" step="any" min="0"></div>
+    <div><label class="txt">Trailing %</label><input id="trailing" type="number" step="0.5" min="0" max="99" value="12"></div>
+  </div>
+  <label class="txt">Riskiluokka</label><select id="riskClass"><option value="low">Matala</option><option value="medium" selected>Keskitaso</option><option value="high">Korkea</option></select>
+  <div class="actions"><button type="button" id="deleteBtn" class="danger hidden">Poista</button><span class="spacer"></span><button type="button" id="cancelDlg">Peruuta</button><button type="submit" class="primary">Tallenna</button></div>
+</form>
+</dialog>
 
-    <section id="riskView" class="view" aria-label="Riski">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow">SUOJATASOT</div>
-          <h2>Riskivahti</h2>
-        </div>
-      </div>
-      <p class="muted intro">
-        Riskitasot ovat päätöksenteon apu, eivät automaattisia myyntitoimeksiantoja.
-        ATR-taso näytetään, kun historiadataa on saatavilla.
-      </p>
-      <div id="riskList" class="stack"></div>
-      <div id="riskEmpty" class="empty hidden">Lisää ensin omistuksia.</div>
-    </section>
+<script>
+const KEY="osakevahti.single.v1";
+let state=load();
+const $=id=>document.getElementById(id);
 
-    <section id="newsView" class="view" aria-label="Uutiset">
-      <div class="section-head">
-        <div>
-          <div class="eyebrow">VAIN OMISTUKSET</div>
-          <h2>Uutisfiidi</h2>
-        </div>
-        <button id="refreshNewsBtn" class="secondary small">Päivitä</button>
-      </div>
-      <p class="muted intro">
-        Uutiset haetaan vain salkun yhtiöille. Finnhub-avain lisätään Asetuksissa.
-      </p>
-      <div id="newsList" class="stack"></div>
-      <div id="newsEmpty" class="empty hidden">
-        <strong>Ei uutisia.</strong>
-        <span>Lisää Finnhub API -avain ja paina Päivitä.</span>
-      </div>
-    </section>
+document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
+$("addBtn").onclick=()=>openDlg();
+$("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
+$("form").onsubmit=e=>{e.preventDefault();saveHolding()};
+$("deleteBtn").onclick=deleteHolding;
+$("refreshBtn").onclick=refreshMarket;
+$("newsBtn").onclick=refreshNews;
+$("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey;
+$("baseCurrency").onchange=()=>{state.baseCurrency=$("baseCurrency").value;save();refreshMarket()};
+$("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
+$("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;
+$("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("apiKey").value="";render()}};
 
-    <section id="settingsView" class="view" aria-label="Asetukset">
-      <div class="section-head"><h2>Asetukset</h2></div>
+function load(){try{return Object.assign({baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null},JSON.parse(localStorage.getItem(KEY)||"{}"))}catch{return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+function uid(){return crypto.randomUUID?.()||Date.now()+"-"+Math.random().toString(16).slice(2)}
+function n(v){const x=Number(String(v??"").replace(",","."));return Number.isFinite(x)?x:0}
+function opt(v){if(v===""||v==null)return null;const x=n(v);return x>0?x:null}
+function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency",currency:c,maximumFractionDigits:2}).format(n(v))}
+function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
+function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
+function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
 
-      <div class="card form-card">
-        <label for="baseCurrency">Perusvaluutta</label>
-        <select id="baseCurrency">
-          <option value="EUR">EUR</option>
-          <option value="USD">USD</option>
-          <option value="SEK">SEK</option>
-        </select>
-
-        <label for="finnhubKey">Finnhub API -avain</label>
-        <input id="finnhubKey" type="password" autocomplete="off" placeholder="Syötä avain tähän" />
-        <div class="hint">Avain tallennetaan vain tämän laitteen selaimeen. Älä lisää sitä GitHubiin.</div>
-
-        <label class="toggle-row">
-          <span>Ilmoitus, kun stop-taso laukeaa appin päivityksessä</span>
-          <input id="notificationsEnabled" type="checkbox" />
-        </label>
-        <button id="requestNotificationBtn" class="secondary">Pyydä ilmoituslupa</button>
-      </div>
-
-      <div class="card form-card">
-        <h3>Tuonti ja varmuuskopio</h3>
-        <label class="file-label">
-          Tuo omistukset CSV:stä
-          <input id="csvImport" type="file" accept=".csv,text/csv" />
-        </label>
-        <div class="hint">
-          Sarakkeet: symbol, name, quantity, buy_price, currency, account, provider_symbol,
-          manual_stop, trailing_pct, risk_class
-        </div>
-        <a class="secondary link-btn" href="./portfolio-template.csv" download>Lataa CSV-pohja</a>
-
-        <div class="button-row">
-          <button id="exportBtn" class="secondary">Vie varmuuskopio</button>
-          <label class="secondary file-label compact">
-            Tuo varmuuskopio
-            <input id="backupImport" type="file" accept=".json,application/json" />
-          </label>
-        </div>
-      </div>
-
-      <div class="card danger-card">
-        <h3>Paikallinen data</h3>
-        <p class="muted">Tyhjentää tämän laitteen Osakevahti-datan. Tätä ei voi perua.</p>
-        <button id="resetBtn" class="danger">Tyhjennä kaikki data</button>
-      </div>
-
-      <div class="card">
-        <div class="muted small-text">
-          v1.0 • data säilyy localStoragessa • taustalla toimivia push-hälytyksiä ei vielä ole.
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <nav class="bottom-nav" aria-label="Päänavigaatio">
-    <button class="nav-btn active" data-view="portfolioView"><span>◫</span>Salkku</button>
-    <button class="nav-btn" data-view="riskView"><span>⚠</span>Riski</button>
-    <button class="nav-btn" data-view="newsView"><span>▤</span>Uutiset</button>
-    <button class="nav-btn" data-view="settingsView"><span>⚙</span>Asetukset</button>
-  </nav>
-
-  <dialog id="holdingDialog">
-    <form id="holdingForm" method="dialog" class="dialog-form">
-      <div class="dialog-head">
-        <h2 id="dialogTitle">Lisää omistus</h2>
-        <button type="button" id="closeDialogBtn" class="icon-btn">×</button>
-      </div>
-
-      <input id="holdingId" type="hidden" />
-
-      <label for="symbol">Tikkeri *</label>
-      <input id="symbol" required placeholder="AMD tai FORTUM.HE" autocapitalize="characters" />
-
-      <label for="name">Nimi</label>
-      <input id="name" placeholder="Advanced Micro Devices" />
-
-      <label for="providerSymbol">Finnhub-symboli</label>
-      <input id="providerSymbol" placeholder="Usein sama kuin tikkeri" />
-
-      <div class="grid2">
-        <div>
-          <label for="quantity">Määrä *</label>
-          <input id="quantity" required type="number" min="0" step="any" inputmode="decimal" />
-        </div>
-        <div>
-          <label for="buyPrice">Keskihinta *</label>
-          <input id="buyPrice" required type="number" min="0" step="any" inputmode="decimal" />
-        </div>
-      </div>
-
-      <div class="grid2">
-        <div>
-          <label for="currency">Valuutta</label>
-          <select id="currency">
-            <option>EUR</option>
-            <option>USD</option>
-            <option>SEK</option>
-            <option>NOK</option>
-            <option>GBP</option>
-          </select>
-        </div>
-        <div>
-          <label for="account">Tili</label>
-          <input id="account" placeholder="Nordnet / Nordea" />
-        </div>
-      </div>
-
-      <label for="manualPrice">Nykykurssi käsin</label>
-      <input id="manualPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="Vapaaehtoinen varahinta" />
-
-      <div class="grid2">
-        <div>
-          <label for="manualStop">Oma stop</label>
-          <input id="manualStop" type="number" min="0" step="any" inputmode="decimal" />
-        </div>
-        <div>
-          <label for="trailingPct">Trailing %</label>
-          <input id="trailingPct" type="number" min="0" max="99" step="0.5" value="12" inputmode="decimal" />
-        </div>
-      </div>
-
-      <label for="riskClass">Volatiliteettiluokka, jos ATR ei ole saatavilla</label>
-      <select id="riskClass">
-        <option value="low">Matala</option>
-        <option value="medium" selected>Keskitaso</option>
-        <option value="high">Korkea</option>
-      </select>
-
-      <div class="dialog-actions">
-        <button type="button" id="deleteHoldingBtn" class="danger ghost hidden">Poista</button>
-        <span class="spacer"></span>
-        <button type="button" id="cancelDialogBtn" class="secondary">Peruuta</button>
-        <button type="submit" class="primary">Tallenna</button>
-      </div>
-    </form>
-  </dialog>
-
-  <script type="module" src="./js/app.js"></script>
+function render(){
+  $("holdings").innerHTML="";$("risks").innerHTML="";let tv=0,tc=0;
+  $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.length>0);
+  state.holdings.forEach(h=>{
+    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")} · ${esc(h.account||h.currency)}</div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div></div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    renderRisk(h);
+  });
+  $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";$("quoteAge").textContent=ago(state.quoteUpdatedAt);
+  renderNews();
+}
+function renderRisk(h){
+  const r=evaluateRisk(h),p=n(h.currentPrice||h.manualPrice),d=document.createElement("div");d.className="card";
+  const cls=r.status==="OK"?"ok":r.status==="WATCH"?"watch":"crit";
+  d.innerHTML=`<div class="row"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div></div><span class="badge ${cls}">${r.label}</span></div><div class="kv"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong><span>Aktiivinen stop</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong><span>Etäisyys</span><strong>${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong><span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong><span>Trailing</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong><span>ATR-stop</span><strong>${r.atrStop?money(r.atrStop,h.currency):"—"}</strong></div>`;$("risks").appendChild(d)
+}
+function evaluateRisk(h){
+  const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null};
+  const high=Math.max(n(h.highWatermark),cur),trail=n(h.trailingPct)>0?high*(1-n(h.trailingPct)/100):null,man=opt(h.manualStop),atr=opt(h.atr),atrStop=atr?cur-2.5*atr:null;
+  const fallback=buy*({low:.93,medium:.88,high:.82}[h.riskClass||"medium"]);const c=[man,trail,atrStop].filter(x=>x&&x>0&&x<cur*2),active=c.length?Math.max(...c):fallback||null;if(!active)return{status:"NO_STOP",label:"EI STOPPIA",activeStop:null,distancePct:null,manualStop:man,trailingStop:trail,atrStop};
+  const dist=(cur-active)/cur*100;let status="OK",label="OK";if(dist<=0){status="TRIGGERED";label="LAUENNUT"}else if(dist<=3){status="CRITICAL";label="KRIITTINEN"}else if(dist<=7){status="WATCH";label="SEURAA"}return{status,label,activeStop:active,distancePct:dist,manualStop:man,trailingStop:trail,atrStop}
+}
+function renderNews(){
+  $("news").innerHTML="";const items=[...(state.news||[])].sort((a,b)=>b.datetime-a.datetime).slice(0,12);$("newsEmpty").classList.toggle("hidden",items.length>0);
+  items.forEach(x=>{const a=document.createElement(x.url?"a":"div");a.className="card news";if(x.url){a.href=x.url;a.target="_blank";a.rel="noopener"}a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${x.datetime?ago(x.datetime*1000):""}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;$("news").appendChild(a)})
+}
+function openDlg(id=null){
+  $("form").reset();$("id").value="";$("trailing").value=12;$("riskClass").value="medium";$("currency").value=state.baseCurrency;$("deleteBtn").classList.add("hidden");$("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
+  if(id){const h=state.holdings.find(x=>x.id===id);$("id").value=h.id;$("symbol").value=h.symbol||"";$("name").value=h.name||"";$("providerSymbol").value=h.providerSymbol||"";$("qty").value=h.quantity||"";$("buy").value=h.buyPrice||"";$("currency").value=h.currency||"EUR";$("account").value=h.account||"";$("manualPrice").value=h.manualPrice||h.currentPrice||"";$("manualStop").value=h.manualStop||"";$("trailing").value=h.trailingPct??12;$("riskClass").value=h.riskClass||"medium";$("deleteBtn").classList.remove("hidden")} $("dlg").showModal()
+}
+function saveHolding(){
+  const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{},h={...old,id,symbol:$("symbol").value.trim().toUpperCase(),name:$("name").value.trim(),providerSymbol:$("providerSymbol").value.trim()||$("symbol").value.trim().toUpperCase(),quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value};
+  if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
+}
+function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
+async function refreshMarket(){
+  $("refreshBtn").disabled=true;
+  const fx={};for(const h of state.holdings){try{fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);h.fxRate=fx[h.currency]}catch{if(h.currency===state.baseCurrency)h.fxRate=1}
+    if(state.apiKey){try{const q=await quote(h.providerSymbol||h.symbol);h.currentPrice=q.c;h.highWatermark=Math.max(n(h.highWatermark),q.c);try{const candles=await candle(h.providerSymbol||h.symbol);const a=atr(candles);if(a)h.atr=a}catch{}}catch{}}
+  }state.quoteUpdatedAt=Date.now();save();render();$("refreshBtn").disabled=false
+}
+async function refreshNews(){
+  if(!state.apiKey)return alert("Lisää Finnhub API -avain Asetuksissa.");$("newsBtn").disabled=true;const out=[],seen=new Set();
+  for(const h of state.holdings){try{const arr=await companyNews(h.providerSymbol||h.symbol);for(const x of arr){const k=x.url||x.headline;if(seen.has(k))continue;seen.add(k);out.push({symbol:h.symbol,headline:x.headline||"Uutinen",summary:x.summary||"",source:x.source||"",url:x.url||"",datetime:n(x.datetime)})}}catch{}}
+  state.news=out.sort((a,b)=>b.datetime-a.datetime).slice(0,50);save();renderNews();$("newsBtn").disabled=false
+}
+async function quote(s){const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(!n(j.c))throw Error();return j}
+async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(j.s!=="ok")return[];return j.c.map((c,i)=>({close:n(c),high:n(j.h[i]),low:n(j.l[i])}))}
+function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
+async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
+async function fxRate(from,to){if(from===to)return 1;const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);const j=await r.json();return n(j.rates?.[to])||1}
+function exportBackup(){const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
+async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));save();$("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
+async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){if(!r.symbol)continue;arr.push({id:uid(),symbol:r.symbol.trim().toUpperCase(),name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency:(r.currency||state.baseCurrency).trim().toUpperCase(),account:(r.account||"").trim(),providerSymbol:(r.provider_symbol||r.symbol).trim(),manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium"})}if(arr.length){state.holdings=arr;save();render();alert(`Tuotu ${arr.length} omistusta.`)}e.target.value=""}
+function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
+function line(l,d){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const x=l[i];if(x=='"'){if(q&&l[i+1]=='"'){c+='"';i++}else q=!q}else if(x===d&&!q){o.push(c);c=""}else c+=x}o.push(c);return o}
+render();
+</script>
 </body>
 </html>
