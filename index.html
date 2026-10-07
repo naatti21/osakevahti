@@ -28,7 +28,7 @@ nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;bac
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
 .hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
 .file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
-.summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -69,7 +69,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: GitHub Actions hakee hinnat palvelinpuolella Nordnetista/Yahoosta ja julkaisee ne samasta osoitteesta market-data.json-tiedostona.</p>
+    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki ja rahastojen NAV: GitHub Actions hakee datan palvelinpuolella ja julkaisee sen market-data.json-tiedostona.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
@@ -103,7 +103,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.0 · tiheämpi Helsinki-päivitys ja intraday-kurssit.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.1 · rahastojen NAV-päivitys, päivän muutos ja parempi datakattavuus.</p>
     </div>
   </details>
 </section>
@@ -211,6 +211,11 @@ function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
 function dataState(h){
   if(h.currentPrice){
+    if(h.quoteSource==="FUND_NAV"){
+      const age=(Date.now()-n(h.quoteTimestamp))/3600000;
+      if(age<=48) return {label:"NAV",cls:"broker"};
+      return {label:"NAV VANHA",cls:"stale"};
+    }
     if(h.quoteSource==="HELSINKI_CACHE"){
       const age=(Date.now()-n(h.quoteTimestamp))/3600000;
       if(age<=1) return {label:"HELSINKI",cls:"broker"};
@@ -237,10 +242,10 @@ function quoteAgeShort(h){
 
 function render(){
   renderMarketDataHealth();
-  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0;
+  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0,todayEur=0;
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   state.holdings.forEach(h=>{
-    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;if(h.account==="OST")ost+=val;if(h.account==="AOT")aot+=val;if(h.assetType==="fund")funds+=val;
+    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;if(h.account==="OST")ost+=val;if(h.account==="AOT")aot+=val;if(h.assetType==="fund")funds+=val;const dp=n(h.dayChangePct);if(p&&fx&&dp&&dp>-99){const prev=p/(1+dp/100);todayEur+=(p-prev)*n(h.quantity)*fx;}
     const ds=dataState(h);
     const day=n(h.dayChangePct);
     const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
@@ -250,10 +255,11 @@ function render(){
     renderRisk(h);
   });
   const fundPct=tv?funds/tv*100:0;
-  $("accountSummary").innerHTML=`<div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään*</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
     const s=state.refreshSummary;
-    $("quoteAge").textContent=`${s.updated}/${s.marketTracked} päivittyi · ${s.snapshot} tuonti`;
+    const fundText=s.fundsTracked!=null?` · NAV ${s.fundsUpdated||0}/${s.fundsTracked||0}`:"";
+    $("quoteAge").textContent=`${s.updated}/${s.marketTracked} osakkeet${fundText}`;
   } else {
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
@@ -300,12 +306,14 @@ function saveHolding(){
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
 async function refreshMarket(showErrors=false){
   $("refreshBtn").disabled=true;
-  let okCount=0, failCount=0, firstError="";
+  let stockOk=0, stockFail=0, fundOk=0, fundFail=0, firstError="";
   const fx={};
-  const tracked=state.holdings.filter(h=>h.assetType!=="fund");
-  let helsinkiData=null;
+  const stocks=state.holdings.filter(h=>h.assetType!=="fund");
+  const funds=state.holdings.filter(h=>h.assetType==="fund");
+  let marketData=null;
 
-  try{ helsinkiData=await loadHelsinkiData(3); }catch(err){ firstError=`Helsinki-data: ${err.message||err}`; }
+  try{ marketData=await loadHelsinkiData(3); }
+  catch(err){ firstError=`Markkinadata: ${err.message||err}`; }
 
   for(const h of state.holdings){
     try{
@@ -315,15 +323,26 @@ async function refreshMarket(showErrors=false){
       if(h.currency===state.baseCurrency) h.fxRate=1;
     }
 
-    if(h.assetType==="fund") continue;
-
     try{
+      if(h.assetType==="fund"){
+        const q=marketData?.fund_quotes?.[h.symbol];
+        if(!q || !n(q.price)) throw new Error(`NAV puuttuu: ${h.name||h.symbol}`);
+        h.currentPrice=n(q.price);
+        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (marketData.generated_at ? Date.parse(marketData.generated_at) : Date.now());
+        h.dayChangePct=n(q.change_pct);
+        h.quoteSource="FUND_NAV";
+        h.quoteProvider=q.provider||"Nordnet fund";
+        h.quoteRealtime=false;
+        fundOk++;
+        continue;
+      }
+
       if(isHelsinkiHolding(h)){
         const sym=nordnetSymbol(h);
-        const q=helsinkiData?.quotes?.[sym];
-        if(!q || !n(q.price)) throw new Error(`market-data.json ei sisällä symbolia ${sym}`);
+        const q=marketData?.quotes?.[sym];
+        if(!q || !n(q.price)) throw new Error(`markkinadata ei sisällä symbolia ${sym}`);
         h.currentPrice=n(q.price);
-        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (helsinkiData.generated_at ? Date.parse(helsinkiData.generated_at) : Date.now());
+        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (marketData.generated_at ? Date.parse(marketData.generated_at) : Date.now());
         h.dayChangePct=n(q.change_pct);
         h.quoteSource="HELSINKI_CACHE";
         h.quoteProvider=q.provider||"";
@@ -342,7 +361,7 @@ async function refreshMarket(showErrors=false){
       }
 
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
-      okCount++;
+      stockOk++;
 
       if(h.quoteSource==="FINNHUB"){
         try{
@@ -352,18 +371,26 @@ async function refreshMarket(showErrors=false){
         }catch{}
       }
     }catch(err){
-      failCount++;
+      if(h.assetType==="fund") fundFail++; else stockFail++;
       if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
     }
   }
 
   const snapshotCount=state.holdings.filter(h=>!h.currentPrice && h.manualPrice).length;
-  state.refreshSummary={updated:okCount,marketTracked:tracked.length,snapshot:snapshotCount,failed:failCount,at:Date.now()};
-  if(okCount>0) state.quoteUpdatedAt=Date.now();
+  state.refreshSummary={
+    updated:stockOk,
+    marketTracked:stocks.length,
+    fundsUpdated:fundOk,
+    fundsTracked:funds.length,
+    snapshot:snapshotCount,
+    failed:stockFail+fundFail,
+    at:Date.now()
+  };
+  if(stockOk>0 || fundOk>0) state.quoteUpdatedAt=Date.now();
   save();render();$("refreshBtn").disabled=false;
 
-  if(showErrors && failCount>0 && firstError){
-    alert(`Päivitys valmis: ${okCount}/${tracked.length} markkinainstrumentista päivittyi.\n\n${firstError}`);
+  if(showErrors && (stockFail>0 || fundFail>0) && firstError){
+    alert(`Päivitys valmis: osakkeet ${stockOk}/${stocks.length}, rahastot ${fundOk}/${funds.length}.\n\n${firstError}`);
   }
 }
 async function refreshNews(){
@@ -400,6 +427,7 @@ async function loadHelsinkiData(retries=3){
         ok:true,
         generatedAt:j.generated_at||null,
         quoteCount:Object.keys(j.quotes||{}).length,
+        fundCount:Object.keys(j.fund_quotes||{}).length,
         checkedAt:Date.now()
       };
       save();
@@ -431,7 +459,7 @@ function renderMarketDataHealth(){
   if(h.ok){
     const age=h.generatedAt?ago(Date.parse(h.generatedAt)):"aikaleima puuttuu";
     box.className="statusBox statusOk";
-    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} Helsinki-symbolia · tiedosto ${age}. Kortissa näkyy myös itse kurssin ikä.`;
+    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta · ${h.fundCount||0} NAV-arvoa · tiedosto ${age}.`;
   }else{
     box.className="statusBox statusBad";
     box.textContent=`Datapalveluvirhe: ${h.error||"tuntematon virhe"}`;
