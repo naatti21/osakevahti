@@ -24,6 +24,20 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
 
+
+.portfolioPulse{margin:0 0 10px;padding:10px 12px}
+.pulseTop{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px}
+.pulseTitle{font-size:12px;font-weight:850}.pulseHint{font-size:9px;color:var(--muted)}
+.pulseGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.pulseCell{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
+.pulseCell span{display:block;font-size:8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pulseCell strong{display:block;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.weightBadge{display:inline-flex;margin-left:4px;padding:2px 6px;border-radius:999px;border:1px solid var(--line);font-size:9px;font-weight:800}
+.weightOk{color:var(--ok)}.weightHigh{color:var(--warn)}.weightLow{color:#8fb7ff}
+.planList{display:grid;gap:6px;margin-top:7px}.planRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px}
+.planName{font-size:11px;font-weight:800}.planMeta{font-size:9px;color:var(--muted)}.planValue{font-size:11px;font-weight:800;text-align:right}
+.newsBadge{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;margin-left:4px;color:var(--ok)}
+@media(max-width:480px){.pulseGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .insightTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 10px}
 .insightTab{padding:9px 6px;font-size:11px;background:#0e1216;color:var(--muted)}
 .insightTab.active{background:var(--panel2);color:var(--text);border-color:#3a4652}
@@ -62,6 +76,15 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="accountSummary" class="summaryGrid"></div>
+  <div id="portfolioPulse" class="card portfolioPulse"></div>
+  <details id="targetMapBox">
+    <summary>Tavoitekartta & OST-rakennuslista</summary>
+    <div class="detailsBody">
+      <div id="targetMap" class="planList"></div>
+      <div class="muted small" style="margin-top:10px">Luonnos, ei automaattinen osto-ohje. Tavoitepainoja voi muuttaa avaamalla omistuksen.</div>
+      <div id="ostPlan" class="planList"></div>
+    </div>
+  </details>
   <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><button id="addBtn" class="primary">+ Lisää</button></div>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -146,7 +169,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.3 · Osinkokoneet ja Rocket Radar.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.4 · Oma paketti, tavoitepainot ja tarkempi omistusuutisfiltteri.</p>
     </div>
   </details>
 </section>
@@ -180,6 +203,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <div><label class="txt">Trailing %</label><input id="trailing" type="number" step="0.5" min="0" max="99" value="12"></div>
   </div>
   <label class="txt">Riskiluokka</label><select id="riskClass"><option value="low">Matala</option><option value="medium" selected>Keskitaso</option><option value="high">Korkea</option></select>
+  <label class="txt">Tavoitepaino %</label><input id="targetWeight" type="number" step="0.5" min="0" max="100" placeholder="Esim. 8">
   <div class="actions"><button type="button" id="deleteBtn" class="danger hidden">Poista</button><span class="spacer"></span><button type="button" id="cancelDlg">Peruuta</button><button type="submit" class="primary">Tallenna</button></div>
 </form>
 </dialog>
@@ -188,6 +212,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 const KEY="osakevahti.single.v1";
 let state=load();save();
 let insights=null;
+let portfolioNews=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -196,7 +221,7 @@ $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
 $("refreshBtn").onclick=()=>refreshMarket(true);
-$("newsBtn").onclick=refreshNews;
+$("newsBtn").onclick=()=>loadPortfolioNews(true);
 $("insightsBtn").onclick=()=>loadInsights(true);
 document.querySelectorAll(".insightTab").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".insightTab").forEach(x=>x.classList.remove("active"));
@@ -223,15 +248,26 @@ function load(){
   }
 }
 function migrateState(s){
+  const targetDefaults={"AMD":10,"FORTUM":10,"NDA-FI":8,"VERK":4,"FRAMERY":2,"IQMX":3,"METSO":5};
   for(const h of (s.holdings||[])){
     if(h.account==="Nordea") h.account="OST";
     if(h.account==="Nordnet") h.account="AOT";
+    if(h.assetType==="fund" && /Nordea Pohjoismaat/i.test(h.name||"")) h.account="Rahastot";
     const ns=nordnetSymbol(h);
     if(ns && isHelsinkiHolding(h)){
       h.nordnetSymbol=ns;
       if(["FORTUM.HE","NDA-FI.HE","VERK.HE","METSO.HE","FRAMERY.HE","IQM.HE"].includes(h.symbol)) h.symbol=ns;
     }
+    const key=(h.symbol||"").toUpperCase();
+    if(h.assetType!=="fund" && h.targetWeight==null && targetDefaults[key]!=null) h.targetWeight=targetDefaults[key];
   }
+  if(!Array.isArray(s.ostPlan)) s.ostPlan=[
+    {symbol:"KESKOB",name:"Kesko B",amount:1000,status:"Seuraava ydinpositio"},
+    {symbol:"SAMPO",name:"Sampo",amount:1000,status:"Seuraava ydinpositio"},
+    {symbol:"UPM",name:"UPM-Kymmene",amount:1000,status:"Tarkkailu"},
+    {symbol:"ELISA",name:"Elisa",amount:1000,status:"Tarkkailu"},
+    {symbol:"ORNBV",name:"Orion B",amount:1000,status:"Tarkkailu"}
+  ];
 }
 function isHelsinkiHolding(h){
   if(h.assetType==="fund") return false;
@@ -291,25 +327,95 @@ function quoteAgeShort(h){
 
 function render(){
   renderMarketDataHealth();
-  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0,todayEur=0;
-  $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
-  state.holdings.forEach(h=>{
-    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;if(h.account==="OST")ost+=val;if(h.account==="AOT")aot+=val;if(h.assetType==="fund")funds+=val;const dp=n(h.dayChangePct);if(p&&fx&&dp&&dp>-99){const prev=p/(1+dp/100);todayEur+=(p-prev)*n(h.quantity)*fx;}
+  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;
+
+  const rows=state.holdings.map(h=>{
+    const p=n(h.currentPrice||h.manualPrice);
+    const fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0);
+    const val=p*n(h.quantity)*fx;
+    const cost=n(h.buyPrice)*n(h.quantity)*fx;
+    const pnl=val-cost;
+    const pct=cost?pnl/cost*100:0;
+    return {h,p,fx,val,cost,pnl,pct};
+  });
+
+  const tv=rows.reduce((a,r)=>a+r.val,0);
+  const tc=rows.reduce((a,r)=>a+r.cost,0);
+  let ost=0,aot=0,funds=0,todayEur=0;
+  rows.forEach(r=>{
+    const h=r.h;
+    if(h.account==="OST")ost+=r.val;
+    if(h.account==="AOT")aot+=r.val;
+    if(h.assetType==="fund")funds+=r.val;
+    const dp=n(h.dayChangePct);
+    if(r.p&&r.fx&&dp&&dp>-99){
+      const prev=r.p/(1+dp/100);
+      todayEur+=(r.p-prev)*n(h.quantity)*r.fx;
+    }
+  });
+
+  $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);
+  $("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
+
+  rows.forEach(r=>{
+    const h=r.h,p=r.p,val=r.val,pnl=r.pnl,pct=r.pct;
     const ds=dataState(h);
     const day=n(h.dayChangePct);
     const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
     const subline=h.assetType==="fund"?"Rahasto":(h.name||"");
     const unit=h.assetType==="fund"?"osuutta":"kpl";
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · kauppa ${quoteAgeShort(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const weight=tv?val/tv*100:0;
+    const target=n(h.targetWeight);
+    let weightHtml="";
+    if(h.assetType!=="fund"&&target>0){
+      const diff=weight-target;
+      const cls=Math.abs(diff)<=1?"weightOk":diff>1?"weightHigh":"weightLow";
+      weightHtml=`<span class="weightBadge ${cls}">${weight.toFixed(1)}→${target.toFixed(1)}%</span>`;
+    }
+    const b=document.createElement("button");
+    b.className="item";
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · kauppa ${quoteAgeShort(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;
+    b.onclick=()=>openDlg(h.id);
+    $("holdings").appendChild(b);
     renderRisk(h);
   });
+
   const fundPct=tv?funds/tv*100:0;
   $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
-  $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
+
+  const sorted=[...rows].sort((a,b)=>b.val-a.val);
+  const largest=sorted[0];
+  const top3=tv?sorted.slice(0,3).reduce((a,r)=>a+r.val,0)/tv*100:0;
+  const stockPct=100-fundPct;
+  const targeted=rows.filter(r=>r.h.assetType!=="fund"&&n(r.h.targetWeight)>0);
+  const offTarget=targeted.filter(r=>Math.abs((tv?r.val/tv*100:0)-n(r.h.targetWeight))>2).length;
+  $("portfolioPulse").innerHTML=`<div class="pulseTop"><div class="pulseTitle">Oma paketti</div><div class="pulseHint">nopea tilannekuva</div></div><div class="pulseGrid"><div class="pulseCell"><span>Suurin omistus</span><strong>${largest?esc(largest.h.assetType==="fund"?largest.h.name:largest.h.symbol):"—"} ${largest&&tv?(largest.val/tv*100).toFixed(1)+" %":""}</strong></div><div class="pulseCell"><span>Top 3 paino</span><strong>${top3.toFixed(0)} %</strong></div><div class="pulseCell"><span>Osakkeet / rahastot</span><strong>${stockPct.toFixed(0)} / ${fundPct.toFixed(0)} %</strong></div><div class="pulseCell"><span>Tavoitepoikkeamia</span><strong>${offTarget}/${targeted.length}</strong></div></div>`;
+
+  const targetMap=$("targetMap");targetMap.innerHTML="";
+  targeted.sort((a,b)=>Math.abs((tv?b.val/tv*100:0)-n(b.h.targetWeight))-Math.abs((tv?a.val/tv*100:0)-n(a.h.targetWeight))).forEach(r=>{
+    const w=tv?r.val/tv*100:0,t=n(r.h.targetWeight),gap=t/100*tv-r.val;
+    const row=document.createElement("div");row.className="planRow";
+    row.innerHTML=`<div><div class="planName">${esc(r.h.symbol)}</div><div class="planMeta">${w.toFixed(1)} % nyt · tavoite ${t.toFixed(1)} %</div></div><div class="planValue ${gap>0?"weightLow":"weightHigh"}">${gap>0?`vajaus ${money(gap,state.baseCurrency)}`:"ei lisäystä"}</div>`;
+    targetMap.appendChild(row);
+  });
+
+  const plan=$("ostPlan");plan.innerHTML=`<div class="eyebrow" style="margin:10px 0 5px">UUSI OST-RUNKO · 1 000 € TAVOITE-ERÄT</div>`;
+  (state.ostPlan||[]).forEach(x=>{
+    const row=document.createElement("div");row.className="planRow";
+    row.innerHTML=`<div><div class="planName">${esc(x.name)}</div><div class="planMeta">${esc(x.symbol)} · ${esc(x.status||"")}</div></div><div class="planValue">${money(x.amount||1000,state.baseCurrency)}</div>`;
+    plan.appendChild(row);
+  });
+
+  $("portfolioValue").textContent=money(tv,state.baseCurrency);
+  const tp=tv-tc,tpp=tc?tp/tc*100:0;
+  $("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
+  $("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";
+
+  if(state.refreshSummary){
     const s=state.refreshSummary;
     const fundText=s.fundsTracked!=null?` · NAV ${s.fundsUpdated||0}/${s.fundsTracked||0}`:"";
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} osakkeet${fundText}`;
-  } else {
+  }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
   renderNews();
@@ -338,8 +444,28 @@ function evaluateRisk(h){
   const dist=(cur-active)/cur*100;let status="OK",label="OK";if(dist<=0){status="TRIGGERED";label="LAUENNUT"}else if(dist<=3){status="CRITICAL";label="KRIITTINEN"}else if(dist<=7){status="WATCH";label="SEURAA"}return{status,label,activeStop:active,distancePct:dist,manualStop:man,trailingStop:trail,atrStop}
 }
 function renderNews(){
-  $("news").innerHTML="";const items=[...(state.news||[])].sort((a,b)=>b.datetime-a.datetime).slice(0,12);$("newsEmpty").classList.toggle("hidden",items.length>0);
-  items.forEach(x=>{const a=document.createElement(x.url?"a":"div");a.className="card news";if(x.url){a.href=x.url;a.target="_blank";a.rel="noopener"}a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${x.datetime?ago(x.datetime*1000):""}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;$("news").appendChild(a)})
+  $("news").innerHTML="";
+  const raw=portfolioNews?.items?.length?portfolioNews.items:(state.news||[]);
+  const items=[...raw].sort((a,b)=>n(b.datetime)-n(a.datetime)).slice(0,14);
+  $("newsEmpty").classList.toggle("hidden",items.length>0);
+  items.forEach(x=>{
+    const a=document.createElement(x.url?"a":"div");a.className="card news";
+    if(x.url){a.href=x.url;a.target="_blank";a.rel="noopener"}
+    const rel=x.relevance>=8?'<span class="newsBadge">OLENNAINEN</span>':"";
+    a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${x.datetime?ago(n(x.datetime)*1000):""}${rel}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;
+    $("news").appendChild(a);
+  });
+}
+async function loadPortfolioNews(force=false){
+  try{
+    const r=await fetch(`./news-data.json?t=${Date.now()}`,{cache:"no-store"});
+    if(!r.ok) throw new Error(`news-data.json HTTP ${r.status}`);
+    portfolioNews=await r.json();
+    renderNews();
+  }catch(err){
+    if(force) alert(`Omistusuutiset eivät latautuneet: ${err.message||err}`);
+    if(!portfolioNews) renderNews();
+  }
 }
 async function loadInsights(force=false){
   try{
@@ -397,14 +523,14 @@ function renderInsights(){
 }
 function openDlg(id=null){
   $("form").reset();$("id").value="";$("trailing").value=12;$("riskClass").value="medium";$("currency").value=state.baseCurrency;$("deleteBtn").classList.add("hidden");$("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
-  if(id){const h=state.holdings.find(x=>x.id===id);$("id").value=h.id;$("symbol").value=h.symbol||"";$("name").value=h.name||"";$("providerSymbol").value=h.providerSymbol||"";$("qty").value=h.quantity||"";$("buy").value=h.buyPrice||"";$("currency").value=h.currency||"EUR";$("account").value=h.account||"";$("manualPrice").value=h.manualPrice||h.currentPrice||"";$("manualStop").value=h.manualStop||"";$("trailing").value=h.trailingPct??12;$("riskClass").value=h.riskClass||"medium";$("deleteBtn").classList.remove("hidden")} $("dlg").showModal()
+  if(id){const h=state.holdings.find(x=>x.id===id);$("id").value=h.id;$("symbol").value=h.symbol||"";$("name").value=h.name||"";$("providerSymbol").value=h.providerSymbol||"";$("qty").value=h.quantity||"";$("buy").value=h.buyPrice||"";$("currency").value=h.currency||"EUR";$("account").value=h.account||"";$("manualPrice").value=h.manualPrice||h.currentPrice||"";$("manualStop").value=h.manualStop||"";$("trailing").value=h.trailingPct??12;$("riskClass").value=h.riskClass||"medium";$("targetWeight").value=h.targetWeight??"";$("deleteBtn").classList.remove("hidden")} $("dlg").showModal()
 }
 function saveHolding(){
   const rawSymbol=$("symbol").value.trim().toUpperCase(),rawProvider=($("providerSymbol").value.trim()||rawSymbol).toUpperCase();
   const valid=/^[A-Z0-9.^:=_-]{1,24}$/;
   if(!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
   if(!valid.test(rawProvider)){alert("Finnhub-symboli näyttää virheelliseltä.");return}
-  const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{},h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value};
+  const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{},h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value,targetWeight:opt($("targetWeight").value)};
   if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
 }
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
@@ -619,6 +745,7 @@ if("caches" in window){
 }
 render();
 loadInsights(false).catch(()=>{});
+loadPortfolioNews(false).catch(()=>{});
 setTimeout(()=>{
   const last=state.quoteUpdatedAt||0;
   if(state.holdings?.length && Date.now()-last>10*60*1000) refreshMarket(false).catch(()=>{});
