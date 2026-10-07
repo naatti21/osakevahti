@@ -96,7 +96,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.7 · Helsinki-data GitHub Actionsin kautta, ilman selaimen CORS-ongelmaa.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.8 · IQM-livehinta, siistimmät rahastorivit ja selkeämpi yhteenveto.</p>
     </div>
   </details>
 </section>
@@ -205,7 +205,7 @@ function dataState(h){
   if(h.currentPrice){
     if(h.quoteSource==="HELSINKI_CACHE"){
       const age=(Date.now()-n(h.quoteTimestamp))/3600000;
-      if(age<=1) return {label:h.quoteProvider==="Nordnet"?"HELSINKI":"HELSINKI*",cls:"broker"};
+      if(age<=1) return {label:"HELSINKI",cls:"broker"};
       if(age<=24) return {label:"VIIMEISIN",cls:"manual"};
       return {label:"VANHA",cls:"stale"};
     }
@@ -226,10 +226,14 @@ function render(){
     const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;if(h.account==="OST")ost+=val;if(h.account==="AOT")aot+=val;if(h.assetType==="fund")funds+=val;
     const ds=dataState(h);
     const day=n(h.dayChangePct);
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="metaLine"><span class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
+    const subline=h.assetType==="fund"?"Rahasto":(h.name||"");
+    const unit=h.assetType==="fund"?"osuutta":"kpl";
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
-  $("accountSummary").innerHTML=`<div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahastot</span><strong>${money(funds,state.baseCurrency)}</strong></div>`;
+  const fundPct=tv?funds/tv*100:0;
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
     const s=state.refreshSummary;
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} päivittyi · ${s.snapshot} tuonti`;
@@ -375,7 +379,7 @@ async function testNordnet(){
     if(!q || !n(q.price)) throw new Error("FORTUM puuttuu market-data.jsonista");
     const stamp=j.generated_at?new Date(j.generated_at).toLocaleString("fi-FI"):"aikaleima puuttuu";
     box.className="statusBox statusOk";
-    box.textContent=`Helsinki-data toimii. FORTUM ${n(q.price).toFixed(2)} EUR · ${q.provider||"lähde"} · data ${stamp}.`;
+    box.textContent=`Helsinki-data toimii. FORTUM ${n(q.price).toFixed(2)} EUR · lähde ${q.provider||"tuntematon"} · data ${stamp}.`;
   }catch(err){
     box.className="statusBox statusBad";
     box.textContent=`Helsinki-data ei ole vielä käytössä: ${err.message||err}`;
