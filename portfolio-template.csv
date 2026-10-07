@@ -1,0 +1,3 @@
+symbol,name,quantity,buy_price,currency,account,provider_symbol,manual_stop,trailing_pct,risk_class
+AMD,Advanced Micro Devices,1,100,USD,Nordnet,AMD,,12,high
+FORTUM.HE,Fortum,1,15,EUR,Nordea,FORTUM.HE,,10,medium

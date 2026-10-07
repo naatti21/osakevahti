@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="description" content="Kevyt henkilökohtainen salkku- ja riskivahti." />
+  <title>Osakevahti</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">HENKILÖKOHTAINEN SALKKUVAHTI</div>
+      <h1>Osakevahti</h1>
+    </div>
+    <button id="refreshBtn" class="icon-btn" aria-label="Päivitä markkinadata" title="Päivitä">↻</button>
+  </header>
+
+  <main>
+    <section id="portfolioView" class="view active" aria-label="Salkku">
+      <div class="hero card">
+        <div class="muted">Salkun arvo</div>
+        <div id="portfolioValue" class="hero-value">—</div>
+        <div class="hero-row">
+          <span id="portfolioProfit" class="metric">—</span>
+          <span id="quoteAge" class="muted">Ei päivitetty</span>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>Omistukset</h2>
+        <button id="addHoldingBtn" class="primary small">+ Lisää</button>
+      </div>
+      <div id="holdingsList" class="stack"></div>
+      <div id="portfolioEmpty" class="empty hidden">
+        <strong>Salkku on tyhjä.</strong>
+        <span>Lisää omistus tai tuo CSV Asetuksista.</span>
+      </div>
+    </section>
+
+    <section id="riskView" class="view" aria-label="Riski">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">SUOJATASOT</div>
+          <h2>Riskivahti</h2>
+        </div>
+      </div>
+      <p class="muted intro">
+        Riskitasot ovat päätöksenteon apu, eivät automaattisia myyntitoimeksiantoja.
+        ATR-taso näytetään, kun historiadataa on saatavilla.
+      </p>
+      <div id="riskList" class="stack"></div>
+      <div id="riskEmpty" class="empty hidden">Lisää ensin omistuksia.</div>
+    </section>
+
+    <section id="newsView" class="view" aria-label="Uutiset">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">VAIN OMISTUKSET</div>
+          <h2>Uutisfiidi</h2>
+        </div>
+        <button id="refreshNewsBtn" class="secondary small">Päivitä</button>
+      </div>
+      <p class="muted intro">
+        Uutiset haetaan vain salkun yhtiöille. Finnhub-avain lisätään Asetuksissa.
+      </p>
+      <div id="newsList" class="stack"></div>
+      <div id="newsEmpty" class="empty hidden">
+        <strong>Ei uutisia.</strong>
+        <span>Lisää Finnhub API -avain ja paina Päivitä.</span>
+      </div>
+    </section>
+
+    <section id="settingsView" class="view" aria-label="Asetukset">
+      <div class="section-head"><h2>Asetukset</h2></div>
+
+      <div class="card form-card">
+        <label for="baseCurrency">Perusvaluutta</label>
+        <select id="baseCurrency">
+          <option value="EUR">EUR</option>
+          <option value="USD">USD</option>
+          <option value="SEK">SEK</option>
+        </select>
+
+        <label for="finnhubKey">Finnhub API -avain</label>
+        <input id="finnhubKey" type="password" autocomplete="off" placeholder="Syötä avain tähän" />
+        <div class="hint">Avain tallennetaan vain tämän laitteen selaimeen. Älä lisää sitä GitHubiin.</div>
+
+        <label class="toggle-row">
+          <span>Ilmoitus, kun stop-taso laukeaa appin päivityksessä</span>
+          <input id="notificationsEnabled" type="checkbox" />
+        </label>
+        <button id="requestNotificationBtn" class="secondary">Pyydä ilmoituslupa</button>
+      </div>
+
+      <div class="card form-card">
+        <h3>Tuonti ja varmuuskopio</h3>
+        <label class="file-label">
+          Tuo omistukset CSV:stä
+          <input id="csvImport" type="file" accept=".csv,text/csv" />
+        </label>
+        <div class="hint">
+          Sarakkeet: symbol, name, quantity, buy_price, currency, account, provider_symbol,
+          manual_stop, trailing_pct, risk_class
+        </div>
+        <a class="secondary link-btn" href="./portfolio-template.csv" download>Lataa CSV-pohja</a>
+
+        <div class="button-row">
+          <button id="exportBtn" class="secondary">Vie varmuuskopio</button>
+          <label class="secondary file-label compact">
+            Tuo varmuuskopio
+            <input id="backupImport" type="file" accept=".json,application/json" />
+          </label>
+        </div>
+      </div>
+
+      <div class="card danger-card">
+        <h3>Paikallinen data</h3>
+        <p class="muted">Tyhjentää tämän laitteen Osakevahti-datan. Tätä ei voi perua.</p>
+        <button id="resetBtn" class="danger">Tyhjennä kaikki data</button>
+      </div>
+
+      <div class="card">
+        <div class="muted small-text">
+          v1.0 • data säilyy localStoragessa • taustalla toimivia push-hälytyksiä ei vielä ole.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Päänavigaatio">
+    <button class="nav-btn active" data-view="portfolioView"><span>◫</span>Salkku</button>
+    <button class="nav-btn" data-view="riskView"><span>⚠</span>Riski</button>
+    <button class="nav-btn" data-view="newsView"><span>▤</span>Uutiset</button>
+    <button class="nav-btn" data-view="settingsView"><span>⚙</span>Asetukset</button>
+  </nav>
+
+  <dialog id="holdingDialog">
+    <form id="holdingForm" method="dialog" class="dialog-form">
+      <div class="dialog-head">
+        <h2 id="dialogTitle">Lisää omistus</h2>
+        <button type="button" id="closeDialogBtn" class="icon-btn">×</button>
+      </div>
+
+      <input id="holdingId" type="hidden" />
+
+      <label for="symbol">Tikkeri *</label>
+      <input id="symbol" required placeholder="AMD tai FORTUM.HE" autocapitalize="characters" />
+
+      <label for="name">Nimi</label>
+      <input id="name" placeholder="Advanced Micro Devices" />
+
+      <label for="providerSymbol">Finnhub-symboli</label>
+      <input id="providerSymbol" placeholder="Usein sama kuin tikkeri" />
+
+      <div class="grid2">
+        <div>
+          <label for="quantity">Määrä *</label>
+          <input id="quantity" required type="number" min="0" step="any" inputmode="decimal" />
+        </div>
+        <div>
+          <label for="buyPrice">Keskihinta *</label>
+          <input id="buyPrice" required type="number" min="0" step="any" inputmode="decimal" />
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label for="currency">Valuutta</label>
+          <select id="currency">
+            <option>EUR</option>
+            <option>USD</option>
+            <option>SEK</option>
+            <option>NOK</option>
+            <option>GBP</option>
+          </select>
+        </div>
+        <div>
+          <label for="account">Tili</label>
+          <input id="account" placeholder="Nordnet / Nordea" />
+        </div>
+      </div>
+
+      <label for="manualPrice">Nykykurssi käsin</label>
+      <input id="manualPrice" type="number" min="0" step="any" inputmode="decimal" placeholder="Vapaaehtoinen varahinta" />
+
+      <div class="grid2">
+        <div>
+          <label for="manualStop">Oma stop</label>
+          <input id="manualStop" type="number" min="0" step="any" inputmode="decimal" />
+        </div>
+        <div>
+          <label for="trailingPct">Trailing %</label>
+          <input id="trailingPct" type="number" min="0" max="99" step="0.5" value="12" inputmode="decimal" />
+        </div>
+      </div>
+
+      <label for="riskClass">Volatiliteettiluokka, jos ATR ei ole saatavilla</label>
+      <select id="riskClass">
+        <option value="low">Matala</option>
+        <option value="medium" selected>Keskitaso</option>
+        <option value="high">Korkea</option>
+      </select>
+
+      <div class="dialog-actions">
+        <button type="button" id="deleteHoldingBtn" class="danger ghost hidden">Poista</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancelDialogBtn" class="secondary">Peruuta</button>
+        <button type="submit" class="primary">Tallenna</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
