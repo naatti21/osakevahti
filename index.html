@@ -20,6 +20,19 @@ button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:1
 button.primary{background:var(--accent);color:#07130c;border-color:transparent}.danger{color:var(--danger)}.muted{color:var(--muted)}.small{font-size:12px}
 .item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left}.symbol{font-weight:850;font-size:15px;line-height:1.15}.name{color:var(--muted);font-size:11px;line-height:1.25}.value{font-weight:800;text-align:right;font-size:15px;white-space:nowrap}.pnl{font-size:11px;text-align:right;white-space:nowrap}.sourceBadge{display:inline-flex;margin-left:5px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;letter-spacing:.03em;vertical-align:1px}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.broker{color:#8fb7ff}.pos{color:var(--ok)}.neg{color:var(--danger)}
 .badge{border-radius:999px;padding:4px 7px;font-size:9px;font-weight:800;white-space:nowrap}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
+
+.riskSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.riskSummaryBox{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px;min-width:0}
+.riskSummaryBox span{display:block;color:var(--muted);font-size:8px;line-height:1.15}
+.riskSummaryBox strong{display:block;margin-top:3px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.riskCardUrgent{border-color:#ff6b6b66}.riskCardWatch{border-color:#ffd16655}
+.riskMetrics5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:8px}
+.riskMetricMini{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
+.riskMetricMini span{display:block;color:var(--muted);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.riskMetricMini strong{display:block;margin-top:2px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.riskWhy{margin-top:7px;font-size:10px;line-height:1.35;color:#b7bec6}
+.riskDataLine{font-size:9px;color:var(--muted);margin-top:6px}
+@media(max-width:480px){.riskSummary{grid-template-columns:repeat(2,1fr)}.riskMetrics5{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .riskMain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.riskMetric{background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px;min-width:0}.riskMetric span{display:block;color:var(--muted);font-size:9px;line-height:1.2}.riskMetric strong{display:block;margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.riskDetails{margin-top:7px;border-top:1px solid var(--line);padding-top:6px}.riskDetails summary{padding:5px 0;font-size:10px;color:var(--muted);font-weight:700;background:transparent;border:0}.riskDetails .kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:11px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
@@ -104,8 +117,9 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 
 <section id="riskView" class="view">
   <div class="section"><div><div class="eyebrow">SUOJATASOT</div><h2>Riskivahti</h2></div></div>
-  <p class="muted introCompact">Stopit yhdellä silmäyksellä. Napauta “Lisätiedot” nähdäksesi trailing- ja ATR-tasot.</p>
-  <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin omistuksia.</div>
+  <p class="muted introCompact">Priorisoi lähellä suojatasoa olevat positiot. Stop-riski on laskennallinen päätöstuki — appi ei lähetä toimeksiantoja välittäjälle.</p>
+  <div id="riskSummary" class="riskSummary"></div>
+  <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin osakeomistuksia.</div>
 </section>
 
 <section id="newsView" class="view">
@@ -190,7 +204,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.5 · Päivän liikkeet, datadiagnostiikka ja jaettu markkinasnapshot.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.6 · priorisoitu Riskivahti, ATR-data ja arvioitu stop-riski.</p>
     </div>
   </details>
 </section>
@@ -234,6 +248,7 @@ const KEY="osakevahti.single.v1";
 let state=load();save();
 let insights=null;
 let portfolioNews=null;
+let riskMetrics=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -398,7 +413,6 @@ function render(){
     b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · kauppa ${quoteAgeShort(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
-    renderRisk(h);
   });
 
   const fundPct=tv?funds/tv*100:0;
@@ -457,30 +471,141 @@ function render(){
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
+  renderRiskDashboard(rows,tv);
   renderNews();
   renderInsights();
 }
-function renderRisk(h){
-  if(h.assetType==="fund") return;
-  const r=evaluateRisk(h),p=n(h.currentPrice||h.manualPrice),d=document.createElement("div");d.className="card";
+function riskStatusRank(status){
+  return {TRIGGERED:0,CRITICAL:1,WATCH:2,NO_STOP:3,STALE:4,OK:5,NO_PRICE:6}[status]??9;
+}
+function renderRiskDashboard(rows,portfolioValue){
+  $("risks").innerHTML="";
+  const stockRows=rows.filter(r=>r.h.assetType!=="fund");
+  $("riskEmpty").classList.toggle("hidden",stockRows.length>0);
+
+  const assessed=stockRows.map(r=>({row:r,risk:evaluateRisk(r.h,portfolioValue,r.fx)}));
+  const actionable=assessed.filter(x=>x.risk.activeStop&&x.row.p);
+  const totalRisk=actionable.reduce((a,x)=>a+n(x.risk.riskEuro),0);
+  const alerts=assessed.filter(x=>["TRIGGERED","CRITICAL","WATCH"].includes(x.risk.status)).length;
+  const noProtection=assessed.filter(x=>!x.risk.activeStop).length;
+  const stale=assessed.filter(x=>x.risk.dataStale).length;
+  const totalRiskPct=portfolioValue?totalRisk/portfolioValue*100:0;
+
+  $("riskSummary").innerHTML=`
+    <div class="riskSummaryBox"><span>Huomiota nyt</span><strong class="${alerts?"neg":""}">${alerts}</strong></div>
+    <div class="riskSummaryBox"><span>Arvioitu stop-riski</span><strong>${money(totalRisk,state.baseCurrency)}</strong></div>
+    <div class="riskSummaryBox"><span>Riski salkusta</span><strong>${totalRiskPct.toFixed(1)} %</strong></div>
+    <div class="riskSummaryBox"><span>Ilman suojaa / vanha data</span><strong>${noProtection} / ${stale}</strong></div>`;
+
+  assessed.sort((a,b)=>{
+    const ra=riskStatusRank(a.risk.status), rb=riskStatusRank(b.risk.status);
+    if(ra!==rb) return ra-rb;
+    const da=a.risk.distancePct==null?999:a.risk.distancePct;
+    const db=b.risk.distancePct==null?999:b.risk.distancePct;
+    return da-db;
+  }).forEach(x=>renderRiskCard(x.row,x.risk,portfolioValue));
+}
+function renderRiskCard(row,r,portfolioValue){
+  const h=row.h,p=row.p,d=document.createElement("div");
+  d.className="card";
+  if(["TRIGGERED","CRITICAL"].includes(r.status)) d.classList.add("riskCardUrgent");
+  else if(r.status==="WATCH") d.classList.add("riskCardWatch");
+
   const cls=r.status==="OK"?"ok":r.status==="WATCH"?"watch":"crit";
-  d.innerHTML=`<div class="riskHead"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div></div><span class="badge ${cls}">${r.label}</span></div>
-  <div class="riskMain">
-    <div class="riskMetric"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong></div>
-    <div class="riskMetric"><span>Stop</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong></div>
-    <div class="riskMetric"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=7?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
+  const weight=portfolioValue?row.val/portfolioValue*100:0;
+  const stopType=r.stopType||"—";
+  const pnlCushion=n(h.buyPrice)>0&&p ? (p/n(h.buyPrice)-1)*100 : 0;
+  const riskShare=portfolioValue?r.riskEuro/portfolioValue*100:0;
+
+  d.innerHTML=`<div class="riskHead"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")} · paino ${weight.toFixed(1)} %</div></div><span class="badge ${cls}">${r.label}</span></div>
+  <div class="riskMetrics5">
+    <div class="riskMetricMini"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong></div>
+    <div class="riskMetricMini"><span>Suojataso</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong></div>
+    <div class="riskMetricMini"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=7?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
+    <div class="riskMetricMini"><span>€ riski</span><strong>${r.activeStop?money(r.riskEuro,state.baseCurrency):"—"}</strong></div>
+    <div class="riskMetricMini"><span>Salkusta</span><strong>${r.activeStop?riskShare.toFixed(1)+" %":"—"}</strong></div>
   </div>
+  <div class="riskWhy">${esc(r.explanation)}</div>
+  <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}</div>
   <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
     <span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong>
-    <span>Trailing</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong>
-    <span>ATR-stop</span><strong>${r.atrStop?money(r.atrStop,h.currency):"—"}</strong>
-  </div></details>`;$("risks").appendChild(d)
+    <span>Trailing (${n(h.trailingPct).toFixed(0)} %)</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong>
+    <span>ATR(14)</span><strong>${r.atr?money(r.atr,h.currency):"—"}</strong>
+    <span>ATR-stop 2,5×</span><strong>${r.atrStop?money(r.atrStop,h.currency):"—"}</strong>
+    <span>20 pv huippu</span><strong>${r.high20?money(r.high20,h.currency):"—"}</strong>
+    <span>20 pv pohja</span><strong>${r.low20?money(r.low20,h.currency):"—"}</strong>
+  </div></details>`;
+  $("risks").appendChild(d);
 }
-function evaluateRisk(h){
-  const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null};
-  const high=Math.max(n(h.highWatermark),cur),trail=n(h.trailingPct)>0?high*(1-n(h.trailingPct)/100):null,man=opt(h.manualStop),atr=opt(h.atr),atrStop=atr?cur-2.5*atr:null;
-  const fallback=buy*({low:.93,medium:.88,high:.82}[h.riskClass||"medium"]);const c=[man,trail,atrStop].filter(x=>x&&x>0&&x<cur*2),active=c.length?Math.max(...c):fallback||null;if(!active)return{status:"NO_STOP",label:"EI STOPPIA",activeStop:null,distancePct:null,manualStop:man,trailingStop:trail,atrStop};
-  const dist=(cur-active)/cur*100;let status="OK",label="OK";if(dist<=0){status="TRIGGERED";label="LAUENNUT"}else if(dist<=3){status="CRITICAL";label="KRIITTINEN"}else if(dist<=7){status="WATCH";label="SEURAA"}return{status,label,activeStop:active,distancePct:dist,manualStop:man,trailingStop:trail,atrStop}
+function evaluateRisk(h,portfolioValue,fxRate){
+  const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);
+  if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null,riskEuro:0,explanation:"Kurssia ei ole saatavilla."};
+
+  const atr=opt(h.atr), high20=opt(h.high20), low20=opt(h.low20);
+  const referenceHigh=Math.max(n(h.highWatermark),n(high20),cur);
+  const trail=n(h.trailingPct)>0?referenceHigh*(1-n(h.trailingPct)/100):null;
+  const man=opt(h.manualStop);
+  const atrStop=atr?cur-2.5*atr:null;
+
+  const suggestions=[["oma stop",man],["trailing",trail],["ATR",atrStop]]
+    .filter(([,x])=>x&&x>0&&x<cur*1.5);
+  let active=null,stopType="";
+  if(suggestions.length){
+    suggestions.sort((a,b)=>b[1]-a[1]);
+    [stopType,active]=suggestions[0];
+  }
+
+  const ageMs=h.quoteTimestamp?Date.now()-n(h.quoteTimestamp):null;
+  const dataStale=ageMs!=null && ageMs>60*60*1000;
+  const quoteAge=h.quoteTimestamp?quoteAgeShort(h):"";
+
+  if(!active){
+    return{
+      status:dataStale?"STALE":"NO_STOP",label:dataStale?"VANHA DATA":"EI SUOJAA",
+      activeStop:null,distancePct:null,riskEuro:0,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,
+      trend:h.riskTrend||"",dataStale,quoteAge,
+      explanation:dataStale?"Kurssidatan ikä on yli tunnin eikä suojatasoa voida arvioida luotettavasti.":"Aseta oma stop tai trailing-prosentti. ATR-data antaa myöhemmin laskennallisen tason."
+    };
+  }
+
+  const dist=(cur-active)/cur*100;
+  const qty=n(h.quantity),fx=n(fxRate)||(h.currency===state.baseCurrency?1:0);
+  const riskEuro=Math.max(0,cur-active)*qty*fx;
+  let status="OK",label="OK";
+  if(dist<=0){status="TRIGGERED";label="SUOJATASO RIKKI"}
+  else if(dist<=3){status="CRITICAL";label="KRIITTINEN"}
+  else if(dist<=7){status="WATCH";label="SEURAA"}
+  else if(dataStale){status="STALE";label="VANHA DATA"}
+
+  let explanation="";
+  if(status==="TRIGGERED") explanation="Kurssi on laskennallisen suojatason alapuolella. Tarkista positio ja teesi heti.";
+  else if(status==="CRITICAL") explanation=`Kurssi on vain ${dist.toFixed(1)} % suojatasosta. Uusi päätös ennen kuin liike pakottaa siihen.`;
+  else if(status==="WATCH") explanation=`Suojatasoon on ${dist.toFixed(1)} %. Positio kuuluu seurantalistan kärkeen.`;
+  else if(status==="STALE") explanation="Suoja näyttää väljältä, mutta hintadata on vanhaa. Älä tee päätöstä tämän luvun varassa.";
+  else explanation=`Suojatasoon on ${dist.toFixed(1)} %. Ei välitöntä teknistä hälytystä.`;
+
+  return{status,label,activeStop:active,distancePct:dist,riskEuro,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,stopType,trend:h.riskTrend||"",dataStale,quoteAge,explanation};
+}
+async function loadRiskData(force=false){
+  try{
+    const r=await fetch(`./risk-data.json?t=${Date.now()}`,{cache:"no-store"});
+    if(!r.ok) throw new Error(`risk-data.json HTTP ${r.status}`);
+    riskMetrics=await r.json();
+    for(const h of state.holdings||[]){
+      if(h.assetType==="fund") continue;
+      const key=(h.symbol||"").toUpperCase();
+      const m=riskMetrics?.metrics?.[key];
+      if(!m) continue;
+      h.atr=n(m.atr14)||h.atr;
+      h.high20=n(m.high20)||h.high20;
+      h.low20=n(m.low20)||h.low20;
+      h.riskTrend=m.trend||h.riskTrend||"";
+      h.riskMetricsAt=riskMetrics.generated_at||"";
+    }
+    save();render();
+  }catch(err){
+    if(force) alert(`Riskidata ei latautunut: ${err.message||err}`);
+  }
 }
 function renderNews(){
   $("news").innerHTML="";
@@ -662,6 +787,7 @@ async function refreshMarket(showErrors=false){
   if(showErrors && stockFail>0 && firstError){
     alert(`Osakepäivityksessä oli ongelma: ${stockOk}/${stocks.length} onnistui.\n\n${firstError}`);
   }
+  loadRiskData(false).catch(()=>{});
 }
 async function refreshNews(){
   if(!state.apiKey)return alert("Lisää Finnhub API -avain Asetuksissa.");$("newsBtn").disabled=true;const out=[],seen=new Set();
@@ -785,6 +911,7 @@ if("caches" in window){
 render();
 loadInsights(false).catch(()=>{});
 loadPortfolioNews(false).catch(()=>{});
+loadRiskData(false).catch(()=>{});
 setTimeout(()=>{
   const last=state.quoteUpdatedAt||0;
   if(state.holdings?.length && Date.now()-last>10*60*1000) refreshMarket(false).catch(()=>{});
