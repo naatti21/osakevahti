@@ -348,6 +348,215 @@ jobs:
           print(json.dumps(payload, ensure_ascii=False, indent=2))
           PY
 
+
+      - name: Build dividend and Rocket Radar
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import math
+          import os
+          import statistics
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone, timedelta
+
+          PREVIOUS = "https://naatti21.github.io/osakevahti/insights.json"
+          REFRESH_HOURS = 4
+
+          DIVIDENDS = {
+              "NDA-FI.HE": ("Nordea Bank", "Suomi"),
+              "SAMPO.HE": ("Sampo", "Suomi"),
+              "FORTUM.HE": ("Fortum", "Suomi"),
+              "ELISA.HE": ("Elisa", "Suomi"),
+              "KESKOB.HE": ("Kesko B", "Suomi"),
+              "UPM.HE": ("UPM-Kymmene", "Suomi"),
+              "KNEBV.HE": ("KONE B", "Suomi"),
+              "METSO.HE": ("Metso", "Suomi"),
+              "HUH1V.HE": ("Huhtamäki", "Suomi"),
+              "ORNBV.HE": ("Orion B", "Suomi"),
+          }
+
+          ROCKETS = {
+              "NVDA": ("NVIDIA", "USA"),
+              "AMD": ("AMD", "USA"),
+              "AVGO": ("Broadcom", "USA"),
+              "PLTR": ("Palantir", "USA"),
+              "ARM": ("Arm", "USA"),
+              "CRWD": ("CrowdStrike", "USA"),
+              "NET": ("Cloudflare", "USA"),
+              "APP": ("AppLovin", "USA"),
+              "VRT": ("Vertiv", "USA"),
+              "RKLB": ("Rocket Lab", "USA"),
+              "ASTS": ("AST SpaceMobile", "USA"),
+              "IONQ": ("IonQ", "USA"),
+              "RGTI": ("Rigetti", "USA"),
+              "QBTS": ("D-Wave Quantum", "USA"),
+              "SMCI": ("Super Micro Computer", "USA"),
+              "LLY": ("Eli Lilly", "USA"),
+              "TSM": ("TSMC ADR", "Taiwan/USA"),
+              "ASML": ("ASML", "Netherlands/USA"),
+              "RHM.DE": ("Rheinmetall", "Germany"),
+              "SAAB-B.ST": ("Saab B", "Sweden"),
+              "AIR.PA": ("Airbus", "France"),
+              "RR.L": ("Rolls-Royce", "UK"),
+              "BA.L": ("BAE Systems", "UK"),
+              "NOVO-B.CO": ("Novo Nordisk B", "Denmark"),
+              "2330.TW": ("TSMC", "Taiwan"),
+              "9984.T": ("SoftBank Group", "Japan"),
+              "6758.T": ("Sony Group", "Japan"),
+              "0700.HK": ("Tencent", "Hong Kong"),
+              "3690.HK": ("Meituan", "Hong Kong"),
+              "SHOP.TO": ("Shopify", "Canada"),
+          }
+
+          def get_json(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "Mozilla/5.0 Osakevahti-Radar/1.0",
+                      "Accept": "application/json",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.loads(r.read().decode("utf-8"))
+
+          def try_reuse():
+              if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
+                  return False
+              try:
+                  data = get_json(PREVIOUS + "?t=" + str(int(time.time())))
+                  ts = datetime.fromisoformat(data["generated_at"].replace("Z","+00:00"))
+                  if datetime.now(timezone.utc) - ts < timedelta(hours=REFRESH_HOURS):
+                      with open("insights.json","w",encoding="utf-8") as f:
+                          json.dump(data,f,ensure_ascii=False,indent=2)
+                      print("Reused fresh insights.json")
+                      return True
+              except Exception as e:
+                  print("Previous insights unavailable:", e)
+              return False
+
+          if try_reuse():
+              raise SystemExit(0)
+
+          def yahoo_history(ticker, years=2, events=False):
+              q = urllib.parse.quote(ticker, safe="")
+              ev = "&events=div%2Csplits" if events else ""
+              url = (
+                  f"https://query1.finance.yahoo.com/v8/finance/chart/{q}"
+                  f"?range={years}y&interval=1d&includePrePost=false{ev}"
+              )
+              data = get_json(url)
+              result = (((data.get("chart") or {}).get("result") or [None])[0])
+              if not result:
+                  raise RuntimeError("no chart data")
+              ts = result.get("timestamp") or []
+              quote = (((result.get("indicators") or {}).get("quote") or [{}])[0])
+              closes = quote.get("close") or []
+              volumes = quote.get("volume") or []
+              rows = []
+              for t,c,v in zip(ts,closes,volumes):
+                  if isinstance(c,(int,float)):
+                      rows.append((int(t),float(c),float(v or 0)))
+              dividends = []
+              for _,d in (((result.get("events") or {}).get("dividends") or {}).items()):
+                  if isinstance(d,dict) and isinstance(d.get("amount"),(int,float)):
+                      dividends.append((int(d.get("date") or 0),float(d["amount"])))
+              return rows, dividends
+
+          def clamp(x,a=0,b=1):
+              return max(a,min(b,x))
+
+          def ret(closes, n):
+              if len(closes) <= n or closes[-n-1] <= 0:
+                  return 0.0
+              return (closes[-1]/closes[-n-1]-1)*100
+
+          def max_drawdown(closes):
+              if not closes: return 0.0
+              peak=closes[0]; worst=0.0
+              for x in closes:
+                  peak=max(peak,x)
+                  if peak>0: worst=min(worst,(x/peak-1)*100)
+              return worst
+
+          def dividend_score(ticker,name,market):
+              rows, divs = yahoo_history(ticker,5,True)
+              closes=[r[1] for r in rows]
+              if len(closes)<200: raise RuntimeError("too little price history")
+              now=int(time.time())
+              ttm=sum(a for t,a in divs if t>=now-365*86400)
+              yld=(ttm/closes[-1]*100) if closes[-1] else 0
+              current_year=datetime.now(timezone.utc).year
+              years=set(datetime.fromtimestamp(t,timezone.utc).year for t,a in divs if a>0 and current_year-4<=datetime.fromtimestamp(t,timezone.utc).year<=current_year)
+              r12=ret(closes,252 if len(closes)>253 else min(200,len(closes)-1))
+              dd=max_drawdown(closes[-252:])
+              yield_score=clamp(yld/7)*35
+              if yld>10: yield_score=max(0,yield_score-10)
+              consistency=len(years)/5*30
+              trend=clamp((r12+25)/55)*20
+              drawdown=clamp((dd+45)/45)*15
+              score=round(clamp((yield_score+consistency+trend+drawdown)/100)*100,1)
+              label="VAHVA SEURANTA" if score>=75 else "SEURAA" if score>=60 else "NEUTRAALI"
+              reason=f"TTM-osinko {yld:.1f} %, osinkoa {len(years)}/5 viime vuodesta, 12 kk {r12:+.1f} %."
+              return {"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"yield_pct":round(yld,2),"dividend_years":len(years),"return_12m":round(r12,2),"max_drawdown":round(dd,2),"reason":reason}
+
+          def rocket_score(ticker,name,market):
+              rows,_=yahoo_history(ticker,2,False)
+              closes=[r[1] for r in rows]
+              vols=[r[2] for r in rows]
+              if len(closes)<140: raise RuntimeError("too little history")
+              m1=ret(closes,21);m3=ret(closes,63);m6=ret(closes,126)
+              high=max(closes[-252:] if len(closes)>=252 else closes)
+              dist=(closes[-1]/high-1)*100 if high else 0
+              recent=sum(vols[-5:])/max(1,len(vols[-5:]))
+              base=sum(vols[-25:-5])/max(1,len(vols[-25:-5])) if len(vols)>=25 else recent
+              vr=recent/base if base>0 else 1
+              rets=[(closes[i]/closes[i-1]-1)*100 for i in range(max(1,len(closes)-21),len(closes)) if closes[i-1]>0]
+              vol=statistics.pstdev(rets) if len(rets)>2 else 0
+              score=0
+              score+=clamp((m1+10)/40)*25
+              score+=clamp((m3+15)/75)*25
+              score+=clamp((m6+20)/120)*20
+              score+=clamp((vr-.8)/1.7)*12
+              score+=clamp((dist+25)/25)*13
+              score+=5 if sum(closes[-20:])/20 > sum(closes[-60:])/60 else 0
+              score-=clamp((vol-3)/5)*10
+              score=round(clamp(score/100)*100,1)
+              label="RAKETTI" if score>=80 else "KUUMA" if score>=68 else "SEURAA"
+              risk="erittäin korkea" if vol>=5 else "korkea" if vol>=3 else "kohtalainen"
+              reason=f"52v huippuun {dist:.1f} %, 20 pv volatiliteetti {vol:.1f} %, volyymi {vr:.1f}×."
+              return {"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"m1":round(m1,2),"m3":round(m3,2),"m6":round(m6,2),"volume_ratio":round(vr,2),"distance_high":round(dist,2),"volatility":round(vol,2),"risk":risk,"reason":reason}
+
+          dividends=[]
+          dividend_errors={}
+          for ticker,(name,market) in DIVIDENDS.items():
+              try: dividends.append(dividend_score(ticker,name,market))
+              except Exception as e: dividend_errors[ticker]=str(e)
+          dividends.sort(key=lambda x:x["score"],reverse=True)
+
+          rockets=[]
+          rocket_errors={}
+          for ticker,(name,market) in ROCKETS.items():
+              try: rockets.append(rocket_score(ticker,name,market))
+              except Exception as e: rocket_errors[ticker]=str(e)
+          rockets.sort(key=lambda x:x["score"],reverse=True)
+
+          payload={
+              "generated_at":datetime.now(timezone.utc).isoformat(),
+              "method_version":"2.3",
+              "dividends":dividends[:8],
+              "rockets":rockets[:8],
+              "rocket_universe_count":len(ROCKETS),
+              "dividend_universe_count":len(DIVIDENDS),
+              "errors":{"dividends":dividend_errors,"rockets":rocket_errors},
+          }
+          with open("insights.json","w",encoding="utf-8") as f:
+              json.dump(payload,f,ensure_ascii=False,indent=2)
+          print(json.dumps(payload,ensure_ascii=False,indent=2))
+          PY
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
