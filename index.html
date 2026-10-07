@@ -15,7 +15,7 @@ main{max-width:760px;margin:auto;padding:10px 10px 102px}.view{display:none}.vie
 .row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:7px}.section{display:flex;justify-content:space-between;align-items:center;margin:8px 2px}
 button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);color:var(--text);font-weight:750}
 button.primary{background:var(--accent);color:#07130c;border-color:transparent}.danger{color:var(--danger)}.muted{color:var(--muted)}.small{font-size:12px}
-.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left}.symbol{font-weight:850;font-size:15px;line-height:1.15}.name{color:var(--muted);font-size:11px;line-height:1.25}.value{font-weight:800;text-align:right;font-size:15px;white-space:nowrap}.pnl{font-size:11px;text-align:right;white-space:nowrap}.sourceBadge{display:inline-flex;margin-left:5px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;letter-spacing:.03em;vertical-align:1px}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.pos{color:var(--ok)}.neg{color:var(--danger)}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;text-align:left}.symbol{font-weight:850;font-size:15px;line-height:1.15}.name{color:var(--muted);font-size:11px;line-height:1.25}.value{font-weight:800;text-align:right;font-size:15px;white-space:nowrap}.pnl{font-size:11px;text-align:right;white-space:nowrap}.sourceBadge{display:inline-flex;margin-left:5px;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;letter-spacing:.03em;vertical-align:1px}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.broker{color:#8fb7ff}.pos{color:var(--ok)}.neg{color:var(--danger)}
 .badge{border-radius:999px;padding:4px 7px;font-size:9px;font-weight:800;white-space:nowrap}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
 .riskMain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}.riskMetric{background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px;min-width:0}.riskMetric span{display:block;color:var(--muted);font-size:9px;line-height:1.2}.riskMetric strong{display:block;margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.riskDetails{margin-top:7px;border-top:1px solid var(--line);padding-top:6px}.riskDetails summary{padding:5px 0;font-size:10px;color:var(--muted);font-weight:700;background:transparent;border:0}.riskDetails .kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:11px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
@@ -25,7 +25,7 @@ nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;bac
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
 .hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
 .file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
-.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -41,6 +41,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <div id="portfolioValue" class="heroValue">0,00 €</div>
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
+  <div id="accountSummary" class="summaryGrid"></div>
   <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><button id="addBtn" class="primary">+ Lisää</button></div>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -65,9 +66,12 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">Finnhub päivittää tällä hetkellä luotettavasti AMD:n kaltaiset US-osakkeet. Jos Helsinki-osake ei päivity, appi säilyttää tuodun arvon ja merkitsee sen TUONTI-tilaan.</p>
-    <button id="testApiBtn" type="button">Testaa Finnhub AMD:llä</button>
-    <div id="apiStatus" class="statusBox muted">Yhteyttä ei ole vielä testattu.</div>
+    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: Nordnetin julkinen instrumenttihaku, joka voi palauttaa viivästettyä tai reaaliaikaista hintaa käyttöoikeuden mukaan.</p>
+    <div class="actions" style="margin-top:8px">
+      <button id="testApiBtn" type="button">Testaa Finnhub</button>
+      <button id="testNordnetBtn" type="button">Testaa Helsinki</button>
+    </div>
+    <div id="apiStatus" class="statusBox muted">Yhteyksiä ei ole vielä testattu.</div>
   </div>
 
   <details>
@@ -92,7 +96,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.5 · erottaa live-/tuontiarvot ja näyttää päivityskattavuuden.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.6 · Nordnet-markkinadata Helsingille, OST/AOT-tilit ja tiiviimpi yhteenveto.</p>
     </div>
   </details>
 </section>
@@ -132,7 +136,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 
 <script>
 const KEY="osakevahti.single.v1";
-let state=load();
+let state=load();save();
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -146,10 +150,49 @@ $("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey;
 $("baseCurrency").onchange=()=>{state.baseCurrency=$("baseCurrency").value;save();refreshMarket()};
 $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
 $("testApiBtn").onclick=testFinnhub;
+$("testNordnetBtn").onclick=testNordnet;
 $("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("apiKey").value="";render()}};
 
-function load(){try{return Object.assign({baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null},JSON.parse(localStorage.getItem(KEY)||"{}"))}catch{return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null}}}
+function load(){
+  try{
+    const s=Object.assign({baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null},JSON.parse(localStorage.getItem(KEY)||"{}"));
+    migrateState(s);
+    return s
+  }catch{
+    return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null}
+  }
+}
+function migrateState(s){
+  for(const h of (s.holdings||[])){
+    if(h.account==="Nordea") h.account="OST";
+    if(h.account==="Nordnet") h.account="AOT";
+    const ns=nordnetSymbol(h);
+    if(ns && isHelsinkiHolding(h)){
+      h.nordnetSymbol=ns;
+      if(["FORTUM.HE","NDA-FI.HE","VERK.HE","METSO.HE","FRAMERY.HE","IQM.HE"].includes(h.symbol)) h.symbol=ns;
+    }
+  }
+}
+function isHelsinkiHolding(h){
+  if(h.assetType==="fund") return false;
+  const s=(h.symbol||"").toUpperCase();
+  const name=(h.name||"").toLowerCase();
+  return ["FORTUM","NDA-FI","VERK","METSO","FRAMERY","IQMX"].includes(nordnetSymbol(h)) ||
+    /fortum|nordea bank|verkkokauppa|metso|framery|iqm quantum/.test(name) ||
+    s.endsWith(".HE");
+}
+function nordnetSymbol(h){
+  const raw=((h.nordnetSymbol||h.symbol||h.providerSymbol||"")+"").toUpperCase();
+  const name=(h.name||"").toLowerCase();
+  if(name.includes("iqm quantum") || raw==="IQM.HE" || raw==="IQM") return "IQMX";
+  if(name.includes("framery") || raw.startsWith("FRAMERY")) return "FRAMERY";
+  if(name.includes("fortum") || raw.startsWith("FORTUM")) return "FORTUM";
+  if(name.includes("nordea bank") || raw.startsWith("NDA-FI")) return "NDA-FI";
+  if(name.includes("verkkokauppa") || raw.startsWith("VERK")) return "VERK";
+  if(name==="metso" || raw.startsWith("METSO")) return "METSO";
+  return raw.replace(/\.HE$/,"");
+}
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function uid(){return crypto.randomUUID?.()||Date.now()+"-"+Math.random().toString(16).slice(2)}
 function n(v){const x=Number(String(v??"").replace(",","."));return Number.isFinite(x)?x:0}
@@ -160,26 +203,31 @@ function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
 function dataState(h){
   if(h.currentPrice){
+    if(h.quoteSource==="NORDNET"){
+      if(h.quoteRealtime===true) return {label:"NORDNET LIVE",cls:"live"};
+      return {label:"NORDNET",cls:"broker"};
+    }
     if(!h.quoteTimestamp) return {label:"VIIMEISIN",cls:"manual"};
     const age=(Date.now()-n(h.quoteTimestamp))/3600000;
     if(age<=0.5) return {label:"TUORE",cls:"live"};
     if(age<=72) return {label:"VIIMEISIN",cls:"manual"};
     return {label:"VANHA",cls:"stale"};
   }
-  if(h.manualPrice) return {label:"TUONTI",cls:"manual"};
+  if(h.manualPrice) return {label:h.assetType==="fund"?"NAV TUONTI":"TUONTI",cls:"manual"};
   return {label:"EI DATAA",cls:"nodata"};
 }
 
 function render(){
-  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0;
+  $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0;
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   state.holdings.forEach(h=>{
-    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;
+    const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;if(h.account==="OST")ost+=val;if(h.account==="AOT")aot+=val;if(h.assetType==="fund")funds+=val;
     const ds=dataState(h);
     const day=n(h.dayChangePct);
     const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="metaLine"><span class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahastot</span><strong>${money(funds,state.baseCurrency)}</strong></div>`;
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
     const s=state.refreshSummary;
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} päivittyi · ${s.snapshot} tuonti`;
@@ -231,52 +279,61 @@ async function refreshMarket(){
   $("refreshBtn").disabled=true;
   let okCount=0, failCount=0, firstError="";
   const fx={};
-  const tracked=state.holdings.filter(h=>h.assetType!=="fund" && (h.providerSymbol||h.symbol));
+  const tracked=state.holdings.filter(h=>h.assetType!=="fund");
+
   for(const h of state.holdings){
     try{
       fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);
       h.fxRate=fx[h.currency];
-    }catch(err){
-      if(h.currency===state.baseCurrency)h.fxRate=1;
+    }catch{
+      if(h.currency===state.baseCurrency) h.fxRate=1;
     }
 
-    if(!state.apiKey || h.assetType==="fund") continue;
-    const sym=(h.providerSymbol||h.symbol||"").trim();
-    if(!sym) continue;
+    if(h.assetType==="fund") continue;
 
     try{
-      const q=await quote(sym);
-      h.currentPrice=q.c;
-      h.quoteTimestamp=q.t ? n(q.t)*1000 : Date.now();
-      h.dayChangePct=n(q.dp);
-      h.quoteSource="FINNHUB";
-      h.highWatermark=Math.max(n(h.highWatermark),q.c);
+      let q=null;
+      if(isHelsinkiHolding(h)){
+        q=await nordnetQuote(nordnetSymbol(h));
+        h.currentPrice=q.current;
+        h.quoteTimestamp=q.timestamp||Date.now();
+        h.dayChangePct=q.changePct;
+        h.quoteSource="NORDNET";
+        h.quoteRealtime=q.realtime;
+        h.nordnetSymbol=nordnetSymbol(h);
+      }else if(state.apiKey){
+        const fq=await quote(h.providerSymbol||h.symbol);
+        h.currentPrice=fq.c;
+        h.quoteTimestamp=fq.t ? n(fq.t)*1000 : Date.now();
+        h.dayChangePct=n(fq.dp);
+        h.quoteSource="FINNHUB";
+        h.quoteRealtime=true;
+      }else{
+        throw new Error("Finnhub-avain puuttuu");
+      }
+      h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       okCount++;
-      try{
-        const candles=await candle(sym);
-        const a=atr(candles);
-        if(a)h.atr=a;
-      }catch{}
+
+      if(h.quoteSource==="FINNHUB"){
+        try{
+          const candles=await candle(h.providerSymbol||h.symbol);
+          const a=atr(candles);
+          if(a) h.atr=a;
+        }catch{}
+      }
     }catch(err){
       failCount++;
-      if(!firstError) firstError=`${sym}: ${err.message||err}`;
+      if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
     }
   }
 
   const snapshotCount=state.holdings.filter(h=>!h.currentPrice && h.manualPrice).length;
-  state.refreshSummary={
-    updated:okCount,
-    marketTracked:tracked.length,
-    snapshot:snapshotCount,
-    failed:failCount,
-    at:Date.now()
-  };
+  state.refreshSummary={updated:okCount,marketTracked:tracked.length,snapshot:snapshotCount,failed:failCount,at:Date.now()};
   if(okCount>0) state.quoteUpdatedAt=Date.now();
   save();render();$("refreshBtn").disabled=false;
 
-  if(state.apiKey && failCount>0){
-    const msg=`Päivittyi ${okCount}/${tracked.length} markkinainstrumentista. ${failCount} ei päivittynyt Finnhubista.`;
-    if(okCount===0 && firstError) alert(msg+"\n\n"+firstError);
+  if(failCount>0 && okCount===0 && firstError){
+    alert(`Kurssipäivitys epäonnistui.\n\n${firstError}`);
   }
 }
 async function refreshNews(){
@@ -291,6 +348,47 @@ async function quote(s){
   if(j.error) throw new Error(j.error);
   if(!n(j.c)) throw new Error(`Finnhub ei palauttanut kurssia symbolille ${s}`);
   return j
+}
+async function nordnetQuote(symbol){
+  const params=new URLSearchParams();
+  params.set("free_text_search",symbol);
+  params.set("limit","10");
+  ["PRICE_INFO","INSTRUMENT_INFO","MARKET_INFO","EXCHANGE_INFO"].forEach(x=>params.append("attribute_groups",x));
+  const url=`https://public.nordnet.se/api/2/instrument_search/query/stocklist?${params.toString()}`;
+  const r=await fetch(url,{headers:{"Accept-Language":"fi"}});
+  let j={};try{j=await r.json()}catch{}
+  if(!r.ok) throw new Error(`Nordnet HTTP ${r.status}`);
+  const rows=Array.isArray(j.results)?j.results:[];
+  const target=String(symbol).toUpperCase();
+  const exact=rows.filter(x=>String(x.instrument_info?.symbol||"").toUpperCase()===target);
+  const item=(exact.find(x=>String(x.exchange_info?.exchange_country||"").toUpperCase()==="FI")||exact[0]||
+              rows.find(x=>String(x.exchange_info?.exchange_country||"").toUpperCase()==="FI"));
+  if(!item) throw new Error(`Nordnet ei löytänyt symbolia ${symbol}`);
+  const pi=item.price_info||{};
+  const current=n(pi.last?.price)||n(pi.close?.price);
+  if(!current) throw new Error(`Nordnet ei palauttanut hintaa symbolille ${symbol}`);
+  return{
+    current,
+    changePct:n(pi.diff_pct),
+    timestamp:n(pi.tick_timestamp)||Date.now(),
+    realtime:pi.realtime===true,
+    currency:item.instrument_info?.currency||"EUR",
+    instrumentId:item.instrument_info?.instrument_id||null
+  };
+}
+async function testNordnet(){
+  const box=$("apiStatus");
+  box.className="statusBox muted";
+  box.textContent="Testataan Nasdaq Helsinki / FORTUM...";
+  try{
+    const q=await nordnetQuote("FORTUM");
+    const stamp=q.timestamp?new Date(q.timestamp).toLocaleString("fi-FI"):"aikaleima puuttuu";
+    box.className="statusBox statusOk";
+    box.textContent=`Helsinki-yhteys toimii. FORTUM ${q.current.toFixed(2)} EUR · ${q.realtime?"reaaliaikainen":"viivästetty/viimeisin"} · ${stamp}.`;
+  }catch(err){
+    box.className="statusBox statusBad";
+    box.textContent=`Helsinki-yhteys ei toimi selaimesta: ${err.message||err}`;
+  }
 }
 async function testFinnhub(){
   const box=$("apiStatus");
@@ -312,8 +410,8 @@ function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.len
 async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
 async function fxRate(from,to){if(from===to)return 1;const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);const j=await r.json();return n(j.rates?.[to])||1}
 function exportBackup(){const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
-async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));save();$("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
-async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){if(!r.symbol)continue;arr.push({id:uid(),symbol:r.symbol.trim().toUpperCase(),name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency:(r.currency||state.baseCurrency).trim().toUpperCase(),account:(r.account||"").trim(),providerSymbol:(r.provider_symbol||r.symbol).trim(),manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium"})}if(arr.length){state.holdings=arr;save();render();alert(`Tuotu ${arr.length} omistusta.`)}e.target.value=""}
+async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
+async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){if(!r.symbol)continue;arr.push({id:uid(),symbol:r.symbol.trim().toUpperCase(),name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency:(r.currency||state.baseCurrency).trim().toUpperCase(),account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol:(r.provider_symbol||r.symbol).trim(),manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium"})}if(arr.length){state.holdings=arr;save();render();alert(`Tuotu ${arr.length} omistusta.`)}e.target.value=""}
 function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
 function line(l,d){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const x=l[i];if(x=='"'){if(q&&l[i+1]=='"'){c+='"';i++}else q=!q}else if(x===d&&!q){o.push(c);c=""}else c+=x}o.push(c);return o}
 if("serviceWorker" in navigator){
