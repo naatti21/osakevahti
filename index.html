@@ -65,6 +65,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
+    <p class="muted small">Finnhub päivittää tällä hetkellä luotettavasti AMD:n kaltaiset US-osakkeet. Jos Helsinki-osake ei päivity, appi säilyttää tuodun arvon ja merkitsee sen TUONTI-tilaan.</p>
     <button id="testApiBtn" type="button">Testaa Finnhub AMD:llä</button>
     <div id="apiStatus" class="statusBox muted">Yhteyttä ei ole vielä testattu.</div>
   </div>
@@ -91,7 +92,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.4 · tiiviimpi mobiilinäkymä, selkeämmät omistus- ja riskikortit.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.5 · erottaa live-/tuontiarvot ja näyttää päivityskattavuuden.</p>
     </div>
   </details>
 </section>
@@ -165,7 +166,7 @@ function dataState(h){
     if(age<=72) return {label:"VIIMEISIN",cls:"manual"};
     return {label:"VANHA",cls:"stale"};
   }
-  if(h.manualPrice) return {label:"KÄSIN",cls:"manual"};
+  if(h.manualPrice) return {label:"TUONTI",cls:"manual"};
   return {label:"EI DATAA",cls:"nodata"};
 }
 
@@ -179,7 +180,12 @@ function render(){
     const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="metaLine"><span class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
-  $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";$("quoteAge").textContent=ago(state.quoteUpdatedAt);
+  $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
+    const s=state.refreshSummary;
+    $("quoteAge").textContent=`${s.updated}/${s.marketTracked} päivittyi · ${s.snapshot} tuonti`;
+  } else {
+    $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
+  }
   renderNews();
 }
 function renderRisk(h){
@@ -225,26 +231,53 @@ async function refreshMarket(){
   $("refreshBtn").disabled=true;
   let okCount=0, failCount=0, firstError="";
   const fx={};
+  const tracked=state.holdings.filter(h=>h.assetType!=="fund" && (h.providerSymbol||h.symbol));
   for(const h of state.holdings){
-    try{fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);h.fxRate=fx[h.currency]}
-    catch(err){if(h.currency===state.baseCurrency)h.fxRate=1}
-    if(state.apiKey){
+    try{
+      fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);
+      h.fxRate=fx[h.currency];
+    }catch(err){
+      if(h.currency===state.baseCurrency)h.fxRate=1;
+    }
+
+    if(!state.apiKey || h.assetType==="fund") continue;
+    const sym=(h.providerSymbol||h.symbol||"").trim();
+    if(!sym) continue;
+
+    try{
+      const q=await quote(sym);
+      h.currentPrice=q.c;
+      h.quoteTimestamp=q.t ? n(q.t)*1000 : Date.now();
+      h.dayChangePct=n(q.dp);
+      h.quoteSource="FINNHUB";
+      h.highWatermark=Math.max(n(h.highWatermark),q.c);
+      okCount++;
       try{
-        const q=await quote(h.providerSymbol||h.symbol);
-        h.currentPrice=q.c;
-        h.quoteTimestamp=q.t ? n(q.t)*1000 : Date.now();
-        h.dayChangePct=n(q.dp);
-        h.highWatermark=Math.max(n(h.highWatermark),q.c);
-        okCount++;
-        try{const candles=await candle(h.providerSymbol||h.symbol);const a=atr(candles);if(a)h.atr=a}catch{}
-      }catch(err){
-        failCount++;
-        if(!firstError) firstError=`${h.providerSymbol||h.symbol}: ${err.message||err}`;
-      }
+        const candles=await candle(sym);
+        const a=atr(candles);
+        if(a)h.atr=a;
+      }catch{}
+    }catch(err){
+      failCount++;
+      if(!firstError) firstError=`${sym}: ${err.message||err}`;
     }
   }
-  state.quoteUpdatedAt=Date.now();save();render();$("refreshBtn").disabled=false;
-  if(state.apiKey && failCount && !okCount) alert("Kurssihaku epäonnistui. "+firstError+"\n\nAsetuksissa on nyt 'Testaa Finnhub AMD:llä' -painike, joka näyttää tarkemman syyn.");
+
+  const snapshotCount=state.holdings.filter(h=>!h.currentPrice && h.manualPrice).length;
+  state.refreshSummary={
+    updated:okCount,
+    marketTracked:tracked.length,
+    snapshot:snapshotCount,
+    failed:failCount,
+    at:Date.now()
+  };
+  if(okCount>0) state.quoteUpdatedAt=Date.now();
+  save();render();$("refreshBtn").disabled=false;
+
+  if(state.apiKey && failCount>0){
+    const msg=`Päivittyi ${okCount}/${tracked.length} markkinainstrumentista. ${failCount} ei päivittynyt Finnhubista.`;
+    if(okCount===0 && firstError) alert(msg+"\n\n"+firstError);
+  }
 }
 async function refreshNews(){
   if(!state.apiKey)return alert("Lisää Finnhub API -avain Asetuksissa.");$("newsBtn").disabled=true;const out=[],seen=new Set();
