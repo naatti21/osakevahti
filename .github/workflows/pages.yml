@@ -47,6 +47,15 @@ jobs:
               "IQMX": "IQMX.HE",
           }
 
+          FUNDS = {
+              "NORDEA_POHJOISMAAT_SELECT_A": "Nordea Pohjoismaat Indeksi Select A",
+              "HANDELSBANKEN_USA_INDEKSI": "Handelsbanken USA Indeksi",
+              "NORDNET_EUROOPPA_INDEKSI": "Nordnet Eurooppa Indeksi",
+              "NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI": "Nordnet Kehittyvät Markkinat Indeksi",
+              "NORDNET_MAAILMA_INDEKSI_125": "Nordnet Maailma Indeksi 125",
+              "NORDNET_SUOMI_INDEKSI": "Nordnet Suomi Indeksi",
+          }
+
           def get_json(url):
               req = urllib.request.Request(
                   url,
@@ -87,7 +96,7 @@ jobs:
                   ("attribute_groups", "EXCHANGE_INFO"),
               ]
               url = (
-                  "https://public.nordnet.fi/api/2/instrument_search/query/stocklist?"
+                  "https://public.nordnet.se/api/2/instrument_search/query/stocklist?"
                   + urllib.parse.urlencode(params)
               )
               data = get_json(url)
@@ -192,25 +201,145 @@ jobs:
                   "provider": "Yahoo intraday",
               }
 
+          def flatten_strings(obj):
+              out = []
+              if isinstance(obj, dict):
+                  for v in obj.values():
+                      out.extend(flatten_strings(v))
+              elif isinstance(obj, list):
+                  for v in obj:
+                      out.extend(flatten_strings(v))
+              elif isinstance(obj, str):
+                  out.append(obj)
+              return out
+
+          def fund_quote(query):
+              params = [
+                  ("query", query),
+                  ("instrument_group", "FUND"),
+                  ("search_space", "INSTRUMENTS"),
+                  ("limit", "10"),
+                  ("use_nnx_instrument_search", "true"),
+              ]
+              url = (
+                  "https://public.nordnet.se/api/2/main_search?"
+                  + urllib.parse.urlencode(params)
+              )
+              data = get_json(url)
+
+              q_tokens = [t.lower() for t in query.replace("-", " ").split() if len(t) > 2]
+              candidates = []
+
+              for d in walk(data):
+                  if not isinstance(d, dict):
+                      continue
+
+                  # Nordnet main_search fund hits expose NAV as last_price.
+                  price = (
+                      price_number(d.get("last_price"))
+                      or price_number(d.get("nav"))
+                      or price_number(d.get("price"))
+                  )
+                  if not price:
+                      continue
+
+                  hay = " ".join(flatten_strings(d)).lower()
+                  score = sum(1 for t in q_tokens if t in hay)
+                  if score == 0:
+                      continue
+
+                  ts = (
+                      d.get("tick_timestamp")
+                      or d.get("timestamp")
+                      or d.get("nav_timestamp")
+                  )
+                  if isinstance(ts, (int, float)):
+                      ts = int(ts)
+                      if ts < 10_000_000_000:
+                          ts *= 1000
+                  else:
+                      ts = int(time.time() * 1000)
+
+                  title = str(d.get("last_price_title") or "").lower()
+                  candidates.append({
+                      "score": score,
+                      "price": float(price),
+                      "timestamp": ts,
+                      "provider": "Nordnet fund",
+                      "title": title,
+                      "raw_name": next(
+                          (
+                              s for s in flatten_strings(d)
+                              if isinstance(s, str) and len(s) >= 4
+                          ),
+                          query,
+                      ),
+                  })
+
+              if not candidates:
+                  raise RuntimeError("rahastoa/NAV-arvoa ei löytynyt")
+
+              candidates.sort(key=lambda x: (x["score"], "nav" in x["title"]), reverse=True)
+              best = candidates[0]
+              return {
+                  "price": best["price"],
+                  "timestamp": best["timestamp"],
+                  "provider": best["provider"],
+                  "realtime": False,
+                  "change_pct": 0,
+              }
+
           quotes = {}
           errors = {}
+          fund_quotes = {}
+          fund_errors = {}
 
           for symbol, yahoo_ticker in SYMBOLS.items():
+              candidates = []
+              source_errors = {}
+
               try:
-                  quotes[symbol] = yahoo_quote(yahoo_ticker)
-              except Exception as yahoo_error:
-                  try:
-                      quotes[symbol] = nordnet_quote(symbol)
-                  except Exception as nordnet_error:
-                      errors[symbol] = {
-                          "yahoo": str(yahoo_error),
-                          "nordnet": str(nordnet_error),
-                      }
+                  candidates.append(nordnet_quote(symbol))
+              except Exception as e:
+                  source_errors["nordnet"] = str(e)
+
+              try:
+                  candidates.append(yahoo_quote(yahoo_ticker))
+              except Exception as e:
+                  source_errors["yahoo"] = str(e)
+
+              if candidates:
+                  # Pick the source with the newest actual quote timestamp.
+                  # This avoids hard-coding one provider when another is fresher.
+                  candidates.sort(
+                      key=lambda q: int(q.get("timestamp") or 0),
+                      reverse=True,
+                  )
+                  quotes[symbol] = candidates[0]
+                  if len(candidates) > 1:
+                      quotes[symbol]["alternatives"] = [
+                          {
+                              "provider": q.get("provider"),
+                              "timestamp": q.get("timestamp"),
+                              "price": q.get("price"),
+                          }
+                          for q in candidates[1:]
+                      ]
+              else:
+                  errors[symbol] = source_errors
+
+          for fund_key, fund_query in FUNDS.items():
+              try:
+                  fund_quotes[fund_key] = fund_quote(fund_query)
+              except Exception as fund_error:
+                  fund_errors[fund_key] = str(fund_error)
 
           payload = {
               "generated_at": datetime.now(timezone.utc).isoformat(),
               "quotes": quotes,
+              "fund_quotes": fund_quotes,
               "errors": errors,
+              "fund_errors": fund_errors,
           }
 
           with open("market-data.json", "w", encoding="utf-8") as f:
