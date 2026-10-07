@@ -47,15 +47,6 @@ jobs:
               "IQMX": "IQMX.HE",
           }
 
-          FUNDS = {
-              "NORDEA_POHJOISMAAT_SELECT_A": "Nordea Pohjoismaat Indeksi Select A",
-              "HANDELSBANKEN_USA_INDEKSI": "Handelsbanken USA Indeksi",
-              "NORDNET_EUROOPPA_INDEKSI": "Nordnet Eurooppa Indeksi",
-              "NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI": "Nordnet Kehittyvät Markkinat Indeksi",
-              "NORDNET_MAAILMA_INDEKSI_125": "Nordnet Maailma Indeksi 125",
-              "NORDNET_SUOMI_INDEKSI": "Nordnet Suomi Indeksi",
-          }
-
           def get_json(url):
               req = urllib.request.Request(
                   url,
@@ -201,93 +192,102 @@ jobs:
                   "provider": "Yahoo intraday",
               }
 
-          def flatten_strings(obj):
-              out = []
-              if isinstance(obj, dict):
-                  for v in obj.values():
-                      out.extend(flatten_strings(v))
-              elif isinstance(obj, list):
-                  for v in obj:
-                      out.extend(flatten_strings(v))
-              elif isinstance(obj, str):
-                  out.append(obj)
-              return out
+          FUND_PAGES = {
+              "NORDEA_POHJOISMAAT_SELECT_A": {
+                  "url": "https://www.nordeafunds.com/fi/rahastot/nordea-pohjoismaat-indeksi-select-a",
+                  "kind": "nordea",
+                  "provider": "Nordea Funds",
+              },
+              "HANDELSBANKEN_USA_INDEKSI": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/handelsbanken-usa-index-a1-eur-348def3b",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
+              "NORDNET_EUROOPPA_INDEKSI": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/nordnet-eurooppa-indeksi-eur-c64564c1",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
+              "NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/nordnet-kehittyvat-markkinat-indeksi-eur-a53cd345",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
+              "NORDNET_MAAILMA_INDEKSI_125": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/nordnet-maailma-indeksi-125-eur-f0404f1b",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
+              "NORDNET_SUOMI_INDEKSI": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/nordnet-suomi-indeksi-eur-a401761d",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
+          }
 
-          def fund_quote(query):
-              params = [
-                  ("query", query),
-                  ("instrument_group", "FUND"),
-                  ("search_space", "INSTRUMENTS"),
-                  ("limit", "10"),
-                  ("use_nnx_instrument_search", "true"),
-              ]
-              url = (
-                  "https://public.nordnet.se/api/2/main_search?"
-                  + urllib.parse.urlencode(params)
+          def get_text(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+                      "Accept": "text/html,application/xhtml+xml",
+                      "Accept-Language": "fi-FI,fi;q=0.9,en;q=0.7",
+                  },
               )
-              data = get_json(url)
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  raw = r.read().decode("utf-8", errors="replace")
 
-              q_tokens = [t.lower() for t in query.replace("-", " ").split() if len(t) > 2]
-              candidates = []
+              import html as html_lib
+              import re as re_lib
 
-              for d in walk(data):
-                  if not isinstance(d, dict):
-                      continue
+              text = html_lib.unescape(raw)
+              text = re_lib.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re_lib.I | re_lib.S)
+              text = re_lib.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re_lib.I | re_lib.S)
+              text = re_lib.sub(r"<[^>]+>", " ", text)
+              text = re_lib.sub(r"\s+", " ", text)
+              return text.strip()
 
-                  # Nordnet main_search fund hits expose NAV as last_price.
-                  price = (
-                      price_number(d.get("last_price"))
-                      or price_number(d.get("nav"))
-                      or price_number(d.get("price"))
+          def parse_decimal(value):
+              s = str(value).replace("\xa0", " ").replace(" ", "")
+              s = s.replace(",", ".")
+              return float(s)
+
+          def fund_page_quote(spec):
+              import re as re_lib
+              text = get_text(spec["url"])
+
+              if spec["kind"] == "nordnet":
+                  m = re_lib.search(
+                      r"NAV\s*\((\d{1,2}\.\d{1,2}\.)\)\s*([0-9][0-9\s\xa0]*[,.][0-9]+)\s*EUR",
+                      text,
+                      flags=re_lib.I,
                   )
-                  if not price:
-                      continue
-
-                  hay = " ".join(flatten_strings(d)).lower()
-                  score = sum(1 for t in q_tokens if t in hay)
-                  if score == 0:
-                      continue
-
-                  ts = (
-                      d.get("tick_timestamp")
-                      or d.get("timestamp")
-                      or d.get("nav_timestamp")
+                  if not m:
+                      raise RuntimeError("NAV-arvoa ei löytynyt rahastosivulta")
+                  nav_date = m.group(1)
+                  price = parse_decimal(m.group(2))
+              elif spec["kind"] == "nordea":
+                  vals = re_lib.findall(
+                      r"Rahaston arvo\s*\(perusvaluutta\)\s*([0-9]+(?:[,.][0-9]+)?)",
+                      text,
+                      flags=re_lib.I,
                   )
-                  if isinstance(ts, (int, float)):
-                      ts = int(ts)
-                      if ts < 10_000_000_000:
-                          ts *= 1000
-                  else:
-                      ts = int(time.time() * 1000)
+                  if not vals:
+                      raise RuntimeError("rahasto-osuuden arvoa ei löytynyt Nordea Funds -sivulta")
+                  price = parse_decimal(vals[-1])
+                  nav_date = ""
+              else:
+                  raise RuntimeError("tuntematon rahastosivun tyyppi")
 
-                  title = str(d.get("last_price_title") or "").lower()
-                  candidates.append({
-                      "score": score,
-                      "price": float(price),
-                      "timestamp": ts,
-                      "provider": "Nordnet fund",
-                      "title": title,
-                      "raw_name": next(
-                          (
-                              s for s in flatten_strings(d)
-                              if isinstance(s, str) and len(s) >= 4
-                          ),
-                          query,
-                      ),
-                  })
-
-              if not candidates:
-                  raise RuntimeError("rahastoa/NAV-arvoa ei löytynyt")
-
-              candidates.sort(key=lambda x: (x["score"], "nav" in x["title"]), reverse=True)
-              best = candidates[0]
               return {
-                  "price": best["price"],
-                  "timestamp": best["timestamp"],
-                  "provider": best["provider"],
+                  "price": price,
+                  "timestamp": int(time.time() * 1000),
+                  "provider": spec["provider"],
                   "realtime": False,
                   "change_pct": 0,
+                  "nav_date": nav_date,
               }
+
 
           quotes = {}
           errors = {}
@@ -328,9 +328,9 @@ jobs:
               else:
                   errors[symbol] = source_errors
 
-          for fund_key, fund_query in FUNDS.items():
+          for fund_key, spec in FUND_PAGES.items():
               try:
-                  fund_quotes[fund_key] = fund_quote(fund_query)
+                  fund_quotes[fund_key] = fund_page_quote(spec)
               except Exception as fund_error:
                   fund_errors[fund_key] = str(fund_error)
 
