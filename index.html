@@ -2,6 +2,9 @@
 <html lang="fi">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d10">
 <title>Osakevahti</title>
@@ -72,6 +75,10 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
     </div>
     <div id="apiStatus" class="statusBox muted">Yhteyksiä ei ole vielä testattu.</div>
+    <div class="actions" style="margin-top:8px">
+      <button id="reloadMarketDataBtn" type="button">Lataa markkinadata uudelleen</button>
+    </div>
+    <div id="marketDataStatus" class="statusBox muted">Helsinki-datan tilaa ei ole vielä tarkistettu.</div>
   </div>
 
   <details>
@@ -96,7 +103,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.8 · IQM-livehinta, siistimmät rahastorivit ja selkeämpi yhteenveto.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.9 · automaattinen Helsinki-päivitys, retry ja datapalvelun terveystarkistus.</p>
     </div>
   </details>
 </section>
@@ -144,13 +151,14 @@ $("addBtn").onclick=()=>openDlg();
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
-$("refreshBtn").onclick=refreshMarket;
+$("refreshBtn").onclick=()=>refreshMarket(true);
 $("newsBtn").onclick=refreshNews;
 $("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey;
 $("baseCurrency").onchange=()=>{state.baseCurrency=$("baseCurrency").value;save();refreshMarket()};
 $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
 $("testApiBtn").onclick=testFinnhub;
 $("testNordnetBtn").onclick=testNordnet;
+$("reloadMarketDataBtn").onclick=async()=>{await refreshMarket(true)};
 $("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("apiKey").value="";render()}};
 
@@ -220,6 +228,7 @@ function dataState(h){
 }
 
 function render(){
+  renderMarketDataHealth();
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0;
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   state.holdings.forEach(h=>{
@@ -281,14 +290,14 @@ function saveHolding(){
   if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
 }
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
-async function refreshMarket(){
+async function refreshMarket(showErrors=false){
   $("refreshBtn").disabled=true;
   let okCount=0, failCount=0, firstError="";
   const fx={};
   const tracked=state.holdings.filter(h=>h.assetType!=="fund");
   let helsinkiData=null;
 
-  try{ helsinkiData=await loadHelsinkiData(); }catch(err){ firstError=`Helsinki-data: ${err.message||err}`; }
+  try{ helsinkiData=await loadHelsinkiData(3); }catch(err){ firstError=`Helsinki-data: ${err.message||err}`; }
 
   for(const h of state.holdings){
     try{
@@ -345,8 +354,8 @@ async function refreshMarket(){
   if(okCount>0) state.quoteUpdatedAt=Date.now();
   save();render();$("refreshBtn").disabled=false;
 
-  if(failCount>0 && okCount===0 && firstError){
-    alert(`Kurssipäivitys epäonnistui.\n\n${firstError}`);
+  if(showErrors && failCount>0 && firstError){
+    alert(`Päivitys valmis: ${okCount}/${tracked.length} markkinainstrumentista päivittyi.\n\n${firstError}`);
   }
 }
 async function refreshNews(){
@@ -362,19 +371,70 @@ async function quote(s){
   if(!n(j.c)) throw new Error(`Finnhub ei palauttanut kurssia symbolille ${s}`);
   return j
 }
-async function loadHelsinkiData(){
-  const r=await fetch(`./market-data.json?t=${Date.now()}`,{cache:"no-store"});
-  if(!r.ok) throw new Error(`market-data.json HTTP ${r.status}`);
-  const j=await r.json();
-  if(!j || !j.quotes) throw new Error("market-data.json ei ole kelvollinen");
-  return j;
+async function loadHelsinkiData(retries=3){
+  let lastErr=null;
+  const base=new URL("./market-data.json",window.location.href);
+  for(let attempt=1;attempt<=retries;attempt++){
+    try{
+      base.searchParams.set("t",String(Date.now()));
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(base.toString(),{
+        cache:"no-store",
+        headers:{"Accept":"application/json"},
+        signal:controller.signal
+      });
+      clearTimeout(timer);
+      if(!r.ok) throw new Error(`market-data.json HTTP ${r.status}`);
+      const j=await r.json();
+      if(!j || !j.quotes) throw new Error("market-data.json ei ole kelvollinen");
+      state.marketDataHealth={
+        ok:true,
+        generatedAt:j.generated_at||null,
+        quoteCount:Object.keys(j.quotes||{}).length,
+        checkedAt:Date.now()
+      };
+      save();
+      renderMarketDataHealth();
+      return j;
+    }catch(err){
+      lastErr=err;
+      if(attempt<retries) await new Promise(r=>setTimeout(r,700*attempt));
+    }
+  }
+  state.marketDataHealth={
+    ok:false,
+    error:String(lastErr?.message||lastErr||"tuntematon virhe"),
+    checkedAt:Date.now()
+  };
+  save();
+  renderMarketDataHealth();
+  throw lastErr||new Error("Helsinki-dataa ei saatu");
+}
+function renderMarketDataHealth(){
+  const box=$("marketDataStatus");
+  if(!box) return;
+  const h=state.marketDataHealth;
+  if(!h){
+    box.className="statusBox muted";
+    box.textContent="Helsinki-datan tilaa ei ole vielä tarkistettu.";
+    return;
+  }
+  if(h.ok){
+    const age=h.generatedAt?ago(Date.parse(h.generatedAt)):"aikaleima puuttuu";
+    box.className="statusBox statusOk";
+    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} Helsinki-symbolia · generoitu ${age}.`;
+  }else{
+    box.className="statusBox statusBad";
+    box.textContent=`Datapalveluvirhe: ${h.error||"tuntematon virhe"}`;
+  }
 }
 async function testNordnet(){
   const box=$("apiStatus");
   box.className="statusBox muted";
   box.textContent="Testataan GitHub Actionsin Helsinki-data...";
   try{
-    const j=await loadHelsinkiData();
+    const j=await loadHelsinkiData(3);
     const q=j.quotes?.FORTUM;
     if(!q || !n(q.price)) throw new Error("FORTUM puuttuu market-data.jsonista");
     const stamp=j.generated_at?new Date(j.generated_at).toLocaleString("fi-FI"):"aikaleima puuttuu";
@@ -382,7 +442,7 @@ async function testNordnet(){
     box.textContent=`Helsinki-data toimii. FORTUM ${n(q.price).toFixed(2)} EUR · lähde ${q.provider||"tuntematon"} · data ${stamp}.`;
   }catch(err){
     box.className="statusBox statusBad";
-    box.textContent=`Helsinki-data ei ole vielä käytössä: ${err.message||err}`;
+    box.textContent=`Helsinki-data ei latautunut: ${err.message||err}`;
   }
 }
 async function testFinnhub(){
@@ -416,6 +476,10 @@ if("caches" in window){
   caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});
 }
 render();
+setTimeout(()=>{
+  const last=state.quoteUpdatedAt||0;
+  if(state.holdings?.length && Date.now()-last>10*60*1000) refreshMarket(false).catch(()=>{});
+},500);
 </script>
 </body>
 </html>
