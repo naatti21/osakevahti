@@ -10,7 +10,7 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}
 .top{position:sticky;top:0;z-index:10;padding:18px 16px 12px;background:#0b0d10e8;backdrop-filter:blur(12px);border-bottom:1px solid #ffffff0a;display:flex;justify-content:space-between;align-items:center}
 h1,h2,h3,p{margin-top:0}h1{margin-bottom:0;font-size:24px}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:.14em;font-weight:800}
-main{max-width:760px;margin:auto;padding:14px 14px 100px}.view{display:none}.view.active{display:block}
+main{max-width:760px;margin:auto;padding:14px 14px 118px}.view{display:none}.view.active{display:block}
 .card,.item{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}.hero{padding:20px;margin-bottom:18px}.heroValue{font-size:42px;font-weight:850;letter-spacing:-.05em;margin:5px 0 7px}
 .row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:10px}.section{display:flex;justify-content:space-between;align-items:center;margin:12px 2px}
 button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);color:var(--text);font-weight:750}
@@ -20,11 +20,11 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
-nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);padding:8px;background:#0c0f12f0;border-top:1px solid var(--line)}
-nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:11px;padding:10px 4px}nav button.active{color:var(--text);background:var(--panel2)}
+nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);display:grid;grid-template-columns:repeat(4,1fr);min-height:68px;padding:7px 8px max(9px,env(safe-area-inset-bottom));background:#0c0f12f5;backdrop-filter:blur(16px);border-top:1px solid var(--line);box-shadow:0 -10px 30px #0005}
+nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:12px;min-height:50px;padding:12px 4px;border-radius:14px}nav button.active{color:var(--text);background:var(--panel2)}
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
 .hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
-.file input{display:none}
+.file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:15px 14px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 14px 14px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
 @media(max-width:480px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -65,23 +65,35 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
+    <button id="testApiBtn" type="button">Testaa Finnhub AMD:llä</button>
+    <div id="apiStatus" class="statusBox muted">Yhteyttä ei ole vielä testattu.</div>
   </div>
-  <div class="card" style="margin-top:12px">
-    <h3>Varmuuskopio</h3>
-    <div class="actions">
-      <button id="exportBtn">Vie JSON</button>
-      <label class="file">Tuo JSON<input id="importBackup" type="file" accept=".json"></label>
+
+  <details>
+    <summary>Varmuuskopio</summary>
+    <div class="detailsBody">
+      <div class="actions">
+        <button id="exportBtn">Vie JSON</button>
+        <label class="file">Tuo JSON<input id="importBackup" type="file" accept=".json"></label>
+      </div>
     </div>
-  </div>
-  <div class="card" style="margin-top:12px">
-    <h3>CSV-tuonti</h3>
-    <label class="file">Valitse CSV<input id="importCsv" type="file" accept=".csv,text/csv"></label>
-    <p class="muted small">Sarakkeet: symbol,name,quantity,buy_price,currency,account,provider_symbol,manual_stop,trailing_pct,risk_class</p>
-  </div>
-  <div class="card" style="margin-top:12px">
-    <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-    <p class="muted small" style="margin:12px 0 0">Osakevahti v1.1 · korjattu mobiilinavigaatio ja datatilan näyttö.</p>
-  </div>
+  </details>
+
+  <details>
+    <summary>CSV-tuonti</summary>
+    <div class="detailsBody">
+      <label class="file">Valitse CSV<input id="importCsv" type="file" accept=".csv,text/csv"></label>
+      <p class="muted small">Sarakkeet: symbol,name,quantity,buy_price,currency,account,provider_symbol,manual_stop,trailing_pct,risk_class</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Huolto</summary>
+    <div class="detailsBody">
+      <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.2 · korkeampi navigaatio, tiiviimmät asetukset ja Finnhub-testi.</p>
+    </div>
+  </details>
 </section>
 </main>
 
@@ -132,6 +144,7 @@ $("newsBtn").onclick=refreshNews;
 $("baseCurrency").value=state.baseCurrency;$("apiKey").value=state.apiKey;
 $("baseCurrency").onchange=()=>{state.baseCurrency=$("baseCurrency").value;save();refreshMarket()};
 $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
+$("testApiBtn").onclick=testFinnhub;
 $("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("apiKey").value="";render()}};
 
@@ -177,22 +190,64 @@ function openDlg(id=null){
   if(id){const h=state.holdings.find(x=>x.id===id);$("id").value=h.id;$("symbol").value=h.symbol||"";$("name").value=h.name||"";$("providerSymbol").value=h.providerSymbol||"";$("qty").value=h.quantity||"";$("buy").value=h.buyPrice||"";$("currency").value=h.currency||"EUR";$("account").value=h.account||"";$("manualPrice").value=h.manualPrice||h.currentPrice||"";$("manualStop").value=h.manualStop||"";$("trailing").value=h.trailingPct??12;$("riskClass").value=h.riskClass||"medium";$("deleteBtn").classList.remove("hidden")} $("dlg").showModal()
 }
 function saveHolding(){
-  const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{},h={...old,id,symbol:$("symbol").value.trim().toUpperCase(),name:$("name").value.trim(),providerSymbol:$("providerSymbol").value.trim()||$("symbol").value.trim().toUpperCase(),quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value};
+  const rawSymbol=$("symbol").value.trim().toUpperCase(),rawProvider=($("providerSymbol").value.trim()||rawSymbol).toUpperCase();
+  const valid=/^[A-Z0-9.^:=_-]{1,24}$/;
+  if(!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
+  if(!valid.test(rawProvider)){alert("Finnhub-symboli näyttää virheelliseltä.");return}
+  const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{},h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value};
   if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
 }
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
 async function refreshMarket(){
   $("refreshBtn").disabled=true;
-  const fx={};for(const h of state.holdings){try{fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);h.fxRate=fx[h.currency]}catch{if(h.currency===state.baseCurrency)h.fxRate=1}
-    if(state.apiKey){try{const q=await quote(h.providerSymbol||h.symbol);h.currentPrice=q.c;h.highWatermark=Math.max(n(h.highWatermark),q.c);try{const candles=await candle(h.providerSymbol||h.symbol);const a=atr(candles);if(a)h.atr=a}catch{}}catch{}}
-  }state.quoteUpdatedAt=Date.now();save();render();$("refreshBtn").disabled=false
+  let okCount=0, failCount=0, firstError="";
+  const fx={};
+  for(const h of state.holdings){
+    try{fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);h.fxRate=fx[h.currency]}
+    catch(err){if(h.currency===state.baseCurrency)h.fxRate=1}
+    if(state.apiKey){
+      try{
+        const q=await quote(h.providerSymbol||h.symbol);
+        h.currentPrice=q.c;
+        h.highWatermark=Math.max(n(h.highWatermark),q.c);
+        okCount++;
+        try{const candles=await candle(h.providerSymbol||h.symbol);const a=atr(candles);if(a)h.atr=a}catch{}
+      }catch(err){
+        failCount++;
+        if(!firstError) firstError=`${h.providerSymbol||h.symbol}: ${err.message||err}`;
+      }
+    }
+  }
+  state.quoteUpdatedAt=Date.now();save();render();$("refreshBtn").disabled=false;
+  if(state.apiKey && failCount && !okCount) alert("Kurssihaku epäonnistui. "+firstError+"\n\nAsetuksissa on nyt 'Testaa Finnhub AMD:llä' -painike, joka näyttää tarkemman syyn.");
 }
 async function refreshNews(){
   if(!state.apiKey)return alert("Lisää Finnhub API -avain Asetuksissa.");$("newsBtn").disabled=true;const out=[],seen=new Set();
   for(const h of state.holdings){try{const arr=await companyNews(h.providerSymbol||h.symbol);for(const x of arr){const k=x.url||x.headline;if(seen.has(k))continue;seen.add(k);out.push({symbol:h.symbol,headline:x.headline||"Uutinen",summary:x.summary||"",source:x.source||"",url:x.url||"",datetime:n(x.datetime)})}}catch{}}
   state.news=out.sort((a,b)=>b.datetime-a.datetime).slice(0,50);save();renderNews();$("newsBtn").disabled=false
 }
-async function quote(s){const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(!n(j.c))throw Error();return j}
+async function quote(s){
+  const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(state.apiKey)}`);
+  let j={};try{j=await r.json()}catch{}
+  if(!r.ok) throw new Error(`HTTP ${r.status}${j.error?": "+j.error:""}`);
+  if(j.error) throw new Error(j.error);
+  if(!n(j.c)) throw new Error(`Finnhub ei palauttanut kurssia symbolille ${s}`);
+  return j
+}
+async function testFinnhub(){
+  const box=$("apiStatus");
+  state.apiKey=$("apiKey").value.trim();save();
+  if(!state.apiKey){box.className="statusBox statusBad";box.textContent="API-avain puuttuu.";return}
+  box.className="statusBox muted";box.textContent="Testataan AMD...";
+  try{
+    const q=await quote("AMD");
+    box.className="statusBox statusOk";
+    box.textContent=`Yhteys toimii. AMD: ${q.c} USD · edellinen päätös ${q.pc||"—"} USD.`;
+  }catch(err){
+    box.className="statusBox statusBad";
+    box.textContent=`Yhteys ei toimi: ${err.message||err}`;
+  }
+}
 async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(j.s!=="ok")return[];return j.c.map((c,i)=>({close:n(c),high:n(j.h[i]),low:n(j.l[i])}))}
 function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
 async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
