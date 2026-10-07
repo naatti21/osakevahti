@@ -25,6 +25,18 @@ input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid va
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.news{color:inherit;text-decoration:none;display:block}.newsTitle{font-weight:750;line-height:1.35}.newsMeta{color:var(--muted);font-size:11px;margin-bottom:5px}.newsSummary{color:#b7bec6;font-size:13px;line-height:1.45;margin-top:6px}
 
 
+
+.dailyMoves{margin:0 0 10px;padding:10px 12px}
+.dailyMovesHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:5px}
+.dailyMovesTitle{font-size:12px;font-weight:850}.dailyMovesMeta{font-size:9px;color:var(--muted)}
+.moveList{display:grid;gap:0}
+.moveRow{display:grid;grid-template-columns:minmax(70px,1fr) auto auto;gap:9px;align-items:center;padding:6px 0;border-top:1px solid #ffffff0a}
+.moveRow:first-child{border-top:0}
+.moveSymbol{font-size:11px;font-weight:850}.movePct{font-size:12px;font-weight:900;text-align:right;min-width:58px}
+.moveAge{font-size:9px;color:var(--muted);text-align:right;min-width:56px;white-space:nowrap}
+.dataDiag{display:grid;gap:5px;margin-top:8px}
+.dataDiagRow{display:grid;grid-template-columns:minmax(70px,1fr) auto auto;gap:8px;align-items:center;background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:7px 8px}
+.dataDiagRow strong{font-size:11px}.dataDiagRow span{font-size:9px;color:var(--muted);white-space:nowrap}
 .portfolioPulse{margin:0 0 10px;padding:10px 12px}
 .pulseTop{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px}
 .pulseTitle{font-size:12px;font-weight:850}.pulseHint{font-size:9px;color:var(--muted)}
@@ -76,6 +88,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="accountSummary" class="summaryGrid"></div>
+  <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
   <details id="targetMapBox">
     <summary>Tavoitekartta & OST-rakennuslista</summary>
@@ -135,7 +148,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: palvelinpuolen markkinadata. Rahastojen NAV haetaan rahastoyhtiöiden julkisilta rahastosivuilta ja päiväys näytetään kortissa.</p>
+    <p class="muted small">Sovellus käyttää Finnhubia AMD:lle ja palvelinpuolen snapshotia Helsingin osakkeille. Jaettu market-data.json sisältää myös AMD:n, jotta muut vahdit voivat lukea saman päivän prosentit ilman puhelimen localStoragea.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
@@ -146,6 +159,14 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     </div>
     <div id="marketDataStatus" class="statusBox muted">Helsinki-datan tilaa ei ole vielä tarkistettu.</div>
   </div>
+
+  <details>
+    <summary>Datalähteet</summary>
+    <div class="detailsBody">
+      <div class="muted small" style="margin-top:8px">Näyttää jokaisen osakkeen lähteen ja hinnan iän. Tätä käytetään stale-datan ja API-ongelmien jäljittämiseen.</div>
+      <div id="dataDiagnostics" class="dataDiag"></div>
+    </div>
+  </details>
 
   <details>
     <summary>Varmuuskopio</summary>
@@ -169,7 +190,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.4 · Oma paketti, tavoitepainot ja tarkempi omistusuutisfiltteri.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.5 · Päivän liikkeet, datadiagnostiikka ja jaettu markkinasnapshot.</p>
     </div>
   </details>
 </section>
@@ -382,6 +403,24 @@ function render(){
 
   const fundPct=tv?funds/tv*100:0;
   $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
+  const moves=rows
+    .filter(r=>r.h.assetType!=="fund" && r.p)
+    .map(r=>({h:r.h,pct:n(r.h.dayChangePct)}))
+    .sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct));
+  const staleMoves=moves.filter(x=>x.h.quoteTimestamp && (Date.now()-n(x.h.quoteTimestamp))>20*60*1000).length;
+  $("dailyMoves").innerHTML=`<div class="dailyMovesHead"><div class="dailyMovesTitle">Päivän liikkeet</div><div class="dailyMovesMeta">${moves.length} osaketta${staleMoves?` · ${staleMoves} vanhaa hintaa`:""}</div></div><div class="moveList">${moves.map(x=>{
+    const age=x.h.quoteTimestamp ? (x.h.quoteSource==="HELSINKI_CACHE" ? `kauppa ${quoteAgeShort(x.h)}` : quoteAgeShort(x.h)) : "—";
+    return `<div class="moveRow"><div class="moveSymbol">${esc(x.h.symbol)}</div><div class="movePct ${x.pct>0?"pos":x.pct<0?"neg":""}">${sPct(x.pct)}</div><div class="moveAge">${esc(age)}</div></div>`;
+  }).join("")}</div>`;
+
+  const diag=$("dataDiagnostics");
+  if(diag){
+    diag.innerHTML=rows.filter(r=>r.h.assetType!=="fund").map(r=>{
+      const h=r.h,ds=dataState(h),age=h.quoteTimestamp?quoteAgeShort(h):"—";
+      const provider=h.quoteProvider||h.quoteSource||"ei lähdettä";
+      return `<div class="dataDiagRow"><strong>${esc(h.symbol)}</strong><span>${esc(provider)}</span><span>${esc(age)}</span></div>`;
+    }).join("");
+  }
 
   const sorted=[...rows].sort((a,b)=>b.val-a.val);
   const largest=sorted[0];
