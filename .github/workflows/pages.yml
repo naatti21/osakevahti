@@ -557,6 +557,118 @@ jobs:
           print(json.dumps(payload,ensure_ascii=False,indent=2))
           PY
 
+
+      - name: Build focused portfolio news
+        shell: bash
+        run: |
+          python - <<'PY'
+          import email.utils
+          import json
+          import os
+          import re
+          import time
+          import urllib.parse
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          from datetime import datetime, timezone, timedelta
+
+          PREVIOUS = "https://naatti21.github.io/osakevahti/news-data.json"
+          REFRESH_HOURS = 2
+
+          COMPANIES = [
+              {"symbol":"AMD","name":"Advanced Micro Devices","query":'"Advanced Micro Devices" earnings OR revenue OR guidance OR acquisition OR "data center" OR AI',"locale":("en-US","US","US:en"),"must":["advanced micro devices"," amd "],"noise":["review","benchmark","driver download","best gpu","gaming pc","deal on ryzen"]},
+              {"symbol":"FORTUM","name":"Fortum","query":'Fortum tulos OR osinko OR investointi OR sähkö OR strategia OR ohjeistus',"locale":("fi","FI","FI:fi"),"must":["fortum"],"noise":[]},
+              {"symbol":"NDA-FI","name":"Nordea","query":'Nordea tulos OR osinko OR takaisinosto OR korko OR vakavaraisuus OR strategia',"locale":("fi","FI","FI:fi"),"must":["nordea"],"noise":[]},
+              {"symbol":"VERK","name":"Verkkokauppa.com","query":'"Verkkokauppa.com" tulos OR liikevaihto OR osinko OR ohjeistus OR strategia',"locale":("fi","FI","FI:fi"),"must":["verkkokauppa.com"],"noise":["alennus","tarjous","black friday"]},
+              {"symbol":"FRAMERY","name":"Framery","query":'Framery tulos OR liikevaihto OR kasvu OR tilaus OR listautuminen OR strategia',"locale":("fi","FI","FI:fi"),"must":["framery"],"noise":[]},
+              {"symbol":"IQMX","name":"IQM Quantum Computers","query":'"IQM Quantum Computers" funding OR contract OR partnership OR investment OR quantum OR rahoitus OR sopimus',"locale":("en-US","US","US:en"),"must":["iqm quantum","iqm quantum computers"],"noise":[]},
+              {"symbol":"METSO","name":"Metso","query":'Metso order OR contract OR acquisition OR results OR tilaus OR tulos OR yrityskauppa',"locale":("en-US","US","US:en"),"must":["metso"],"noise":[]},
+          ]
+
+          FINANCE_WORDS = ["earnings","revenue","guidance","profit","dividend","buyback","acquisition","contract","order","investment","strategy","results","outlook","tulos","liikevaihto","osinko","ohjeistus","tilaus","sopimus","investointi","strategia","yrityskauppa","takaisinosto","rahoitus"]
+
+          def get_bytes(url):
+              req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 Osakevahti-News/1.0","Accept":"application/rss+xml,application/xml,text/xml"})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  return r.read()
+
+          def get_json(url):
+              req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 Osakevahti-News/1.0","Accept":"application/json"})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  return json.loads(r.read().decode("utf-8"))
+
+          def reuse_previous():
+              if os.getenv("GITHUB_EVENT_NAME")=="workflow_dispatch":
+                  return False
+              try:
+                  data=get_json(PREVIOUS+"?t="+str(int(time.time())))
+                  ts=datetime.fromisoformat(data["generated_at"].replace("Z","+00:00"))
+                  if datetime.now(timezone.utc)-ts<timedelta(hours=REFRESH_HOURS):
+                      with open("news-data.json","w",encoding="utf-8") as f:
+                          json.dump(data,f,ensure_ascii=False,indent=2)
+                      print("Reused fresh news-data.json")
+                      return True
+              except Exception as e:
+                  print("Previous news unavailable:",e)
+              return False
+
+          if reuse_previous():
+              raise SystemExit(0)
+
+          def google_news(company):
+              hl,gl,ceid=company["locale"]
+              q=company["query"]+" when:7d"
+              url="https://news.google.com/rss/search?"+urllib.parse.urlencode({"q":q,"hl":hl,"gl":gl,"ceid":ceid})
+              root=ET.fromstring(get_bytes(url))
+              out=[]
+              now=time.time()
+              for item in root.findall(".//item"):
+                  title=(item.findtext("title") or "").strip()
+                  link=(item.findtext("link") or "").strip()
+                  pub=(item.findtext("pubDate") or "").strip()
+                  source_node=item.find("source")
+                  source=(source_node.text.strip() if source_node is not None and source_node.text else "")
+                  try:
+                      dt=email.utils.parsedate_to_datetime(pub)
+                      if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+                      ts=int(dt.timestamp())
+                  except Exception:
+                      ts=int(now)
+                  low=(" "+title.lower()+" ")
+                  if not any(m in low for m in company["must"]):
+                      continue
+                  if any(noise in low for noise in company["noise"]):
+                      continue
+                  score=4
+                  score+=sum(1.2 for w in FINANCE_WORDS if w in low)
+                  age_days=max(0,(now-ts)/86400)
+                  if age_days<1: score+=2
+                  elif age_days<3: score+=1
+                  if source.lower() in {"reuters","bloomberg","cnbc","financial times","kauppalehti","talouselämä","yle","helsingin sanomat"}:
+                      score+=1
+                  if score<5:
+                      continue
+                  out.append({"symbol":company["symbol"],"company":company["name"],"headline":title,"url":link,"source":source or "Google News","datetime":ts,"relevance":round(score,1),"summary":""})
+              out.sort(key=lambda x:(x["relevance"],x["datetime"]),reverse=True)
+              return out[:2]
+
+          items=[];errors={};seen=set()
+          for c in COMPANIES:
+              try:
+                  for x in google_news(c):
+                      key=re.sub(r"\W+"," ",x["headline"].lower()).strip()
+                      if key in seen: continue
+                      seen.add(key);items.append(x)
+              except Exception as e:
+                  errors[c["symbol"]]=str(e)
+
+          items.sort(key=lambda x:(x["relevance"],x["datetime"]),reverse=True)
+          payload={"generated_at":datetime.now(timezone.utc).isoformat(),"items":items[:14],"company_count":len(COMPANIES),"errors":errors,"method":"company-specific Google News RSS + relevance filter v1"}
+          with open("news-data.json","w",encoding="utf-8") as f:
+              json.dump(payload,f,ensure_ascii=False,indent=2)
+          print(json.dumps(payload,ensure_ascii=False,indent=2))
+          PY
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
