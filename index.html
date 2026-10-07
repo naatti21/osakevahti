@@ -15,7 +15,7 @@ main{max-width:760px;margin:auto;padding:14px 14px 118px}.view{display:none}.vie
 .row{display:flex;justify-content:space-between;gap:12px;align-items:center}.stack{display:grid;gap:10px}.section{display:flex;justify-content:space-between;align-items:center;margin:12px 2px}
 button,.btn,label.file{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2);color:var(--text);font-weight:750}
 button.primary{background:var(--accent);color:#07130c;border-color:transparent}.danger{color:var(--danger)}.muted{color:var(--muted)}.small{font-size:12px}
-.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.symbol{font-weight:850}.name{color:var(--muted);font-size:13px}.value{font-weight:800;text-align:right}.pnl{font-size:12px;text-align:right}.sourceBadge{display:inline-flex;margin-top:5px;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;letter-spacing:.04em}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.pos{color:var(--ok)}.neg{color:var(--danger)}
+.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.symbol{font-weight:850}.name{color:var(--muted);font-size:13px}.value{font-weight:800;text-align:right}.pnl{font-size:12px;text-align:right}.sourceBadge{display:inline-flex;margin-top:5px;border:1px solid var(--line);border-radius:999px;padding:3px 7px;font-size:10px;font-weight:800;letter-spacing:.04em}.live{color:var(--ok)}.manual{color:var(--warn)}.nodata{color:var(--muted)}.stale{color:var(--danger)}.pos{color:var(--ok)}.neg{color:var(--danger)}
 .badge{border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800}.ok{color:var(--ok);background:#6ee7a814}.watch{color:var(--warn);background:#ffd16614}.crit{color:var(--danger);background:#ff6b6b14}
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
 input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:#0e1216;color:var(--text)}label.txt{display:block;font-size:12px;color:#c5ccd3;margin:9px 0 5px;font-weight:700}
@@ -91,7 +91,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.2 · korkeampi navigaatio, tiiviimmät asetukset ja Finnhub-testi.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.3 · kurssidatan tuoreus, päivämuutos ja selkeämpi datatila.</p>
     </div>
   </details>
 </section>
@@ -157,14 +157,26 @@ function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency"
 function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
+function dataState(h){
+  if(h.currentPrice){
+    if(!h.quoteTimestamp) return {label:"VIIMEISIN",cls:"manual"};
+    const age=(Date.now()-n(h.quoteTimestamp))/3600000;
+    if(age<=0.5) return {label:"TUORE",cls:"live"};
+    if(age<=72) return {label:"VIIMEISIN",cls:"manual"};
+    return {label:"VANHA",cls:"stale"};
+  }
+  if(h.manualPrice) return {label:"KÄSIN",cls:"manual"};
+  return {label:"EI DATAA",cls:"nodata"};
+}
 
 function render(){
   $("holdings").innerHTML="";$("risks").innerHTML="";let tv=0,tc=0;
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);$("riskEmpty").classList.toggle("hidden",state.holdings.length>0);
   state.holdings.forEach(h=>{
     const p=n(h.currentPrice||h.manualPrice),fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0),val=p*n(h.quantity)*fx,cost=n(h.buyPrice)*n(h.quantity)*fx,pnl=val-cost,pct=cost?pnl/cost*100:0;tv+=val;tc+=cost;
-    const source=h.currentPrice?"LIVE":h.manualPrice?"KÄSIN":"EI DATAA",sourceClass=h.currentPrice?"live":h.manualPrice?"manual":"nodata";
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</div><span class="sourceBadge ${sourceClass}">${source}</span></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="name" style="text-align:right;margin-top:5px">Kurssi ${money(p,h.currency)}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const ds=dataState(h);
+    const day=n(h.dayChangePct);
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")}</div><div class="name">${n(h.quantity)} kpl · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</div><span class="sourceBadge ${ds.cls}">${ds.label}</span></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="name" style="text-align:right;margin-top:5px">Kurssi ${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";$("quoteAge").textContent=ago(state.quoteUpdatedAt);
@@ -209,6 +221,8 @@ async function refreshMarket(){
       try{
         const q=await quote(h.providerSymbol||h.symbol);
         h.currentPrice=q.c;
+        h.quoteTimestamp=q.t ? n(q.t)*1000 : Date.now();
+        h.dayChangePct=n(q.dp);
         h.highWatermark=Math.max(n(h.highWatermark),q.c);
         okCount++;
         try{const candles=await candle(h.providerSymbol||h.symbol);const a=atr(candles);if(a)h.atr=a}catch{}
@@ -242,7 +256,8 @@ async function testFinnhub(){
   try{
     const q=await quote("AMD");
     box.className="statusBox statusOk";
-    box.textContent=`Yhteys toimii. AMD: ${q.c} USD · edellinen päätös ${q.pc||"—"} USD.`;
+    const stamp=q.t ? new Date(n(q.t)*1000).toLocaleString("fi-FI") : "aikaleima puuttuu";
+    box.textContent=`Yhteys toimii. AMD: ${q.c} USD · edellinen päätös ${q.pc||"—"} USD · datan aikaleima ${stamp}.`;
   }catch(err){
     box.className="statusBox statusBad";
     box.textContent=`Yhteys ei toimi: ${err.message||err}`;
