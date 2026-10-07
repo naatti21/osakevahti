@@ -1,0 +1,222 @@
+name: Osakevahti Pages + market data
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+  schedule:
+    # 15 min välein arkisin. GitHub käyttää UTC-aikaa.
+    - cron: "*/15 6-17 * * 1-5"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Helsinki market data
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+
+          SYMBOLS = {
+              "FORTUM": "FORTUM.HE",
+              "NDA-FI": "NDA-FI.HE",
+              "VERK": "VERK.HE",
+              "METSO": "METSO.HE",
+              "FRAMERY": "FRAMERY.HE",
+              "IQMX": "IQM.HE",
+          }
+
+          def get_json(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "Mozilla/5.0 Osakevahti/1.0",
+                      "Accept": "application/json",
+                      "Accept-Language": "fi",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.loads(r.read().decode("utf-8"))
+
+          def walk(obj):
+              if isinstance(obj, dict):
+                  yield obj
+                  for v in obj.values():
+                      yield from walk(v)
+              elif isinstance(obj, list):
+                  for v in obj:
+                      yield from walk(v)
+
+          def price_number(value):
+              if isinstance(value, (int, float)):
+                  return float(value)
+              if isinstance(value, dict):
+                  for key in ("price", "value", "amount"):
+                      v = value.get(key)
+                      if isinstance(v, (int, float)):
+                          return float(v)
+              return None
+
+          def nordnet_quote(symbol):
+              params = [
+                  ("free_text_search", symbol),
+                  ("limit", "20"),
+                  ("attribute_groups", "PRICE_INFO"),
+                  ("attribute_groups", "INSTRUMENT_INFO"),
+                  ("attribute_groups", "EXCHANGE_INFO"),
+              ]
+              url = (
+                  "https://public.nordnet.fi/api/2/instrument_search/query/stocklist?"
+                  + urllib.parse.urlencode(params)
+              )
+              data = get_json(url)
+
+              candidates = []
+              for d in walk(data):
+                  info = d.get("instrument_info")
+                  pi = d.get("price_info")
+                  if not isinstance(info, dict) or not isinstance(pi, dict):
+                      continue
+
+                  sym = str(info.get("symbol") or "").upper()
+                  if sym != symbol.upper():
+                      continue
+
+                  exchange = d.get("exchange_info") if isinstance(d.get("exchange_info"), dict) else {}
+                  country = str(exchange.get("exchange_country") or exchange.get("country") or "").upper()
+                  candidates.append((country == "FI", d))
+
+              if not candidates:
+                  raise RuntimeError("symbolia ei löytynyt")
+
+              candidates.sort(key=lambda x: x[0], reverse=True)
+              d = candidates[0][1]
+              pi = d.get("price_info") or {}
+
+              price = price_number(pi.get("last")) or price_number(pi.get("close"))
+              if not price:
+                  raise RuntimeError("hintaa ei löytynyt")
+
+              ts = pi.get("tick_timestamp") or pi.get("timestamp")
+              if isinstance(ts, (int, float)):
+                  ts = int(ts)
+                  if ts < 10_000_000_000:
+                      ts *= 1000
+              else:
+                  ts = int(time.time() * 1000)
+
+              return {
+                  "price": price,
+                  "change_pct": float(pi.get("diff_pct") or 0),
+                  "currency": (d.get("instrument_info") or {}).get("currency") or "EUR",
+                  "timestamp": ts,
+                  "realtime": bool(pi.get("realtime") is True),
+                  "provider": "Nordnet",
+              }
+
+          def yahoo_quote(ticker):
+              q = urllib.parse.quote(ticker, safe="")
+              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{q}?range=5d&interval=1d"
+              data = get_json(url)
+
+              result = (((data.get("chart") or {}).get("result") or [None])[0])
+              if not result:
+                  raise RuntimeError("Yahoo ei palauttanut dataa")
+
+              meta = result.get("meta") or {}
+              price = meta.get("regularMarketPrice")
+              prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+
+              if not isinstance(price, (int, float)):
+                  closes = (
+                      ((result.get("indicators") or {}).get("quote") or [{}])[0]
+                      .get("close") or []
+                  )
+                  price = next(
+                      (x for x in reversed(closes) if isinstance(x, (int, float))),
+                      None,
+                  )
+
+              if not price:
+                  raise RuntimeError("Yahoo-hinta puuttuu")
+
+              change_pct = (
+                  (float(price) - float(prev)) / float(prev) * 100
+                  if prev else 0
+              )
+
+              ts = meta.get("regularMarketTime")
+              ts = (
+                  int(ts * 1000)
+                  if isinstance(ts, (int, float))
+                  else int(time.time() * 1000)
+              )
+
+              return {
+                  "price": float(price),
+                  "change_pct": float(change_pct),
+                  "currency": meta.get("currency") or "EUR",
+                  "timestamp": ts,
+                  "realtime": False,
+                  "provider": "Yahoo",
+              }
+
+          quotes = {}
+          errors = {}
+
+          for symbol, yahoo_ticker in SYMBOLS.items():
+              try:
+                  quotes[symbol] = nordnet_quote(symbol)
+              except Exception as nordnet_error:
+                  try:
+                      quotes[symbol] = yahoo_quote(yahoo_ticker)
+                  except Exception as yahoo_error:
+                      errors[symbol] = {
+                          "nordnet": str(nordnet_error),
+                          "yahoo": str(yahoo_error),
+                      }
+
+          payload = {
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "quotes": quotes,
+              "errors": errors,
+          }
+
+          with open("market-data.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, ensure_ascii=False, indent=2)
+
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
