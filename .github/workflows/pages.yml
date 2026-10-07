@@ -39,6 +39,7 @@ jobs:
           from datetime import datetime, timezone
 
           SYMBOLS = {
+              "AMD": "AMD",
               "FORTUM": "FORTUM.HE",
               "NDA-FI": "NDA-FI.HE",
               "VERK": "VERK.HE",
@@ -298,10 +299,11 @@ jobs:
               candidates = []
               source_errors = {}
 
-              try:
-                  candidates.append(nordnet_quote(symbol))
-              except Exception as e:
-                  source_errors["nordnet"] = str(e)
+              if symbol != "AMD":
+                  try:
+                      candidates.append(nordnet_quote(symbol))
+                  except Exception as e:
+                      source_errors["nordnet"] = str(e)
 
               try:
                   candidates.append(yahoo_quote(yahoo_ticker))
