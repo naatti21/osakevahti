@@ -103,7 +103,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.9 · automaattinen Helsinki-päivitys, retry ja datapalvelun terveystarkistus.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.0 · tiheämpi Helsinki-päivitys ja intraday-kurssit.</p>
     </div>
   </details>
 </section>
@@ -227,6 +227,14 @@ function dataState(h){
   return {label:"EI DATAA",cls:"nodata"};
 }
 
+function quoteAgeShort(h){
+  if(!h.quoteTimestamp) return "";
+  const min=Math.max(0,Math.floor((Date.now()-n(h.quoteTimestamp))/60000));
+  if(min<1) return "nyt";
+  if(min<60) return `${min} min`;
+  return `${Math.floor(min/60)} h`;
+}
+
 function render(){
   renderMarketDataHealth();
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;let tv=0,tc=0,ost=0,aot=0,funds=0;
@@ -238,7 +246,7 @@ function render(){
     const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
     const subline=h.assetType==="fund"?"Rahasto":(h.name||"");
     const unit=h.assetType==="fund"?"osuutta":"kpl";
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · ${quoteAgeShort(h)}`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
   const fundPct=tv?funds/tv*100:0;
@@ -423,7 +431,7 @@ function renderMarketDataHealth(){
   if(h.ok){
     const age=h.generatedAt?ago(Date.parse(h.generatedAt)):"aikaleima puuttuu";
     box.className="statusBox statusOk";
-    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} Helsinki-symbolia · generoitu ${age}.`;
+    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} Helsinki-symbolia · tiedosto ${age}. Kortissa näkyy myös itse kurssin ikä.`;
   }else{
     box.className="statusBox statusBad";
     box.textContent=`Datapalveluvirhe: ${h.error||"tuntematon virhe"}`;
