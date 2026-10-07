@@ -69,7 +69,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki ja rahastojen NAV: GitHub Actions hakee datan palvelinpuolella ja julkaisee sen market-data.json-tiedostona.</p>
+    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: palvelinpuolen markkinadata. Rahastojen NAV haetaan rahastoyhtiöiden julkisilta rahastosivuilta ja päiväys näytetään kortissa.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
@@ -103,7 +103,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.1 · rahastojen NAV-päivitys, päivän muutos ja parempi datakattavuus.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.2 · rahastojen NAV verkkosivuilta, hiljaisemmat virheet ja selkeämpi datan päiväys.</p>
     </div>
   </details>
 </section>
@@ -212,9 +212,7 @@ function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts
 function dataState(h){
   if(h.currentPrice){
     if(h.quoteSource==="FUND_NAV"){
-      const age=(Date.now()-n(h.quoteTimestamp))/3600000;
-      if(age<=48) return {label:"NAV",cls:"broker"};
-      return {label:"NAV VANHA",cls:"stale"};
+      return {label:"NAV",cls:"broker"};
     }
     if(h.quoteSource==="HELSINKI_CACHE"){
       const age=(Date.now()-n(h.quoteTimestamp))/3600000;
@@ -251,11 +249,11 @@ function render(){
     const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
     const subline=h.assetType==="fund"?"Rahasto":(h.name||"");
     const unit=h.assetType==="fund"?"osuutta":"kpl";
-    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · ${quoteAgeShort(h)}`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
+    const b=document.createElement("button");b.className="item";b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span></div></div><div><div class="value">${p&&fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${h.quoteSource==="HELSINKI_CACHE"&&h.quoteTimestamp?` · kauppa ${quoteAgeShort(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;b.onclick=()=>openDlg(h.id);$("holdings").appendChild(b);
     renderRisk(h);
   });
   const fundPct=tv?funds/tv*100:0;
-  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään*</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   $("portfolioValue").textContent=money(tv,state.baseCurrency);const tp=tv-tc,tpp=tc?tp/tc*100:0;$("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";$("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";if(state.refreshSummary){
     const s=state.refreshSummary;
     const fundText=s.fundsTracked!=null?` · NAV ${s.fundsUpdated||0}/${s.fundsTracked||0}`:"";
@@ -329,9 +327,10 @@ async function refreshMarket(showErrors=false){
         if(!q || !n(q.price)) throw new Error(`NAV puuttuu: ${h.name||h.symbol}`);
         h.currentPrice=n(q.price);
         h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (marketData.generated_at ? Date.parse(marketData.generated_at) : Date.now());
-        h.dayChangePct=n(q.change_pct);
+        h.navDate=q.nav_date||"";
+        h.dayChangePct=0;
         h.quoteSource="FUND_NAV";
-        h.quoteProvider=q.provider||"Nordnet fund";
+        h.quoteProvider=q.provider||"Fund page";
         h.quoteRealtime=false;
         fundOk++;
         continue;
@@ -389,8 +388,8 @@ async function refreshMarket(showErrors=false){
   if(stockOk>0 || fundOk>0) state.quoteUpdatedAt=Date.now();
   save();render();$("refreshBtn").disabled=false;
 
-  if(showErrors && (stockFail>0 || fundFail>0) && firstError){
-    alert(`Päivitys valmis: osakkeet ${stockOk}/${stocks.length}, rahastot ${fundOk}/${funds.length}.\n\n${firstError}`);
+  if(showErrors && stockFail>0 && firstError){
+    alert(`Osakepäivityksessä oli ongelma: ${stockOk}/${stocks.length} onnistui.\n\n${firstError}`);
   }
 }
 async function refreshNews(){
@@ -459,7 +458,8 @@ function renderMarketDataHealth(){
   if(h.ok){
     const age=h.generatedAt?ago(Date.parse(h.generatedAt)):"aikaleima puuttuu";
     box.className="statusBox statusOk";
-    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta · ${h.fundCount||0} NAV-arvoa · tiedosto ${age}.`;
+    const navNote=(h.fundCount||0)<6?` · NAV ${h.fundCount||0}/6`:` · NAV 6/6`;
+    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta${navNote} · tiedosto ${age}.`;
   }else{
     box.className="statusBox statusBad";
     box.textContent=`Datapalveluvirhe: ${h.error||"tuntematon virhe"}`;
