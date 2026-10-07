@@ -66,10 +66,10 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: Nordnetin julkinen instrumenttihaku, joka voi palauttaa viivästettyä tai reaaliaikaista hintaa käyttöoikeuden mukaan.</p>
+    <p class="muted small">US-osakkeet: Finnhub. Nasdaq Helsinki: GitHub Actions hakee hinnat palvelinpuolella Nordnetista/Yahoosta ja julkaisee ne samasta osoitteesta market-data.json-tiedostona.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
-      <button id="testNordnetBtn" type="button">Testaa Helsinki</button>
+      <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
     </div>
     <div id="apiStatus" class="statusBox muted">Yhteyksiä ei ole vielä testattu.</div>
   </div>
@@ -96,7 +96,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.6 · Nordnet-markkinadata Helsingille, OST/AOT-tilit ja tiiviimpi yhteenveto.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v1.7 · Helsinki-data GitHub Actionsin kautta, ilman selaimen CORS-ongelmaa.</p>
     </div>
   </details>
 </section>
@@ -203,9 +203,11 @@ function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
 function dataState(h){
   if(h.currentPrice){
-    if(h.quoteSource==="NORDNET"){
-      if(h.quoteRealtime===true) return {label:"NORDNET LIVE",cls:"live"};
-      return {label:"NORDNET",cls:"broker"};
+    if(h.quoteSource==="HELSINKI_CACHE"){
+      const age=(Date.now()-n(h.quoteTimestamp))/3600000;
+      if(age<=1) return {label:h.quoteProvider==="Nordnet"?"HELSINKI":"HELSINKI*",cls:"broker"};
+      if(age<=24) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA",cls:"stale"};
     }
     if(!h.quoteTimestamp) return {label:"VIIMEISIN",cls:"manual"};
     const age=(Date.now()-n(h.quoteTimestamp))/3600000;
@@ -280,6 +282,9 @@ async function refreshMarket(){
   let okCount=0, failCount=0, firstError="";
   const fx={};
   const tracked=state.holdings.filter(h=>h.assetType!=="fund");
+  let helsinkiData=null;
+
+  try{ helsinkiData=await loadHelsinkiData(); }catch(err){ firstError=`Helsinki-data: ${err.message||err}`; }
 
   for(const h of state.holdings){
     try{
@@ -292,25 +297,29 @@ async function refreshMarket(){
     if(h.assetType==="fund") continue;
 
     try{
-      let q=null;
       if(isHelsinkiHolding(h)){
-        q=await nordnetQuote(nordnetSymbol(h));
-        h.currentPrice=q.current;
-        h.quoteTimestamp=q.timestamp||Date.now();
-        h.dayChangePct=q.changePct;
-        h.quoteSource="NORDNET";
-        h.quoteRealtime=q.realtime;
-        h.nordnetSymbol=nordnetSymbol(h);
+        const sym=nordnetSymbol(h);
+        const q=helsinkiData?.quotes?.[sym];
+        if(!q || !n(q.price)) throw new Error(`market-data.json ei sisällä symbolia ${sym}`);
+        h.currentPrice=n(q.price);
+        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (helsinkiData.generated_at ? Date.parse(helsinkiData.generated_at) : Date.now());
+        h.dayChangePct=n(q.change_pct);
+        h.quoteSource="HELSINKI_CACHE";
+        h.quoteProvider=q.provider||"";
+        h.quoteRealtime=q.realtime===true;
+        h.nordnetSymbol=sym;
       }else if(state.apiKey){
         const fq=await quote(h.providerSymbol||h.symbol);
         h.currentPrice=fq.c;
         h.quoteTimestamp=fq.t ? n(fq.t)*1000 : Date.now();
         h.dayChangePct=n(fq.dp);
         h.quoteSource="FINNHUB";
+        h.quoteProvider="Finnhub";
         h.quoteRealtime=true;
       }else{
         throw new Error("Finnhub-avain puuttuu");
       }
+
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       okCount++;
 
@@ -349,45 +358,27 @@ async function quote(s){
   if(!n(j.c)) throw new Error(`Finnhub ei palauttanut kurssia symbolille ${s}`);
   return j
 }
-async function nordnetQuote(symbol){
-  const params=new URLSearchParams();
-  params.set("free_text_search",symbol);
-  params.set("limit","10");
-  ["PRICE_INFO","INSTRUMENT_INFO","MARKET_INFO","EXCHANGE_INFO"].forEach(x=>params.append("attribute_groups",x));
-  const url=`https://public.nordnet.se/api/2/instrument_search/query/stocklist?${params.toString()}`;
-  const r=await fetch(url,{headers:{"Accept-Language":"fi"}});
-  let j={};try{j=await r.json()}catch{}
-  if(!r.ok) throw new Error(`Nordnet HTTP ${r.status}`);
-  const rows=Array.isArray(j.results)?j.results:[];
-  const target=String(symbol).toUpperCase();
-  const exact=rows.filter(x=>String(x.instrument_info?.symbol||"").toUpperCase()===target);
-  const item=(exact.find(x=>String(x.exchange_info?.exchange_country||"").toUpperCase()==="FI")||exact[0]||
-              rows.find(x=>String(x.exchange_info?.exchange_country||"").toUpperCase()==="FI"));
-  if(!item) throw new Error(`Nordnet ei löytänyt symbolia ${symbol}`);
-  const pi=item.price_info||{};
-  const current=n(pi.last?.price)||n(pi.close?.price);
-  if(!current) throw new Error(`Nordnet ei palauttanut hintaa symbolille ${symbol}`);
-  return{
-    current,
-    changePct:n(pi.diff_pct),
-    timestamp:n(pi.tick_timestamp)||Date.now(),
-    realtime:pi.realtime===true,
-    currency:item.instrument_info?.currency||"EUR",
-    instrumentId:item.instrument_info?.instrument_id||null
-  };
+async function loadHelsinkiData(){
+  const r=await fetch(`./market-data.json?t=${Date.now()}`,{cache:"no-store"});
+  if(!r.ok) throw new Error(`market-data.json HTTP ${r.status}`);
+  const j=await r.json();
+  if(!j || !j.quotes) throw new Error("market-data.json ei ole kelvollinen");
+  return j;
 }
 async function testNordnet(){
   const box=$("apiStatus");
   box.className="statusBox muted";
-  box.textContent="Testataan Nasdaq Helsinki / FORTUM...";
+  box.textContent="Testataan GitHub Actionsin Helsinki-data...";
   try{
-    const q=await nordnetQuote("FORTUM");
-    const stamp=q.timestamp?new Date(q.timestamp).toLocaleString("fi-FI"):"aikaleima puuttuu";
+    const j=await loadHelsinkiData();
+    const q=j.quotes?.FORTUM;
+    if(!q || !n(q.price)) throw new Error("FORTUM puuttuu market-data.jsonista");
+    const stamp=j.generated_at?new Date(j.generated_at).toLocaleString("fi-FI"):"aikaleima puuttuu";
     box.className="statusBox statusOk";
-    box.textContent=`Helsinki-yhteys toimii. FORTUM ${q.current.toFixed(2)} EUR · ${q.realtime?"reaaliaikainen":"viivästetty/viimeisin"} · ${stamp}.`;
+    box.textContent=`Helsinki-data toimii. FORTUM ${n(q.price).toFixed(2)} EUR · ${q.provider||"lähde"} · data ${stamp}.`;
   }catch(err){
     box.className="statusBox statusBad";
-    box.textContent=`Helsinki-yhteys ei toimi selaimesta: ${err.message||err}`;
+    box.textContent=`Helsinki-data ei ole vielä käytössä: ${err.message||err}`;
   }
 }
 async function testFinnhub(){
