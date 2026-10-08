@@ -798,6 +798,120 @@ jobs:
           print(json.dumps(payload,ensure_ascii=False,indent=2))
           PY
 
+
+      - name: Build unified portfolio status
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from datetime import datetime, timezone
+
+          def read_json(path, default):
+              try:
+                  with open(path, "r", encoding="utf-8") as f:
+                      return json.load(f)
+              except Exception:
+                  return default
+
+          market = read_json("market-data.json", {})
+          risk = read_json("risk-data.json", {})
+          quotes = market.get("quotes") or {}
+          risk_metrics = risk.get("metrics") or {}
+          now_ms = int(time.time() * 1000)
+
+          assets = {}
+
+          for symbol, q in quotes.items():
+              price = q.get("price")
+              change = q.get("change_pct")
+              ts = q.get("timestamp")
+              source = q.get("provider") or "unknown"
+
+              age_min = None
+              if isinstance(ts, (int, float)):
+                  age_min = max(0, (now_ms - int(ts)) / 60000)
+
+              alert_code = "NONE"
+              severity = "info"
+              reason = "Ei markkinahälytystä."
+
+              if age_min is not None and age_min > 60:
+                  alert_code = "STALE_DATA"
+                  severity = "watch"
+                  reason = f"Hintadata on {age_min:.0f} minuuttia vanhaa."
+
+              if isinstance(change, (int, float)):
+                  if change >= 4:
+                      alert_code = "DAY_UP_4"
+                      severity = "watch"
+                      reason = f"Päivän nousu {change:+.2f} % ylittää +4 % triggerin."
+                  elif change <= -4:
+                      alert_code = "DAY_DOWN_4"
+                      severity = "critical"
+                      reason = f"Päivän lasku {change:+.2f} % alittaa -4 % triggerin."
+
+              rm = risk_metrics.get(symbol) or {}
+              vol = rm.get("vol20_daily_pct")
+
+              if alert_code == "NONE" and isinstance(vol, (int, float)) and vol >= 5:
+                  alert_code = "HIGH_VOL"
+                  severity = "watch"
+                  reason = f"20 päivän päivittäinen volatiliteetti on korkea ({vol:.1f} %)."
+
+              assets[symbol] = {
+                  "ticker": symbol,
+                  "price": price,
+                  "day_change_pct": change,
+                  "quote_timestamp": ts,
+                  "age_minutes_at_generation": round(age_min, 1) if age_min is not None else None,
+                  "source": source,
+                  "realtime": bool(q.get("realtime") is True),
+                  "currency": q.get("currency"),
+                  "risk": {
+                      "atr14": rm.get("atr14"),
+                      "atr14_pct": rm.get("atr14_pct"),
+                      "high20": rm.get("high20"),
+                      "low20": rm.get("low20"),
+                      "sma20": rm.get("sma20"),
+                      "sma50": rm.get("sma50"),
+                      "vol20_daily_pct": rm.get("vol20_daily_pct"),
+                      "trend": rm.get("trend"),
+                  },
+                  "alert": {
+                      "code": alert_code,
+                      "severity": severity,
+                      "reason": reason,
+                  },
+              }
+
+          payload = {
+              "schema_version": "1.0",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "source_files": {
+                  "market_data_generated_at": market.get("generated_at"),
+                  "risk_data_generated_at": risk.get("generated_at"),
+              },
+              "coverage": {
+                  "stocks": len(assets),
+                  "alerts": sum(1 for a in assets.values() if a["alert"]["code"] != "NONE"),
+                  "stale": sum(1 for a in assets.values() if a["alert"]["code"] == "STALE_DATA"),
+              },
+              "assets": assets,
+              "privacy": {
+                  "contains_positions": False,
+                  "contains_quantities": False,
+                  "contains_cost_basis": False,
+                  "note": "Public market snapshot only. Private portfolio data stays in browser localStorage.",
+              },
+          }
+
+          with open("portfolio-status.json", "w", encoding="utf-8") as f:
+              json.dump(payload, f, ensure_ascii=False, indent=2)
+
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
