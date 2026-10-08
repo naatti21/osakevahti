@@ -31,6 +31,23 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .riskBudgetBar{height:6px;border-radius:999px;background:#0e1216;border:1px solid var(--line);overflow:hidden;margin-top:5px}
 .riskBudgetFill{height:100%;background:var(--ok);width:0}.riskBudgetFill.warn{background:var(--warn)}.riskBudgetFill.crit{background:var(--danger)}
 .agentEndpoint{word-break:break-all;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:#b7bec6;background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:8px;margin-top:7px}
+
+.marketContextCard{margin:0 0 10px;padding:10px 12px}
+.marketContextHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
+.marketContextTitle{font-size:12px;font-weight:850}.marketContextPhase{font-size:9px;color:var(--muted)}
+.marketContextGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.marketCell{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
+.marketCell span{display:block;font-size:8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.marketCell strong{display:block;margin-top:2px;font-size:11px;white-space:nowrap}
+.marketStory{margin-top:8px;font-size:10px;line-height:1.4;color:#c0c7cf}
+.decisionGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0}
+.decisionCell{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
+.decisionCell span{display:block;font-size:8px;color:var(--muted)}
+.decisionCell strong{display:block;margin-top:2px;font-size:9px;line-height:1.2}
+.ownerAction{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px;padding:8px 9px;border-radius:10px;border:1px solid var(--line);background:#0e1216}
+.ownerAction strong{font-size:11px}.ownerAction span{font-size:9px;color:var(--muted);text-align:right}
+.actionOk{border-color:#73d3a055}.actionWatch{border-color:#ffd16666}.actionCrit{border-color:#ff6b6b77}
+@media(max-width:480px){.marketContextGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.decisionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .riskSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px}
 .riskSummaryBox{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px;min-width:0}
 .riskSummaryBox span{display:block;color:var(--muted);font-size:8px;line-height:1.15}
@@ -127,7 +144,8 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 
 <section id="riskView" class="view">
   <div class="section"><div><div class="eyebrow">SUOJATASOT</div><h2>Riskivahti</h2></div></div>
-  <p class="muted introCompact">Priorisoi lähellä suojatasoa olevat positiot. Stop-riski on laskennallinen päätöstuki — appi ei lähetä toimeksiantoja välittäjälle.</p>
+  <p class="muted introCompact">Omistajan päätöstuki yhdistää teknisen tason, salkkupainon, markkinan ja uutistriggerit. Punainen tekninen taso ei yksin tarkoita myyntiä.</p>
+  <div id="marketContext" class="card marketContextCard"></div>
   <div id="riskSummary" class="riskSummary"></div>
   <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin osakeomistuksia.</div>
 </section>
@@ -235,7 +253,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.9.1 · AMD Finnhubista, Helsinki Yahoo-varalähteestä ja viivedatan tunnistus.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.10 · markkinakonteksti, omistajan päätöstuki ja teesisignaalit.</p>
     </div>
   </details>
 </section>
@@ -281,6 +299,7 @@ let insights=null;
 let portfolioNews=null;
 let riskMetrics=null;
 let sharedStatus=null;
+let marketContext=null;
 let deferredInstallPrompt=null;
 const $=id=>document.getElementById(id);
 
@@ -542,93 +561,199 @@ function render(){
   renderNews();
   renderInsights();
 }
+
+function marketPhase(){
+  const d=new Date(), mins=d.getHours()*60+d.getMinutes();
+  if(mins<600) return "ennen Helsinkiä";
+  if(mins<990) return "Eurooppa auki · USA futuurit";
+  if(mins<1110) return "USA auki";
+  return "Helsinki kiinni / USA auki";
+}
+function mcAsset(key){ return marketContext?.assets?.[key]||null; }
+function marketStory(){
+  const hel=n(mcAsset("HELSINKI")?.day_change_pct);
+  const eur=n(mcAsset("EUROPE")?.day_change_pct);
+  const sp=n(mcAsset("SP_FUT")?.day_change_pct);
+  const nq=n(mcAsset("NQ_FUT")?.day_change_pct);
+  if(hel<=-1 && eur<=-.7 && Math.min(sp,nq)<=-.7)
+    return "Laaja risk-off: Helsinki, Eurooppa ja USA-futuurit ovat heikkoja. Yksittäisen osakkeen lasku voi olla enemmän markkinavetoista kuin yhtiökohtaista.";
+  if(hel>=1 && eur>=.7 && Math.max(sp,nq)>=.7)
+    return "Laaja risk-on: nousu on laajaa usealla markkinalla. Yksittäisen osakkeen vihreä päivä ei välttämättä ole vain yhtiön omaa ansiota.";
+  if(hel<=-1 && eur>-.3) return "Helsinki on selvästi Eurooppaa heikompi. Kotimarkkinassa voi olla omaa painetta.";
+  if(hel>=1 && eur<.3) return "Helsinki on selvästi Eurooppaa vahvempi. Kotimarkkinassa on suhteellista vahvuutta.";
+  return "Markkina on valikoiva tai liike on vielä maltillinen. Suhteellinen liike kertoo enemmän kuin pelkkä indeksin väri.";
+}
+function renderMarketContext(){
+  const box=$("marketContext"); if(!box) return;
+  if(!marketContext?.assets){
+    box.innerHTML=`<div class="marketContextHead"><div class="marketContextTitle">Markkinakonteksti</div><div class="marketContextPhase">${esc(marketPhase())}</div></div><div class="marketStory">Markkinakontekstia odotetaan taustasyötteestä. Älä tulkitse teknisiä hälytyksiä irrallaan koko markkinasta.</div>`;
+    return;
+  }
+  const cells=[
+    ["HELSINKI","Helsinki 25"],["EUROPE","Eurooppa"],["SP_FUT","S&P fut."],
+    ["NQ_FUT","Nasdaq fut."],["BRENT","Brent"],["VIX","VIX"]
+  ].map(([k,label])=>{
+    const a=mcAsset(k),v=a? n(a.day_change_pct):null;
+    const txt=a?`${v>0?"+":""}${v.toFixed(2)} %`:"—";
+    const cls=v==null?"":v>0?"pos":v<0?"neg":"";
+    return `<div class="marketCell"><span>${label}</span><strong class="${cls}">${txt}</strong></div>`;
+  }).join("");
+  box.innerHTML=`<div class="marketContextHead"><div class="marketContextTitle">Markkinakonteksti</div><div class="marketContextPhase">${esc(marketPhase())}</div></div><div class="marketContextGrid">${cells}</div><div class="marketStory">${esc(marketStory())}</div>`;
+}
+function thesisFocus(h){
+  const s=(h.symbol||"").toUpperCase();
+  const map={
+    "AMD":"AI/datakeskus-kasvu, marginaalit, kilpailuasema",
+    "FORTUM":"osingon kestävyys, sähköhinta, suojaus, investoinnit",
+    "NDA-FI":"luottotappiot, korkokate, CET1, osinko/pääomanpalautus",
+    "METSO":"tilaukset, marginaalit, kaivos-/teollisuussykli",
+    "VERK":"kannattavuus, liikevaihto, kassavirta, turnaround",
+    "FRAMERY":"kasvu, tilauskehitys, marginaalit, kassavirta",
+    "IQMX":"rahoitus/kassa, tilaukset, kaupalliset virstanpylväät, diluutio"
+  };
+  return map[s]||"tulos, ohjeistus, kassavirta ja kilpailuasema";
+}
+function thesisSignal(h){
+  const sym=(h.symbol||"").toUpperCase();
+  const items=(portfolioNews?.items||[]).filter(x=>(x.symbol||"").toUpperCase()===sym).slice(0,3);
+  if(!items.length) return {level:"NONE",label:"ei uutistriggeriä",reason:"Ei havaittua olennaista uutistriggeriä syötteessä."};
+  const text=items.map(x=>`${x.headline||""} ${x.summary||""}`.toLowerCase()).join(" ");
+  const neg=["profit warning","cuts guidance","cut guidance","lowers guidance","misses estimates","dividend cut","cuts dividend","liquidity","bankruptcy","capital raise","share offering","downgrade","tulosvaroitus","alentaa ohjeistusta","laskee ohjeistusta","heikentää näkymiä","leikkaa osinkoa","osinkoa leikataan","maksuvalmius","rahoitustarve"];
+  const pos=["raises guidance","raised guidance","beats estimates","record order","major order","contract win","dividend increase","raises dividend","funding round","new contract","nostaa ohjeistusta","vahva tulos","merkittävä tilaus","suuri tilaus","uusi sopimus","nostaa osinkoa"];
+  if(neg.some(k=>text.includes(k))) return {level:"NEG",label:"tarkista teesi",reason:"Uutisotsikoissa on mahdollinen negatiivinen fundamentaalinen triggeri."};
+  if(pos.some(k=>text.includes(k))) return {level:"POS",label:"positiivinen triggeri",reason:"Uutisotsikoissa on mahdollinen positiivinen fundamentaalinen triggeri."};
+  return {level:"NEUTRAL",label:"uutisia, ei selvää triggeriä",reason:"Uutisia löytyy, mutta otsikoista ei nouse selvää teesin rikkoutumista."};
+}
+function ownerDecision(row,r,portfolioValue,budgetUse,overweightTarget){
+  const h=row.h, thesis=thesisSignal(h);
+  const mins=new Date().getHours()*60+new Date().getMinutes();
+  const isAMD=(h.symbol||"").toUpperCase()==="AMD";
+  const bench=isAMD ? (mins>=990 ? mcAsset("NASDAQ") : mcAsset("NQ_FUT")) : mcAsset("HELSINKI");
+  const benchPct=bench?n(bench.day_change_pct):null;
+  const stockPct=n(h.dayChangePct);
+  const rel=benchPct==null?null:stockPct-benchPct;
+  const broadDown=n(mcAsset("HELSINKI")?.day_change_pct)<=-1 && n(mcAsset("EUROPE")?.day_change_pct)<=-.5;
+  const marketLabel=benchPct==null?"konteksti puuttuu"
+    : rel<=-2?`markkinaa heikompi (${rel.toFixed(1)} %-yks.)`
+    : rel>=2?`markkinaa vahvempi (+${rel.toFixed(1)} %-yks.)`
+    : `lähellä markkinaa (${rel>=0?"+":""}${rel.toFixed(1)} %-yks.)`;
+  const techLabel=r.status==="TRIGGERED"?"taso rikottu":r.status==="CRITICAL"?"lähellä tasoa":r.status==="WATCH"?"seuranta-alue":r.status==="STALE"?"data vanha":"normaali";
+  const portfolioLabel=overweightTarget?"ylipaino / ei lisäystä":budgetUse>100?"riskibudjetti yli":budgetUse>75?"riskibudjetti korkea":"ok";
+
+  if(r.dataStale) return {severity:"WATCH",action:"ODOTA TUORE DATA",reason:"Hintadata ei ole riittävän tuore päätökseen.",techLabel,portfolioLabel,thesis,marketLabel};
+  if(thesis.level==="NEG" && ["TRIGGERED","CRITICAL","WATCH"].includes(r.status))
+    return {severity:"CRIT",action:"TARKISTA TEESI",reason:"Tekninen heikkous ja mahdollinen negatiivinen uutistriggeri osuvat samaan aikaan.",techLabel,portfolioLabel,thesis,marketLabel};
+  if(thesis.level==="NEG")
+    return {severity:"WATCH",action:"LUE UUTINEN",reason:"Mahdollinen fundamentaalinen triggeri on tärkeämpi kuin tekninen taso.",techLabel,portfolioLabel,thesis,marketLabel};
+  if(overweightTarget && ["TRIGGERED","CRITICAL","WATCH"].includes(r.status))
+    return {severity:"WATCH",action:"PIDÄ · ÄLÄ LISÄÄ",reason:"Positio on jo tavoitepainon yläpuolella. Tekninen varoitus ei yksin ole myyntisignaali.",techLabel,portfolioLabel,thesis,marketLabel};
+  if(["TRIGGERED","CRITICAL"].includes(r.status)){
+    if(broadDown && rel!=null && Math.abs(rel)<1.5)
+      return {severity:"OK",action:"EI TOIMENPIDETTÄ",reason:"Osake liikkuu lähellä yleistä markkinaa. Tekninen taso yksin ei riitä toimenpiteeseen.",techLabel,portfolioLabel,thesis,marketLabel};
+    if(rel!=null && rel<=-2)
+      return {severity:"WATCH",action:"TARKISTA SYY",reason:"Osake on teknisesti heikko ja jää selvästi vertailumarkkinasta. Tarkista yhtiökohtainen syy.",techLabel,portfolioLabel,thesis,marketLabel};
+    return {severity:"WATCH",action:"SEURAA",reason:"Tekninen taso on lähellä, mutta fundamentaalista vahvistusta ei ole.",techLabel,portfolioLabel,thesis,marketLabel};
+  }
+  if(r.status==="WATCH"){
+    if(broadDown && rel!=null && Math.abs(rel)<1.5)
+      return {severity:"OK",action:"EI TOIMENPIDETTÄ",reason:"Liike näyttää tällä hetkellä pääosin markkinavetoiselta.",techLabel,portfolioLabel,thesis,marketLabel};
+    return {severity:"WATCH",action:"SEURAA",reason:"Seuranta riittää. Katso muuttuuko suhteellinen liike tai uutisvirta.",techLabel,portfolioLabel,thesis,marketLabel};
+  }
+  if(thesis.level==="POS" && rel!=null && rel>=2)
+    return {severity:"OK",action:"TEESI VOI VAHVISTUA",reason:"Positiivinen uutistriggeri ja markkinaa vahvempi kurssiliike tukevat toisiaan.",techLabel,portfolioLabel,thesis,marketLabel};
+  return {severity:"OK",action:"EI TOIMENPIDETTÄ",reason:"Ei yhdistelmää, joka vaatisi päätöstä juuri nyt.",techLabel,portfolioLabel,thesis,marketLabel};
+}
 function riskStatusRank(status){
   return {TRIGGERED:0,CRITICAL:1,WATCH:2,NO_STOP:3,STALE:4,OK:5,NO_PRICE:6}[status]??9;
 }
 function renderRiskDashboard(rows,portfolioValue){
   $("risks").innerHTML="";
+  renderMarketContext();
   const stockRows=rows.filter(r=>r.h.assetType!=="fund");
   $("riskEmpty").classList.toggle("hidden",stockRows.length>0);
-
-  const assessed=stockRows.map(r=>({row:r,risk:evaluateRisk(r.h,portfolioValue,r.fx)}));
-  const actionable=assessed.filter(x=>x.risk.activeStop&&x.row.p);
-  const totalRisk=actionable.reduce((a,x)=>a+n(x.risk.riskEuro),0);
-  const alerts=assessed.filter(x=>["TRIGGERED","CRITICAL","WATCH"].includes(x.risk.status)).length;
-  const noProtection=assessed.filter(x=>!x.risk.activeStop).length;
-  const stale=assessed.filter(x=>x.risk.dataStale).length;
   const budgetPct=Math.max(.1,n(state.riskBudgetPct)||1.25);
   const budgetEuro=portfolioValue*budgetPct/100;
+
+  const assessed=stockRows.map(row=>{
+    const risk=evaluateRisk(row.h,portfolioValue,row.fx);
+    const budgetUse=budgetEuro>0&&risk.activeStop?risk.riskEuro/budgetEuro*100:0;
+    const weight=portfolioValue?row.val/portfolioValue*100:0;
+    const targetPct=Math.max(0,n(row.h.targetWeight));
+    const overweightTarget=targetPct>0&&weight>=targetPct;
+    const decision=ownerDecision(row,risk,portfolioValue,budgetUse,overweightTarget);
+    return {row,risk,budgetUse,overweightTarget,decision};
+  });
+
+  const actionable=assessed.filter(x=>x.risk.activeStop&&x.row.p);
+  const totalRisk=actionable.reduce((a,x)=>a+n(x.risk.riskEuro),0);
+  const checkNow=assessed.filter(x=>["WATCH","CRIT"].includes(x.decision.severity)).length;
+  const noProtection=assessed.filter(x=>!x.risk.activeStop).length;
   const overBudget=assessed.filter(x=>x.risk.activeStop&&n(x.risk.riskEuro)>budgetEuro).length;
 
   $("riskSummary").innerHTML=`
-    <div class="riskSummaryBox"><span>Huomiota nyt</span><strong class="${alerts?"neg":""}">${alerts}</strong></div>
+    <div class="riskSummaryBox"><span>Tarkista nyt</span><strong class="${checkNow?"neg":""}">${checkNow}</strong></div>
     <div class="riskSummaryBox"><span>Stop-riski yhteensä</span><strong>${money(totalRisk,state.baseCurrency)}</strong></div>
     <div class="riskSummaryBox"><span>Budjetti / osake</span><strong>${budgetPct.toFixed(2)} % · ${money(budgetEuro,state.baseCurrency)}</strong></div>
     <div class="riskSummaryBox"><span>Yli budjetin / ilman suojaa</span><strong class="${overBudget?"neg":""}">${overBudget} / ${noProtection}</strong></div>`;
 
+  const sevRank={CRIT:0,WATCH:1,OK:2};
   assessed.sort((a,b)=>{
-    const ra=riskStatusRank(a.risk.status), rb=riskStatusRank(b.risk.status);
-    if(ra!==rb) return ra-rb;
+    const sa=sevRank[a.decision.severity]??9, sb=sevRank[b.decision.severity]??9;
+    if(sa!==sb) return sa-sb;
     const da=a.risk.distancePct==null?999:a.risk.distancePct;
     const db=b.risk.distancePct==null?999:b.risk.distancePct;
     return da-db;
-  }).forEach(x=>renderRiskCard(x.row,x.risk,portfolioValue));
+  }).forEach(x=>renderRiskCard(x.row,x.risk,portfolioValue,x.decision,x.budgetUse,x.overweightTarget));
 }
-function renderRiskCard(row,r,portfolioValue){
+function renderRiskCard(row,r,portfolioValue,decision,budgetUse,overweightTarget){
   const h=row.h,p=row.p,d=document.createElement("div");
   d.className="card";
-  if(["TRIGGERED","CRITICAL"].includes(r.status)) d.classList.add("riskCardUrgent");
-  else if(r.status==="WATCH") d.classList.add("riskCardWatch");
+  if(decision.severity==="CRIT") d.classList.add("riskCardUrgent");
+  else if(decision.severity==="WATCH") d.classList.add("riskCardWatch");
 
-  const cls=r.status==="OK"?"ok":r.status==="WATCH"?"watch":"crit";
+  const actionCls=decision.severity==="CRIT"?"crit":decision.severity==="WATCH"?"watch":"ok";
+  const actionBoxCls=decision.severity==="CRIT"?"actionCrit":decision.severity==="WATCH"?"actionWatch":"actionOk";
   const weight=portfolioValue?row.val/portfolioValue*100:0;
   const stopType=r.stopType||"—";
   const pnlCushion=n(h.buyPrice)>0&&p ? (p/n(h.buyPrice)-1)*100 : 0;
   const riskShare=portfolioValue?r.riskEuro/portfolioValue*100:0;
   const budgetPct=Math.max(.1,n(state.riskBudgetPct)||1.25);
   const budgetEuro=portfolioValue*budgetPct/100;
-  const budgetUse=budgetEuro>0&&r.activeStop?r.riskEuro/budgetEuro*100:0;
   const riskPerShare=r.activeStop&&p?Math.max(0,p-r.activeStop)*row.fx:0;
   const riskMaxQty=riskPerShare>0?Math.floor(budgetEuro/riskPerShare):null;
-
-  // Buy-and-hold sizing: never suggest adding beyond the holding's target weight.
-  // The earlier version used only stop-distance risk, which could suggest absurd
-  // quantities when the stop happened to sit very close to the market price.
   const targetPct=Math.max(0,n(h.targetWeight));
-  const targetMaxQty=(targetPct>0&&p>0&&row.fx>0&&portfolioValue>0)
-    ? Math.floor((portfolioValue*targetPct/100)/(p*row.fx))
-    : null;
-
+  const targetMaxQty=(targetPct>0&&p>0&&row.fx>0&&portfolioValue>0)?Math.floor((portfolioValue*targetPct/100)/(p*row.fx)):null;
   let allowedMaxQty=riskMaxQty;
-  if(targetMaxQty!=null){
-    allowedMaxQty=allowedMaxQty==null?targetMaxQty:Math.min(allowedMaxQty,targetMaxQty);
-  }
-
+  if(targetMaxQty!=null) allowedMaxQty=allowedMaxQty==null?targetMaxQty:Math.min(allowedMaxQty,targetMaxQty);
   const currentQty=n(h.quantity);
   const extraQty=allowedMaxQty==null?null:Math.max(0,allowedMaxQty-currentQty);
-  const overweightTarget=targetPct>0&&weight>=targetPct;
-  const sizingText=overweightTarget
-    ? `tavoite ${targetPct.toFixed(1)} % · EI LISÄYSTÄ`
-    : targetPct>0
-      ? `tavoite ${targetPct.toFixed(1)} % · lisätilaa enintään ${extraQty??0} kpl`
-      : riskMaxQty!=null
-        ? `vain riskibudjetti · enimmäiskoko ${riskMaxQty} kpl`
-        : `positiokokoa ei voitu arvioida`;
+  const sizingText=overweightTarget?`tavoite ${targetPct.toFixed(1)} % · EI LISÄYSTÄ`
+    :targetPct>0?`tavoite ${targetPct.toFixed(1)} % · lisätilaa enintään ${extraQty??0} kpl`
+    :riskMaxQty!=null?`vain riskibudjetti · enimmäiskoko ${riskMaxQty} kpl`:`positiokokoa ei voitu arvioida`;
   const fillClass=budgetUse>100?"crit":budgetUse>75?"warn":"";
   const fillWidth=Math.min(100,Math.max(0,budgetUse));
 
-  d.innerHTML=`<div class="riskHead"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")} · paino ${weight.toFixed(1)} %</div></div><span class="badge ${cls}">${r.label}</span></div>
+  d.innerHTML=`<div class="riskHead"><div><div class="symbol">${esc(h.symbol)}</div><div class="name">${esc(h.name||"")} · paino ${weight.toFixed(1)} %</div></div><span class="badge ${actionCls}">${esc(decision.action)}</span></div>
+  <div class="decisionGrid">
+    <div class="decisionCell"><span>Tekninen</span><strong>${esc(decision.techLabel)}</strong></div>
+    <div class="decisionCell"><span>Salkku</span><strong>${esc(decision.portfolioLabel)}</strong></div>
+    <div class="decisionCell"><span>Teesi</span><strong>${esc(decision.thesis.label)}</strong></div>
+    <div class="decisionCell"><span>Markkina</span><strong>${esc(decision.marketLabel)}</strong></div>
+  </div>
+  <div class="ownerAction ${actionBoxCls}"><strong>${esc(decision.action)}</strong><span>${esc(decision.reason)}</span></div>
   <div class="riskMetrics5">
     <div class="riskMetricMini"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong></div>
     <div class="riskMetricMini"><span>Suojataso</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong></div>
-    <div class="riskMetricMini"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=7?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
+    <div class="riskMetricMini"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=3?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
     <div class="riskMetricMini"><span>€ riski</span><strong>${r.activeStop?money(r.riskEuro,state.baseCurrency):"—"}</strong></div>
     <div class="riskMetricMini"><span>Salkusta</span><strong>${r.activeStop?riskShare.toFixed(1)+" %":"—"}</strong></div>
   </div>
   ${r.activeStop?`<div class="riskDataLine">Riskibudjetista käytetty ${budgetUse.toFixed(0)} % · ${sizingText}</div><div class="riskBudgetBar"><div class="riskBudgetFill ${fillClass}" style="width:${fillWidth}%"></div></div>`:""}
-  <div class="riskWhy">${esc(r.explanation)}${overweightTarget?` Tavoitepainon perusteella positiota ei pidä kasvattaa.`:""}</div>
+  <div class="riskWhy"><strong>Teesissä seuraa:</strong> ${esc(thesisFocus(h))}</div>
   <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}${r.delayNote?` · ${esc(r.delayNote)}`:""}</div>
   <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
+    <span>Tekninen alkuperäisstatus</span><strong>${esc(r.label)}</strong>
+    <span>Uutistriggerin tulkinta</span><strong>${esc(decision.thesis.reason)}</strong>
     <span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong>
     <span>Trailing (${n(h.trailingPct).toFixed(0)} %)</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong>
     <span>ATR(14)</span><strong>${r.atr?money(r.atr,h.currency):"—"}</strong>
@@ -638,6 +763,7 @@ function renderRiskCard(row,r,portfolioValue){
   </div></details>`;
   $("risks").appendChild(d);
 }
+
 function evaluateRisk(h,portfolioValue,fxRate){
   const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);
   if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null,riskEuro:0,explanation:"Kurssia ei ole saatavilla."};
@@ -690,11 +816,24 @@ function evaluateRisk(h,portfolioValue,fxRate){
 
   return{status,label,activeStop:active,distancePct:dist,riskEuro,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,stopType,trend:h.riskTrend||"",dataStale,quoteAge,delayNote,explanation};
 }
+async function loadMarketContext(force=false){
+  try{
+    const r=await fetch(`./market-context.json?t=${Date.now()}`,{cache:"no-store"});
+    if(!r.ok) throw new Error(`market-context.json HTTP ${r.status}`);
+    marketContext=await r.json();
+    renderMarketContext();
+    render();
+  }catch(err){
+    if(force) alert(`Markkinakonteksti ei latautunut: ${err.message||err}`);
+    renderMarketContext();
+  }
+}
 async function loadSharedStatus(force=false){
   try{
     const r=await fetch(`./portfolio-status.json?t=${Date.now()}`,{cache:"no-store"});
     if(!r.ok) throw new Error(`portfolio-status.json HTTP ${r.status}`);
     sharedStatus=await r.json();
+    marketContext=sharedStatus?.market_context||marketContext;
     const assets=sharedStatus?.assets||{};
     for(const h of state.holdings||[]){
       if(h.assetType==="fund") continue;
@@ -781,6 +920,7 @@ async function loadPortfolioNews(force=false){
     if(!r.ok) throw new Error(`news-data.json HTTP ${r.status}`);
     portfolioNews=await r.json();
     renderNews();
+    render();
   }catch(err){
     if(force) alert(`Omistusuutiset eivät latautuneet: ${err.message||err}`);
     if(!portfolioNews) renderNews();
@@ -1162,6 +1302,7 @@ updateInstallStatus();
 render();
 loadInsights(false).catch(()=>{});
 loadPortfolioNews(false).catch(()=>{});
+loadMarketContext(false).catch(()=>{});
 loadSharedStatus(false).catch(()=>{});
 loadRiskData(false).catch(()=>{});
 let lastAutoRefresh=0;
