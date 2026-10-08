@@ -816,6 +816,7 @@ jobs:
 
           market = read_json("market-data.json", {})
           risk = read_json("risk-data.json", {})
+          market_context = read_json("market-context.json", {})
           quotes = market.get("quotes") or {}
           risk_metrics = risk.get("metrics") or {}
           now_ms = int(time.time() * 1000)
@@ -897,6 +898,7 @@ jobs:
                   "alerts": sum(1 for a in assets.values() if a["alert"]["code"] != "NONE"),
                   "stale": sum(1 for a in assets.values() if a["alert"]["code"] == "STALE_DATA"),
               },
+              "market_context": market_context,
               "assets": assets,
               "privacy": {
                   "contains_positions": False,
@@ -910,6 +912,86 @@ jobs:
               json.dump(payload, f, ensure_ascii=False, indent=2)
 
           print(json.dumps(payload, ensure_ascii=False, indent=2))
+          PY
+
+
+      - name: Build market context
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.parse
+          import urllib.request
+          from datetime import datetime, timezone
+
+          SYMBOLS = {
+              "HELSINKI": ("^OMXH25", "OMX Helsinki 25"),
+              "EUROPE": ("^STOXX50E", "Euro Stoxx 50"),
+              "SP_FUT": ("ES=F", "S&P 500 futures"),
+              "NQ_FUT": ("NQ=F", "Nasdaq 100 futures"),
+              "NASDAQ": ("^IXIC", "Nasdaq Composite"),
+              "BRENT": ("BZ=F", "Brent crude"),
+              "VIX": ("^VIX", "VIX"),
+          }
+
+          def get_json(url):
+              req = urllib.request.Request(url, headers={
+                  "User-Agent":"Mozilla/5.0 Osakevahti-MarketContext/1.0",
+                  "Accept":"application/json",
+              })
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.loads(r.read().decode("utf-8"))
+
+          def quote(ticker):
+              q = urllib.parse.quote(ticker, safe="")
+              url = f"https://query1.finance.yahoo.com/v8/finance/chart/{q}?range=1d&interval=5m&includePrePost=true"
+              data = get_json(url)
+              result = (((data.get("chart") or {}).get("result") or [None])[0])
+              if not result:
+                  raise RuntimeError("no chart result")
+              meta = result.get("meta") or {}
+              timestamps = result.get("timestamp") or []
+              closes = (((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or [])
+              price = None
+              ts = None
+              for t,c in reversed(list(zip(timestamps, closes))):
+                  if isinstance(c,(int,float)) and isinstance(t,(int,float)):
+                      price=float(c); ts=int(t); break
+              if price is None and isinstance(meta.get("regularMarketPrice"),(int,float)):
+                  price=float(meta["regularMarketPrice"])
+                  ts=int(meta.get("regularMarketTime") or time.time())
+              if price is None:
+                  raise RuntimeError("price missing")
+              prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+              change = ((price-float(prev))/float(prev)*100) if isinstance(prev,(int,float)) and prev else 0.0
+              return {
+                  "price":price,
+                  "day_change_pct":change,
+                  "quote_timestamp":int(ts*1000),
+                  "currency":meta.get("currency"),
+                  "provider":"Yahoo intraday",
+              }
+
+          assets={}
+          errors={}
+          for key,(ticker,name) in SYMBOLS.items():
+              try:
+                  q=quote(ticker)
+                  q.update({"ticker":ticker,"name":name})
+                  assets[key]=q
+              except Exception as e:
+                  errors[key]=str(e)
+
+          payload={
+              "generated_at":datetime.now(timezone.utc).isoformat(),
+              "assets":assets,
+              "errors":errors,
+              "method":"Yahoo intraday 5m market context v1"
+          }
+          with open("market-context.json","w",encoding="utf-8") as f:
+              json.dump(payload,f,ensure_ascii=False,indent=2)
+          print(json.dumps(payload,ensure_ascii=False,indent=2))
           PY
 
       - name: Configure Pages
