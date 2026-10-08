@@ -175,7 +175,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">Sovellus yrittää hakea kaikki osakekurssit suoraan Finnhubista aina kun appi on auki. GitHubin market-data.json jää varalähteeksi ja rahastojen NAV-lähteeksi. Näin GitHub Actionsin viive ei yksin pysäytä päivän kurssipäivitystä.</p>
+    <p class="muted small">AMD haetaan suoraan Finnhubista. Helsingin osakkeisiin nykyinen Finnhub-avain ei anna pääsyä, joten ne tulevat GitHubin market-data.jsonin kautta Yahoo intraday -datasta, tyypillisesti noin 15 minuutin viiveellä. Rahastojen NAV tulee samasta taustasyötteestä.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
@@ -235,7 +235,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.9 · suora Finnhub-päivitys, stale-suoja ja automaattinen 5 min virkistys.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.9.1 · AMD Finnhubista, Helsinki Yahoo-varalähteestä ja viivedatan tunnistus.</p>
     </div>
   </details>
 </section>
@@ -387,6 +387,12 @@ function dataState(h){
       const age=(Date.now()-n(h.quoteTimestamp))/60000;
       if(age<=20) return {label:"LIVE*",cls:"broker"};
       if(age<=60) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA",cls:"stale"};
+    }
+    if(h.quoteSource==="HELSINKI_CACHE" && /Yahoo/i.test(h.quoteProvider||"")){
+      const age=(Date.now()-n(h.quoteTimestamp))/60000;
+      if(age<=25) return {label:"YAHOO ~15m",cls:"manual"};
+      if(age<=45) return {label:"VIIVE",cls:"manual"};
       return {label:"VANHA",cls:"stale"};
     }
     if(h.quoteSource==="PORTFOLIO_STATUS"){
@@ -621,7 +627,7 @@ function renderRiskCard(row,r,portfolioValue){
   </div>
   ${r.activeStop?`<div class="riskDataLine">Riskibudjetista käytetty ${budgetUse.toFixed(0)} % · ${sizingText}</div><div class="riskBudgetBar"><div class="riskBudgetFill ${fillClass}" style="width:${fillWidth}%"></div></div>`:""}
   <div class="riskWhy">${esc(r.explanation)}${overweightTarget?` Tavoitepainon perusteella positiota ei pidä kasvattaa.`:""}</div>
-  <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}</div>
+  <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}${r.delayNote?` · ${esc(r.delayNote)}`:""}</div>
   <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
     <span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong>
     <span>Trailing (${n(h.trailingPct).toFixed(0)} %)</span><strong>${r.trailingStop?money(r.trailingStop,h.currency):"—"}</strong>
@@ -651,14 +657,17 @@ function evaluateRisk(h,portfolioValue,fxRate){
   }
 
   const ageMs=h.quoteTimestamp?Date.now()-n(h.quoteTimestamp):null;
-  const dataStale=ageMs!=null && ageMs>60*60*1000;
+  const yahooDelayed=h.quoteSource==="HELSINKI_CACHE" && /Yahoo/i.test(h.quoteProvider||"");
+  const staleLimitMs=yahooDelayed?45*60*1000:60*60*1000;
+  const dataStale=ageMs!=null && ageMs>staleLimitMs;
   const quoteAge=h.quoteTimestamp?quoteAgeShort(h):"";
+  const delayNote=yahooDelayed?"Yahoo ~15 min viive":"";
 
   if(!active){
     return{
       status:dataStale?"STALE":"NO_STOP",label:dataStale?"VANHA DATA":"EI SUOJAA",
       activeStop:null,distancePct:null,riskEuro:0,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,
-      trend:h.riskTrend||"",dataStale,quoteAge,
+      trend:h.riskTrend||"",dataStale,quoteAge,delayNote,
       explanation:dataStale?"Kurssidatan ikä on yli tunnin eikä suojatasoa voida arvioida luotettavasti.":"Aseta oma stop tai trailing-prosentti. ATR-data antaa myöhemmin laskennallisen tason."
     };
   }
@@ -679,7 +688,7 @@ function evaluateRisk(h,portfolioValue,fxRate){
   else if(status==="STALE") explanation="Suoja näyttää väljältä, mutta hintadata on vanhaa. Älä tee päätöstä tämän luvun varassa.";
   else explanation=`Suojatasoon on ${dist.toFixed(1)} %. Ei välitöntä teknistä hälytystä.`;
 
-  return{status,label,activeStop:active,distancePct:dist,riskEuro,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,stopType,trend:h.riskTrend||"",dataStale,quoteAge,explanation};
+  return{status,label,activeStop:active,distancePct:dist,riskEuro,manualStop:man,trailingStop:trail,atrStop,atr,high20,low20,stopType,trend:h.riskTrend||"",dataStale,quoteAge,delayNote,explanation};
 }
 async function loadSharedStatus(force=false){
   try{
@@ -859,7 +868,8 @@ async function refreshMarket(showErrors=false){
   // This is the fast path while the app is open. GitHub snapshot stays as fallback.
   const directQuotes={};
   if(state.apiKey){
-    const results=await Promise.allSettled(stocks.map(async h=>{
+    const directStocks=stocks.filter(h=>!isHelsinkiHolding(h));
+    const results=await Promise.allSettled(directStocks.map(async h=>{
       const sym=finnhubSymbol(h);
       const q=await quote(sym);
       return {id:h.id,symbol:sym,q};
@@ -1056,9 +1066,9 @@ function renderMarketDataHealth(){
     const staleMs=h.generatedAt?Date.now()-Date.parse(h.generatedAt):0;
     if(staleMs>30*60*1000){
       box.className="statusBox statusBad";
-      box.textContent=`Taustadata VANHA · ${age}${directNote}${navNote}. Appi käyttää mahdollisuuksien mukaan suoraa Finnhub-dataa.`;
+      box.textContent=`Taustadata VANHA · ${age}${directNote}${navNote}. Helsinki-kurssit ovat Yahoo-varalähdettä (~15 min viive normaalisti).`;
     }else{
-      box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta${navNote}${directNote} · tiedosto ${age}.`;
+      box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta${navNote}${directNote} · tiedosto ${age} · Helsinki ~15 min viive.`;
     }
   }else{
     box.className="statusBox statusBad";
@@ -1085,13 +1095,12 @@ async function testFinnhub(){
   const box=$("apiStatus");
   state.apiKey=$("apiKey").value.trim();save();
   if(!state.apiKey){box.className="statusBox statusBad";box.textContent="API-avain puuttuu.";return}
-  box.className="statusBox muted";box.textContent="Testataan AMD + FORTUM.HE...";
+  box.className="statusBox muted";box.textContent="Testataan AMD...";
   try{
-    const [amd,fortum]=await Promise.all([quote("AMD"),quote("FORTUM.HE")]);
+    const amd=await quote("AMD");
     box.className="statusBox statusOk";
     const aStamp=amd.t ? new Date(n(amd.t)*1000).toLocaleString("fi-FI") : "—";
-    const fStamp=fortum.t ? new Date(n(fortum.t)*1000).toLocaleString("fi-FI") : "—";
-    box.textContent=`Finnhub toimii. AMD ${amd.c} USD (${aStamp}) · FORTUM ${fortum.c} EUR (${fStamp}).`;
+    box.textContent=`Finnhub toimii AMD:lle. ${amd.c} USD · ${aStamp}. Helsinki-noteeraukset eivät kuulu nykyiseen Finnhub-oikeuteen, joten niissä käytetään Yahoo-varalähdettä.`;
   }catch(err){
     box.className="statusBox statusBad";
     box.textContent=`Finnhub-testissä ongelma: ${err.message||err}`;
