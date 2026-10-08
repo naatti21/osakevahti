@@ -7,6 +7,12 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Osakevahti">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <title>Osakevahti</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0d10;--panel:#14181d;--panel2:#1a2027;--text:#f3f6f8;--muted:#9099a3;--line:#262d35;--accent:#73d3a0;--warn:#ffd166;--danger:#ff6b6b;--ok:#6ee7a8}
@@ -182,6 +188,15 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
   </div>
 
   <details>
+    <summary>Asenna Osakevahti</summary>
+    <div class="detailsBody">
+      <p class="muted small" style="margin-top:10px">Asennettuna Osakevahti avautuu omana sovelluksenaan ilman selaimen osoiteriviä. Päivitykset tulevat edelleen GitHub Pagesista.</p>
+      <button id="installAppBtn" type="button" disabled>Asenna sovellus</button>
+      <div id="installStatus" class="statusBox muted">Tarkistetaan asennettavuus…</div>
+    </div>
+  </details>
+
+  <details>
     <summary>Agenttisyöte</summary>
     <div class="detailsBody">
       <div class="muted small" style="margin-top:8px">Yksi julkinen markkinasnapshot agenteille. Se sisältää hinnan, päivän muutoksen, lähteen, noteerausajan, ATR:n/trendin ja hälytyksen — ei määriä, hankintahintoja tai tilien saldoja.</div>
@@ -220,7 +235,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.7 · yhteinen portfolio-status, riskibudjetti ja agenttisyöte.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.8 · asennettava PWA ja push-valmius.</p>
     </div>
   </details>
 </section>
@@ -266,6 +281,7 @@ let insights=null;
 let portfolioNews=null;
 let riskMetrics=null;
 let sharedStatus=null;
+let deferredInstallPrompt=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -989,12 +1005,50 @@ async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{stat
 async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){if(!r.symbol)continue;arr.push({id:uid(),symbol:r.symbol.trim().toUpperCase(),name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency:(r.currency||state.baseCurrency).trim().toUpperCase(),account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol:(r.provider_symbol||r.symbol).trim(),manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium"})}if(arr.length){state.holdings=arr;save();render();alert(`Tuotu ${arr.length} omistusta.`)}e.target.value=""}
 function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
 function line(l,d){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const x=l[i];if(x=='"'){if(q&&l[i+1]=='"'){c+='"';i++}else q=!q}else if(x===d&&!q){o.push(c);c=""}else c+=x}o.push(c);return o}
+const installBtn=$("installAppBtn");
+const installStatus=$("installStatus");
+function updateInstallStatus(){
+  if(window.matchMedia("(display-mode: standalone)").matches){
+    if(installBtn) installBtn.disabled=true;
+    if(installStatus){installStatus.className="statusBox statusOk";installStatus.textContent="Osakevahti on asennettu sovelluksena."}
+    return;
+  }
+  if(deferredInstallPrompt){
+    if(installBtn) installBtn.disabled=false;
+    if(installStatus){installStatus.className="statusBox statusOk";installStatus.textContent="Sovellus voidaan asentaa tästä laitteesta."}
+  }else{
+    if(installBtn) installBtn.disabled=true;
+    if(installStatus){installStatus.className="statusBox muted";installStatus.textContent="Jos nappi ei vielä aktivoidu, avaa Chromen valikko ja valitse Asenna sovellus. Chrome voi tarvita hetken ennen kuin asennus tarjotaan."}
+  }
+}
+window.addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  updateInstallStatus();
+});
+window.addEventListener("appinstalled",()=>{
+  deferredInstallPrompt=null;
+  updateInstallStatus();
+});
+if(installBtn) installBtn.onclick=async()=>{
+  if(!deferredInstallPrompt) return updateInstallStatus();
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt=null;
+  updateInstallStatus();
+};
 if("serviceWorker" in navigator){
-  navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js",{scope:"./"})
+      .then(()=>updateInstallStatus())
+      .catch(err=>{
+        if(installStatus){installStatus.className="statusBox statusBad";installStatus.textContent=`Service worker -virhe: ${err.message||err}`;}
+      });
+  });
+}else{
+  if(installStatus){installStatus.className="statusBox statusBad";installStatus.textContent="Selain ei tue service workereita."}
 }
-if("caches" in window){
-  caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k)))).catch(()=>{});
-}
+updateInstallStatus();
 render();
 loadInsights(false).catch(()=>{});
 loadPortfolioNews(false).catch(()=>{});
