@@ -235,7 +235,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.8 · asennettava PWA ja push-valmius.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.8.1 · riskikoko rajataan tavoitepainolla.</p>
     </div>
   </details>
 </section>
@@ -562,8 +562,31 @@ function renderRiskCard(row,r,portfolioValue){
   const budgetEuro=portfolioValue*budgetPct/100;
   const budgetUse=budgetEuro>0&&r.activeStop?r.riskEuro/budgetEuro*100:0;
   const riskPerShare=r.activeStop&&p?Math.max(0,p-r.activeStop)*row.fx:0;
-  const maxQty=riskPerShare>0?Math.floor(budgetEuro/riskPerShare):null;
-  const extraQty=maxQty==null?null:Math.max(0,maxQty-n(h.quantity));
+  const riskMaxQty=riskPerShare>0?Math.floor(budgetEuro/riskPerShare):null;
+
+  // Buy-and-hold sizing: never suggest adding beyond the holding's target weight.
+  // The earlier version used only stop-distance risk, which could suggest absurd
+  // quantities when the stop happened to sit very close to the market price.
+  const targetPct=Math.max(0,n(h.targetWeight));
+  const targetMaxQty=(targetPct>0&&p>0&&row.fx>0&&portfolioValue>0)
+    ? Math.floor((portfolioValue*targetPct/100)/(p*row.fx))
+    : null;
+
+  let allowedMaxQty=riskMaxQty;
+  if(targetMaxQty!=null){
+    allowedMaxQty=allowedMaxQty==null?targetMaxQty:Math.min(allowedMaxQty,targetMaxQty);
+  }
+
+  const currentQty=n(h.quantity);
+  const extraQty=allowedMaxQty==null?null:Math.max(0,allowedMaxQty-currentQty);
+  const overweightTarget=targetPct>0&&weight>=targetPct;
+  const sizingText=overweightTarget
+    ? `tavoite ${targetPct.toFixed(1)} % · EI LISÄYSTÄ`
+    : targetPct>0
+      ? `tavoite ${targetPct.toFixed(1)} % · lisätilaa enintään ${extraQty??0} kpl`
+      : riskMaxQty!=null
+        ? `vain riskibudjetti · enimmäiskoko ${riskMaxQty} kpl`
+        : `positiokokoa ei voitu arvioida`;
   const fillClass=budgetUse>100?"crit":budgetUse>75?"warn":"";
   const fillWidth=Math.min(100,Math.max(0,budgetUse));
 
@@ -575,8 +598,8 @@ function renderRiskCard(row,r,portfolioValue){
     <div class="riskMetricMini"><span>€ riski</span><strong>${r.activeStop?money(r.riskEuro,state.baseCurrency):"—"}</strong></div>
     <div class="riskMetricMini"><span>Salkusta</span><strong>${r.activeStop?riskShare.toFixed(1)+" %":"—"}</strong></div>
   </div>
-  ${r.activeStop?`<div class="riskDataLine">Riskibudjetista käytetty ${budgetUse.toFixed(0)} % · laskennallinen max ${maxQty??"—"} kpl${extraQty!=null?` · lisätilaa ${extraQty} kpl`:""}</div><div class="riskBudgetBar"><div class="riskBudgetFill ${fillClass}" style="width:${fillWidth}%"></div></div>`:""}
-  <div class="riskWhy">${esc(r.explanation)}</div>
+  ${r.activeStop?`<div class="riskDataLine">Riskibudjetista käytetty ${budgetUse.toFixed(0)} % · ${sizingText}</div><div class="riskBudgetBar"><div class="riskBudgetFill ${fillClass}" style="width:${fillWidth}%"></div></div>`:""}
+  <div class="riskWhy">${esc(r.explanation)}${overweightTarget?` Tavoitepainon perusteella positiota ei pidä kasvattaa.`:""}</div>
   <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}</div>
   <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
     <span>Oma stop</span><strong>${r.manualStop?money(r.manualStop,h.currency):"—"}</strong>
