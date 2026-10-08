@@ -175,7 +175,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Älä lisää API-avainta GitHubiin.</p>
-    <p class="muted small">Sovellus käyttää Finnhubia AMD:lle ja palvelinpuolen snapshotia Helsingin osakkeille. Jaettu market-data.json sisältää myös AMD:n, jotta muut vahdit voivat lukea saman päivän prosentit ilman puhelimen localStoragea.</p>
+    <p class="muted small">Sovellus yrittää hakea kaikki osakekurssit suoraan Finnhubista aina kun appi on auki. GitHubin market-data.json jää varalähteeksi ja rahastojen NAV-lähteeksi. Näin GitHub Actionsin viive ei yksin pysäytä päivän kurssipäivitystä.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub</button>
       <button id="testNordnetBtn" type="button">Testaa Helsinki-data</button>
@@ -235,7 +235,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.8.1 · riskikoko rajataan tavoitepainolla.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.9 · suora Finnhub-päivitys, stale-suoja ja automaattinen 5 min virkistys.</p>
     </div>
   </details>
 </section>
@@ -358,6 +358,21 @@ function nordnetSymbol(h){
   if(name==="metso" || raw.startsWith("METSO")) return "METSO";
   return raw.replace(/\.HE$/,"");
 }
+function finnhubSymbol(h){
+  if(!isHelsinkiHolding(h)) return (h.providerSymbol||h.symbol||"").toUpperCase();
+  const s=nordnetSymbol(h);
+  const map={
+    "FORTUM":"FORTUM.HE",
+    "NDA-FI":"NDA-FI.HE",
+    "VERK":"VERK.HE",
+    "METSO":"METSO.HE",
+    "FRAMERY":"FRAMERY.HE",
+    "IQMX":"IQMX.HE"
+  };
+  return map[s]||((h.providerSymbol||h.symbol||s).toUpperCase().endsWith(".HE")
+    ? (h.providerSymbol||h.symbol||s).toUpperCase()
+    : `${s}.HE`);
+}
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function uid(){return crypto.randomUUID?.()||Date.now()+"-"+Math.random().toString(16).slice(2)}
 function n(v){const x=Number(String(v??"").replace(",","."));return Number.isFinite(x)?x:0}
@@ -368,6 +383,12 @@ function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
 function dataState(h){
   if(h.currentPrice){
+    if(h.quoteSource==="FINNHUB_HELSINKI"){
+      const age=(Date.now()-n(h.quoteTimestamp))/60000;
+      if(age<=20) return {label:"LIVE*",cls:"broker"};
+      if(age<=60) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA",cls:"stale"};
+    }
     if(h.quoteSource==="PORTFOLIO_STATUS"){
       const age=(Date.now()-n(h.quoteTimestamp))/3600000;
       if(age<=1) return {label:"YHTEINEN",cls:"broker"};
@@ -825,14 +846,33 @@ function saveHolding(){
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
 async function refreshMarket(showErrors=false){
   $("refreshBtn").disabled=true;
-  let stockOk=0, stockFail=0, fundOk=0, fundFail=0, firstError="";
+  let stockOk=0, stockFail=0, fundOk=0, fundFail=0, firstError="", directOk=0, directFail=0;
   const fx={};
   const stocks=state.holdings.filter(h=>h.assetType!=="fund");
   const funds=state.holdings.filter(h=>h.assetType==="fund");
   let marketData=null;
 
-  try{ marketData=await loadHelsinkiData(3); }
-  catch(err){ firstError=`Markkinadata: ${err.message||err}`; }
+  try{ marketData=await loadHelsinkiData(2); }
+  catch(err){ firstError=`Taustadata: ${err.message||err}`; }
+
+  // Pull all stock quotes directly from Finnhub when an API key exists.
+  // This is the fast path while the app is open. GitHub snapshot stays as fallback.
+  const directQuotes={};
+  if(state.apiKey){
+    const results=await Promise.allSettled(stocks.map(async h=>{
+      const sym=finnhubSymbol(h);
+      const q=await quote(sym);
+      return {id:h.id,symbol:sym,q};
+    }));
+    results.forEach(r=>{
+      if(r.status==="fulfilled"){
+        directQuotes[r.value.id]=r.value;
+        directOk++;
+      }else{
+        directFail++;
+      }
+    });
+  }
 
   for(const h of state.holdings){
     try{
@@ -857,41 +897,63 @@ async function refreshMarket(showErrors=false){
         continue;
       }
 
+      const direct=directQuotes[h.id];
+      let cache=null;
       if(isHelsinkiHolding(h)){
         const sym=nordnetSymbol(h);
         const q=marketData?.quotes?.[sym];
-        if(!q || !n(q.price)) throw new Error(`markkinadata ei sisällä symbolia ${sym}`);
-        h.currentPrice=n(q.price);
-        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (marketData.generated_at ? Date.parse(marketData.generated_at) : Date.now());
-        h.dayChangePct=n(q.change_pct);
-        h.quoteSource="HELSINKI_CACHE";
-        h.quoteProvider=q.provider||"";
-        h.quoteRealtime=q.realtime===true;
+        if(q && n(q.price)){
+          cache={
+            price:n(q.price),
+            timestamp:q.timestamp ? n(q.timestamp) : (marketData?.generated_at ? Date.parse(marketData.generated_at) : 0),
+            changePct:n(q.change_pct),
+            provider:q.provider||"GitHub snapshot",
+            realtime:q.realtime===true,
+            source:"HELSINKI_CACHE"
+          };
+        }
         h.nordnetSymbol=sym;
-      }else if(state.apiKey){
-        const fq=await quote(h.providerSymbol||h.symbol);
-        h.currentPrice=fq.c;
-        h.quoteTimestamp=fq.t ? n(fq.t)*1000 : Date.now();
-        h.dayChangePct=n(fq.dp);
-        h.quoteSource="FINNHUB";
-        h.quoteProvider="Finnhub";
-        h.quoteRealtime=true;
       }else{
-        throw new Error("Finnhub-avain puuttuu");
+        const q=marketData?.quotes?.[(h.symbol||"").toUpperCase()];
+        if(q && n(q.price)){
+          cache={
+            price:n(q.price),
+            timestamp:q.timestamp ? n(q.timestamp) : (marketData?.generated_at ? Date.parse(marketData.generated_at) : 0),
+            changePct:n(q.change_pct),
+            provider:q.provider||"GitHub snapshot",
+            realtime:q.realtime===true,
+            source:"HELSINKI_CACHE"
+          };
+        }
       }
+
+      let live=null;
+      if(direct?.q && n(direct.q.c)){
+        live={
+          price:n(direct.q.c),
+          timestamp:direct.q.t ? n(direct.q.t)*1000 : Date.now(),
+          changePct:n(direct.q.dp),
+          provider:`Finnhub ${direct.symbol}`,
+          realtime:false,
+          source:isHelsinkiHolding(h)?"FINNHUB_HELSINKI":"FINNHUB"
+        };
+      }
+
+      const candidates=[cache,live].filter(Boolean).sort((a,b)=>n(b.timestamp)-n(a.timestamp));
+      const best=candidates[0];
+      if(!best) throw new Error(`ei tuoretta kurssia symbolille ${h.symbol}`);
+
+      h.currentPrice=best.price;
+      h.quoteTimestamp=best.timestamp||Date.now();
+      h.dayChangePct=best.changePct;
+      h.quoteSource=best.source;
+      h.quoteProvider=best.provider;
+      h.quoteRealtime=best.realtime;
 
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       stockOk++;
-
-      if(h.quoteSource==="FINNHUB"){
-        try{
-          const candles=await candle(h.providerSymbol||h.symbol);
-          const a=atr(candles);
-          if(a) h.atr=a;
-        }catch{}
-      }
     }catch(err){
-      if(h.assetType==="fund") fundFail++; else stockFail++;
+      stockFail++;
       if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
     }
   }
@@ -904,9 +966,17 @@ async function refreshMarket(showErrors=false){
     fundsTracked:funds.length,
     snapshot:snapshotCount,
     failed:stockFail+fundFail,
+    directOk,
+    directFail,
     at:Date.now()
   };
   if(stockOk>0 || fundOk>0) state.quoteUpdatedAt=Date.now();
+
+  if(state.marketDataHealth){
+    state.marketDataHealth.directOk=directOk;
+    state.marketDataHealth.directFail=directFail;
+  }
+
   save();render();$("refreshBtn").disabled=false;
 
   if(showErrors && stockFail>0 && firstError){
@@ -982,7 +1052,14 @@ function renderMarketDataHealth(){
     const age=h.generatedAt?ago(Date.parse(h.generatedAt)):"aikaleima puuttuu";
     box.className="statusBox statusOk";
     const navNote=(h.fundCount||0)<6?` · NAV ${h.fundCount||0}/6`:` · NAV 6/6`;
-    box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta${navNote} · tiedosto ${age}.`;
+    const directNote=h.directOk?` · Finnhub suoraan ${h.directOk}`:"";
+    const staleMs=h.generatedAt?Date.now()-Date.parse(h.generatedAt):0;
+    if(staleMs>30*60*1000){
+      box.className="statusBox statusBad";
+      box.textContent=`Taustadata VANHA · ${age}${directNote}${navNote}. Appi käyttää mahdollisuuksien mukaan suoraa Finnhub-dataa.`;
+    }else{
+      box.textContent=`Datapalvelu OK · ${h.quoteCount||0} osaketta${navNote}${directNote} · tiedosto ${age}.`;
+    }
   }else{
     box.className="statusBox statusBad";
     box.textContent=`Datapalveluvirhe: ${h.error||"tuntematon virhe"}`;
@@ -1008,15 +1085,16 @@ async function testFinnhub(){
   const box=$("apiStatus");
   state.apiKey=$("apiKey").value.trim();save();
   if(!state.apiKey){box.className="statusBox statusBad";box.textContent="API-avain puuttuu.";return}
-  box.className="statusBox muted";box.textContent="Testataan AMD...";
+  box.className="statusBox muted";box.textContent="Testataan AMD + FORTUM.HE...";
   try{
-    const q=await quote("AMD");
+    const [amd,fortum]=await Promise.all([quote("AMD"),quote("FORTUM.HE")]);
     box.className="statusBox statusOk";
-    const stamp=q.t ? new Date(n(q.t)*1000).toLocaleString("fi-FI") : "aikaleima puuttuu";
-    box.textContent=`Yhteys toimii. AMD: ${q.c} USD · edellinen päätös ${q.pc||"—"} USD · datan aikaleima ${stamp}.`;
+    const aStamp=amd.t ? new Date(n(amd.t)*1000).toLocaleString("fi-FI") : "—";
+    const fStamp=fortum.t ? new Date(n(fortum.t)*1000).toLocaleString("fi-FI") : "—";
+    box.textContent=`Finnhub toimii. AMD ${amd.c} USD (${aStamp}) · FORTUM ${fortum.c} EUR (${fStamp}).`;
   }catch(err){
     box.className="statusBox statusBad";
-    box.textContent=`Yhteys ei toimi: ${err.message||err}`;
+    box.textContent=`Finnhub-testissä ongelma: ${err.message||err}`;
   }
 }
 async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(j.s!=="ok")return[];return j.c.map((c,i)=>({close:n(c),high:n(j.h[i]),low:n(j.l[i])}))}
@@ -1077,10 +1155,21 @@ loadInsights(false).catch(()=>{});
 loadPortfolioNews(false).catch(()=>{});
 loadSharedStatus(false).catch(()=>{});
 loadRiskData(false).catch(()=>{});
-setTimeout(()=>{
-  const last=state.quoteUpdatedAt||0;
-  if(state.holdings?.length && Date.now()-last>10*60*1000) refreshMarket(false).catch(()=>{});
-},500);
+let lastAutoRefresh=0;
+async function maybeAutoRefresh(force=false){
+  if(document.visibilityState!=="visible" || !state.holdings?.length) return;
+  const age=Date.now()-(state.quoteUpdatedAt||0);
+  if(force || age>5*60*1000){
+    if(Date.now()-lastAutoRefresh<60*1000) return;
+    lastAutoRefresh=Date.now();
+    refreshMarket(false).catch(()=>{});
+  }
+}
+setTimeout(()=>maybeAutoRefresh(false),500);
+setInterval(()=>maybeAutoRefresh(false),5*60*1000);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible") maybeAutoRefresh(false);
+});
 </script>
 </body>
 </html>
