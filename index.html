@@ -253,7 +253,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11 · Cloudflare Worker ensisijaisena kurssilähteenä, GitHub-varmistus.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11.1 · nopeampi avauspäivitys ja 1 min Worker-pollaus markkinan ollessa auki.</p>
     </div>
   </details>
 </section>
@@ -407,8 +407,8 @@ function dataState(h){
       const age=(Date.now()-n(h.quoteTimestamp))/60000;
       const yahoo=/Yahoo/i.test(h.quoteProvider||"");
       if(yahoo){
-        if(age<=25) return {label:"WORKER ~15m",cls:"broker"};
-        if(age<=45) return {label:"VIIVE",cls:"manual"};
+        if(age<=3) return {label:"WORKER",cls:"live"};
+        if(age<=20) return {label:"WORKER VIIVE",cls:"broker"};
         return {label:"VANHA",cls:"stale"};
       }
       if(age<=10) return {label:"WORKER",cls:"live"};
@@ -1360,19 +1360,26 @@ loadMarketContext(false).catch(()=>{});
 loadSharedStatus(false).catch(()=>{});
 loadRiskData(false).catch(()=>{});
 let lastAutoRefresh=0;
+function helsinkiMarketLikelyOpen(){
+  const d=new Date();
+  const day=d.getDay();
+  if(day===0 || day===6) return false;
+  const mins=d.getHours()*60+d.getMinutes();
+  return mins>=9*60+55 && mins<=18*60+35;
+}
 async function maybeAutoRefresh(force=false){
   if(document.visibilityState!=="visible" || !state.holdings?.length) return;
-  const age=Date.now()-(state.quoteUpdatedAt||0);
-  if(force || age>4*60*1000){
-    if(Date.now()-lastAutoRefresh<60*1000) return;
-    lastAutoRefresh=Date.now();
+  const now=Date.now();
+  const minGap=helsinkiMarketLikelyOpen()?55*1000:4*60*1000;
+  if(force || now-lastAutoRefresh>=minGap){
+    lastAutoRefresh=now;
     refreshMarket(false).catch(()=>{});
   }
 }
-setTimeout(()=>maybeAutoRefresh(false),500);
-setInterval(()=>maybeAutoRefresh(false),5*60*1000);
+setTimeout(()=>maybeAutoRefresh(true),500);
+setInterval(()=>maybeAutoRefresh(false),60*1000);
 document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState==="visible") maybeAutoRefresh(false);
+  if(document.visibilityState==="visible") maybeAutoRefresh(true);
 });
 </script>
 </body>
