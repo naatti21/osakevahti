@@ -2,3 +2,6 @@ name = "osakevahti-market-ed59"
 main = "worker.js"
 compatibility_date = "2026-10-09"
 workers_dev = true
+
+[secrets]
+required = ["FINNHUB_API_KEY"]
