@@ -253,7 +253,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11.1 · nopeampi avauspäivitys ja 1 min Worker-pollaus markkinan ollessa auki.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11.2 · tuorein kurssi voittaa, edellisen kaupankäyntipäivän liike erotellaan nykyisestä.</p>
     </div>
   </details>
 </section>
@@ -401,8 +401,57 @@ function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency"
 function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
 function ago(ts){if(!ts)return"Ei päivitetty";const m=Math.floor((Date.now()-ts)/60000);if(m<1)return"juuri nyt";if(m<60)return m+" min sitten";const h=Math.floor(m/60);return h<24?h+" h sitten":Math.floor(h/24)+" pv sitten"}
+function marketTimeZone(h){
+  if(isHelsinkiHolding(h)) return "Europe/Helsinki";
+  if((h.currency||"").toUpperCase()==="USD") return "America/New_York";
+  return "Europe/Helsinki";
+}
+function zonedDateParts(ts,tz){
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",
+    weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+  }).formatToParts(new Date(ts));
+  const out={};
+  for(const p of parts) if(p.type!=="literal") out[p.type]=p.value;
+  return out;
+}
+function hasCurrentTradingDayQuote(h){
+  if(!h.quoteTimestamp) return false;
+  const tz=marketTimeZone(h);
+  const q=zonedDateParts(n(h.quoteTimestamp),tz);
+  const now=zonedDateParts(Date.now(),tz);
+  return q.year===now.year && q.month===now.month && q.day===now.day;
+}
+function marketLikelyOpenForHolding(h){
+  const tz=marketTimeZone(h);
+  const p=zonedDateParts(Date.now(),tz);
+  if(p.weekday==="Sat" || p.weekday==="Sun") return false;
+  const mins=n(p.hour)*60+n(p.minute);
+  if(isHelsinkiHolding(h)) return mins>=10*60 && mins<=18*60+30;
+  if(tz==="America/New_York") return mins>=9*60+30 && mins<=16*60;
+  return false;
+}
+function quoteIsStaleWhileOpen(h){
+  if(!marketLikelyOpenForHolding(h)) return false;
+  if(!hasCurrentTradingDayQuote(h)) return true;
+  return (Date.now()-n(h.quoteTimestamp))>20*60*1000;
+}
+function quoteContextLabel(h){
+  if(!h.quoteTimestamp) return "—";
+  if(!hasCurrentTradingDayQuote(h)){
+    return marketLikelyOpenForHolding(h)?`vanha ${quoteAgeShort(h)}`:"ed. päätös";
+  }
+  if(quoteIsStaleWhileOpen(h)) return `vanha ${quoteAgeShort(h)}`;
+  return (h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")
+    ?`kauppa ${quoteAgeShort(h)}`
+    :quoteAgeShort(h);
+}
+
 function dataState(h){
   if(h.currentPrice){
+    if(h.assetType!=="fund" && !hasCurrentTradingDayQuote(h) && !marketLikelyOpenForHolding(h)){
+      return {label:"ED. PÄÄTÖS",cls:"manual"};
+    }
     if(h.quoteSource==="WORKER"){
       const age=(Date.now()-n(h.quoteTimestamp))/60000;
       const yahoo=/Yahoo/i.test(h.quoteProvider||"");
@@ -482,7 +531,7 @@ function render(){
     if(h.account==="OST")ost+=r.val;
     if(h.account==="AOT")aot+=r.val;
     if(h.assetType==="fund")funds+=r.val;
-    const dp=n(h.dayChangePct);
+    const dp=hasCurrentTradingDayQuote(h)?n(h.dayChangePct):0;
     if(r.p&&r.fx&&dp&&dp>-99){
       const prev=r.p/(1+dp/100);
       todayEur+=(r.p-prev)*n(h.quantity)*r.fx;
@@ -495,7 +544,7 @@ function render(){
   rows.forEach(r=>{
     const h=r.h,p=r.p,val=r.val,pnl=r.pnl,pct=r.pct;
     const ds=dataState(h);
-    const day=n(h.dayChangePct);
+    const day=hasCurrentTradingDayQuote(h)?n(h.dayChangePct):null;
     const headline=h.assetType==="fund"?(h.name||h.symbol):h.symbol;
     const subline=h.assetType==="fund"?"Rahasto":(h.name||"");
     const unit=h.assetType==="fund"?"osuutta":"kpl";
@@ -509,7 +558,7 @@ function render(){
     }
     const b=document.createElement("button");
     b.className="item";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · kauppa ${quoteAgeShort(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -518,12 +567,18 @@ function render(){
   $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   const moves=rows
     .filter(r=>r.h.assetType!=="fund" && r.p)
-    .map(r=>({h:r.h,pct:n(r.h.dayChangePct)}))
-    .sort((a,b)=>Math.abs(b.pct)-Math.abs(a.pct));
-  const staleMoves=moves.filter(x=>x.h.quoteTimestamp && (Date.now()-n(x.h.quoteTimestamp))>20*60*1000).length;
-  $("dailyMoves").innerHTML=`<div class="dailyMovesHead"><div class="dailyMovesTitle">Päivän liikkeet</div><div class="dailyMovesMeta">${moves.length} osaketta${staleMoves?` · ${staleMoves} vanhaa hintaa`:""}</div></div><div class="moveList">${moves.map(x=>{
-    const age=x.h.quoteTimestamp ? ((x.h.quoteSource==="HELSINKI_CACHE"||x.h.quoteSource==="WORKER") ? `kauppa ${quoteAgeShort(x.h)}` : quoteAgeShort(x.h)) : "—";
-    return `<div class="moveRow"><div class="moveSymbol">${esc(x.h.symbol)}</div><div class="movePct ${x.pct>0?"pos":x.pct<0?"neg":""}">${sPct(x.pct)}</div><div class="moveAge">${esc(age)}</div></div>`;
+    .map(r=>({h:r.h,pct:hasCurrentTradingDayQuote(r.h)?n(r.h.dayChangePct):null}))
+    .sort((a,b)=>{
+      if(a.pct==null && b.pct!=null) return 1;
+      if(a.pct!=null && b.pct==null) return -1;
+      return Math.abs(n(b.pct))-Math.abs(n(a.pct));
+    });
+  const staleMoves=moves.filter(x=>quoteIsStaleWhileOpen(x.h)).length;
+  $("dailyMoves").innerHTML=`<div class="dailyMovesHead"><div class="dailyMovesTitle">Päivän liikkeet</div><div class="dailyMovesMeta">${moves.length} osaketta${staleMoves?` · ${staleMoves} vanhaa markkinan ollessa auki`:""}</div></div><div class="moveList">${moves.map(x=>{
+    const age=quoteContextLabel(x.h);
+    const pctHtml=x.pct==null?"—":sPct(x.pct);
+    const pctClass=x.pct==null?"":x.pct>0?"pos":x.pct<0?"neg":"";
+    return `<div class="moveRow"><div class="moveSymbol">${esc(x.h.symbol)}</div><div class="movePct ${pctClass}">${pctHtml}</div><div class="moveAge">${esc(age)}</div></div>`;
   }).join("")}</div>`;
 
   const diag=$("dataDiagnostics");
@@ -853,10 +908,13 @@ async function loadSharedStatus(force=false){
       const key=(h.symbol||"").toUpperCase();
       const a=assets[key];
       if(!a) continue;
-      if(n(a.price)>0){
+      const sharedTs=n(a.quote_timestamp)||(sharedStatus?.generated_at?Date.parse(sharedStatus.generated_at):0);
+      const localTs=n(h.quoteTimestamp);
+      // portfolio-status täydentää analytiikkaa, mutta ei saa ylikirjoittaa tuoreempaa Worker-kurssia.
+      if(n(a.price)>0 && (!n(h.currentPrice) || (sharedTs>0 && sharedTs>localTs))){
         h.currentPrice=n(a.price);
         h.dayChangePct=n(a.day_change_pct);
-        h.quoteTimestamp=n(a.quote_timestamp)||h.quoteTimestamp;
+        h.quoteTimestamp=sharedTs||h.quoteTimestamp;
         h.quoteSource="PORTFOLIO_STATUS";
         h.quoteProvider=a.source||"portfolio-status";
       }
