@@ -262,10 +262,16 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </details>
 
   <details>
-    <summary>CSV-tuonti</summary>
+    <summary>Salkun tuonti</summary>
     <div class="detailsBody">
-      <label class="file">Valitse CSV<input id="importCsv" type="file" accept=".csv,text/csv"></label>
-      <p class="muted small">Perussarakkeet: symbol,name,quantity,buy_price,currency,account. Sovellus yrittää tunnistaa oikean listauksen automaattisesti ja näyttää aina esikatselun ennen tallennusta. Epävarmaa osumaa ei hyväksytä hiljaa.</p>
+      <p class="muted small">Tuo taulukko tiedostona tai kopioi solut suoraan Excelistä / Google Sheetsistä. Tuonti yhdistetään nykyiseen salkkuun eikä pyyhi muita omistuksia.</p>
+      <div class="actions">
+        <label class="file">Valitse CSV / TSV / TXT<input id="importCsv" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"></label>
+      </div>
+      <label class="txt" for="importText">Tai liitä taulukko</label>
+      <textarea id="importText" rows="6" placeholder="Esim.&#10;Ticker&#9;Nimi&#9;Kpl&#9;Keskihinta&#9;Valuutta&#10;MSFT&#9;Microsoft Corporation&#9;2&#9;400&#9;USD"></textarea>
+      <div class="actions"><button type="button" id="importTextBtn">Tunnista liitetty taulukko</button></div>
+      <p class="muted small">Sarakkeiden ei tarvitse olla Osakevahdin nimillä. Tunnettuja otsikoita ovat esimerkiksi Ticker/Symbol, Nimi/Company, Kpl/Qty/Shares, Keskihinta/Avg price, Valuutta/Currency ja Tili/Account. Epävarmaa instrumenttia tai puuttuvaa tietoa ei arvata hiljaa.</p>
     </div>
   </details>
 
@@ -273,7 +279,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.13.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.14.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -319,7 +325,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
 <dialog id="importReviewDlg">
   <div class="row"><div><div class="eyebrow">TUONNIN ESITARKISTUS</div><h2 style="margin:3px 0 0">Tarkista instrumentit</h2></div><button type="button" id="closeImportReview">×</button></div>
-  <p class="muted small" style="margin:10px 0 0">Osakevahti tallentaa salkun vasta hyväksynnän jälkeen. Automaattinen osuma hyväksytään vain, kun tunnistus on riittävän vahva ja selvästi muita vaihtoehtoja parempi.</p>
+  <p class="muted small" style="margin:10px 0 0">Osakevahti muuttaa salkkua vasta hyväksynnän jälkeen. Tuodut omistukset yhdistetään nykyisiin: sama tunnistettu omistus päivittyy, muut säilyvät. Automaattinen osuma hyväksytään vain, kun tunnistus on riittävän vahva ja selvästi muita vaihtoehtoja parempi.</p>
   <div id="importReviewSummary" class="statusBox muted"></div>
   <div id="importReviewList" class="importReviewList"></div>
   <div class="actions"><button type="button" id="cancelImportReview">Peruuta</button><span class="spacer"></span><button type="button" id="confirmImportReview" class="primary">Hyväksy tuonti</button></div>
@@ -373,7 +379,7 @@ $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
 $("testApiBtn").onclick=testFinnhub;
 $("testNordnetBtn").onclick=testNordnet;
 $("reloadMarketDataBtn").onclick=async()=>{await refreshMarket(true)};
-$("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;
+$("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;$("importTextBtn").onclick=importPastedTable;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value="";render()}};
 
 function load(){
@@ -1652,7 +1658,7 @@ function renderImportReview(){
     if(!row)return;
     if(btn.dataset.unverified==="1"){
       row.ready=true;row.status="unverified";row.selected=-1;
-      row.holding.instrument={...row.holding.instrument,identification:"unverified",source:row.holding.instrument?.source||"csv"};
+      row.holding.instrument={...row.holding.instrument,identification:"unverified",source:row.holding.instrument?.source||row.holding.importMeta?.source||"import"};
       row.reason="Käyttäjä jätti instrumentin tarkoituksella tunnistamatta.";
     }else{
       const ci=n(btn.dataset.candidate),cand=row.candidates[ci];
@@ -1679,21 +1685,162 @@ async function startImportReview(holdings){
     renderImportReview();
   }
 }
+function holdingIdentityKey(h){
+  const i=h.instrument||{};
+  const account=cleanNameToken(h.account||"");
+  const listing=normalizedIdText(i.listingTicker||h.symbol);
+  const market=cleanNameToken(i.mic||i.exchange||"");
+  const isin=normalizedIdText(i.isin);
+  const currency=normalizedIdText(i.currency||h.currency);
+  const company=cleanNameToken(i.companyName||h.name||"");
+  if(!listing&&!isin&&!company)return "";
+  return [account,isin||"noisin",listing||company,market||"nomarket",currency||"noccy"].join("|");
+}
+function mergeImportedHoldings(existing,incoming){
+  const out=(existing||[]).map(h=>({...h}));
+  const byKey=new Map();
+  out.forEach((h,idx)=>{const k=holdingIdentityKey(h);if(k)byKey.set(k,idx)});
+  let added=0,updated=0;
+  for(const raw of incoming||[]){
+    const h={...raw},key=holdingIdentityKey(h),idx=key?byKey.get(key):undefined;
+    if(idx!=null){
+      const old=out[idx],merged={...old,...h,id:old.id};
+      if(!h.manualStop)merged.manualStop=old.manualStop;
+      if(!h.importMeta?.provided?.trailingPct)merged.trailingPct=old.trailingPct??h.trailingPct;
+      if(!h.importMeta?.provided?.riskClass)merged.riskClass=old.riskClass||h.riskClass;
+      if(!h.importMeta?.provided?.targetWeight)merged.targetWeight=old.targetWeight??h.targetWeight;
+      merged.highWatermark=Math.max(n(old.highWatermark),n(old.currentPrice),n(h.currentPrice),n(h.manualPrice));
+      out[idx]=merged;updated++;
+    }else{
+      out.push(h);added++;
+      if(key)byKey.set(key,out.length-1);
+    }
+  }
+  return {holdings:out,added,updated};
+}
 function commitPendingImport(){
   if(!pendingImport||pendingImport.rows.some(x=>!x.ready))return;
-  state.holdings=pendingImport.rows.map(x=>x.holding);
+  const incoming=pendingImport.rows.map(x=>x.holding);
+  const merged=mergeImportedHoldings(state.holdings,incoming);
+  state.holdings=merged.holdings;
   save();render();
-  const unresolved=state.holdings.filter(h=>h.instrument?.identification==="unverified").length;
-  const count=state.holdings.length;
+  const unresolved=incoming.filter(h=>h.instrument?.identification==="unverified").length;
+  const count=incoming.length;
   pendingImport=null;$("importReviewDlg").close();
-  alert(`Tuotu ${count} omistusta.${unresolved?` ${unresolved} jäi tarkoituksella tunnistamatta.`:""}`);
+  alert("Käsitelty "+count+" omistusta: "+merged.added+" lisätty, "+merged.updated+" päivitetty."+(unresolved?" "+unresolved+" jäi tarkoituksella tunnistamatta.":""));
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
 async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
-async function importCsv(e){const f=e.target.files?.[0];if(!f)return;try{const rows=parseCsv(await f.text()),arr=[];for(const r of rows){const listingTicker=normalizedIdText(r.listing_ticker||r.symbol);if(!listingTicker&&!r.name&&!r.isin)continue;const currency=normalizedIdText(r.currency||state.baseCurrency);const providerSymbol=normalizedIdText(r.provider_symbol);const isin=normalizedIdText(r.isin);const mic=normalizedIdText(r.mic);const exchange=String(r.exchange||"").trim();const explicitIdentity=!!(isin||mic||exchange);const h={id:uid(),symbol:listingTicker,name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency,account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol,manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium",instrument:{schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:(r.name||"").trim(),isin,listingTicker,mic,exchange,currency,providerSymbol,dataKey:legacyDataKey(listingTicker),source:"csv",identification:explicitIdentity?"explicit-source":"unverified"}};arr.push(h)}if(arr.length)await startImportReview(arr);else alert("CSV:stä ei löytynyt tuotavia omistuksia.")}catch(err){alert(`CSV-tuonti epäonnistui: ${err?.message||err}`)}finally{e.target.value=""}}
-function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
+const IMPORT_HEADER_ALIASES={
+  symbol:["symbol","ticker","tikkeri","tunnus","stock symbol","osaketunnus"],
+  listing_ticker:["listing ticker","listing symbol","listaus ticker","listaustunnus"],
+  name:["name","nimi","company","company name","yhtio","yhtiö","yritys","instrument name","security name"],
+  quantity:["quantity","qty","shares","share count","kpl","maara","määrä","lukumaara","lukumäärä"],
+  buy_price:["buy price","avg price","average price","average cost","cost basis","keskihinta","hankintahinta","ostohinta"],
+  currency:["currency","ccy","valuutta"],
+  account:["account","tili","portfolio","salkku"],
+  isin:["isin"],
+  mic:["mic","market identifier code"],
+  exchange:["exchange","market","porssi","pörssi","markkinapaikka"],
+  provider_symbol:["provider symbol","data symbol","market data symbol","markkinadatan tunnus","datatunnus"],
+  manual_stop:["manual stop","stop","oma stop"],
+  trailing_pct:["trailing","trailing pct","trailing %"],
+  risk_class:["risk class","riskiluokka"],
+  target_weight:["target weight","target weight %","tavoitepaino","tavoitepaino %"]
+};
+function normalizeImportHeader(v){
+  return String(v||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[%€$£]/g," ").replace(/[^a-z0-9]+/g," ").trim();
+}
+const IMPORT_ALIAS_LOOKUP=(()=>{
+  const m=new Map();
+  for(const [field,aliases] of Object.entries(IMPORT_HEADER_ALIASES)){
+    for(const alias of aliases)m.set(normalizeImportHeader(alias),field);
+    m.set(normalizeImportHeader(field),field);
+  }
+  return m;
+})();
+function canonicalImportField(v){return IMPORT_ALIAS_LOOKUP.get(normalizeImportHeader(v))||""}
 function line(l,d){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const x=l[i];if(x=='"'){if(q&&l[i+1]=='"'){c+='"';i++}else q=!q}else if(x===d&&!q){o.push(c);c=""}else c+=x}o.push(c);return o}
+function detectTableDelimiter(header){
+  const options=["\t",";",","].map(d=>({d,count:line(header,d).length})).sort((a,b)=>b.count-a.count);
+  return options[0].count>1?options[0].d:",";
+}
+function parseImportTable(text){
+  const ls=String(text||"").replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());
+  if(ls.length<2)throw new Error("Taulukossa tarvitaan otsikkorivi ja vähintään yksi omistusrivi.");
+  const delimiter=detectTableDelimiter(ls[0]);
+  const rawHeaders=line(ls[0],delimiter).map(x=>x.trim());
+  const fields=rawHeaders.map(canonicalImportField);
+  if(!fields.some(Boolean))throw new Error("Sarakkeiden otsikoita ei tunnistettu. Käytä esimerkiksi Ticker, Nimi, Kpl ja Keskihinta.");
+  if(!fields.some(x=>["symbol","listing_ticker","name","isin"].includes(x)))throw new Error("Taulukosta puuttuu instrumentin tunniste: Ticker/Symbol, Nimi tai ISIN.");
+  if(!fields.includes("quantity"))throw new Error("Taulukosta puuttuu määrä: Kpl, Qty, Shares tai Quantity.");
+  const rows=[];
+  for(let li=1;li<ls.length;li++){
+    const values=line(ls[li],delimiter),row={_rowNumber:li+1};
+    fields.forEach((field,i)=>{if(field)row[field]=String(values[i]??"").trim()});
+    if(Object.keys(row).length>1)rows.push(row);
+  }
+  return {rows,delimiter,headers:rawHeaders,fields};
+}
+function normalizedAccount(v){
+  const raw=String(v||"").trim();
+  if(raw==="Nordea")return "OST";
+  if(raw==="Nordnet")return "AOT";
+  return raw;
+}
+function holdingFromImportRow(r,source){
+  const listingTicker=normalizedIdText(r.listing_ticker||r.symbol);
+  const name=String(r.name||"").trim();
+  const isin=normalizedIdText(r.isin);
+  if(!listingTicker&&!name&&!isin)throw new Error("Rivi "+(r._rowNumber||"?")+": instrumentin nimi/ticker/ISIN puuttuu.");
+  if(String(r.quantity??"").trim()==="")throw new Error("Rivi "+(r._rowNumber||"?")+": määrä puuttuu.");
+  const quantity=n(r.quantity);
+  if(!(quantity>0))throw new Error("Rivi "+(r._rowNumber||"?")+": määrän pitää olla suurempi kuin 0.");
+  const currency=normalizedIdText(r.currency);
+  const providerSymbol=normalizedIdText(r.provider_symbol);
+  const mic=normalizedIdText(r.mic);
+  const exchange=String(r.exchange||"").trim();
+  const explicitIdentity=!!(isin||mic||exchange);
+  const riskRaw=String(r.risk_class||"").trim().toLowerCase();
+  const provided={
+    trailingPct:String(r.trailing_pct??"").trim()!=="",
+    riskClass:!!riskRaw,
+    targetWeight:String(r.target_weight??"").trim()!==""
+  };
+  return {
+    id:uid(),symbol:listingTicker,name,quantity,
+    buyPrice:String(r.buy_price??"").trim()===""?0:n(r.buy_price),
+    currency,account:normalizedAccount(r.account),providerSymbol,
+    manualStop:opt(r.manual_stop),
+    trailingPct:provided.trailingPct?n(r.trailing_pct):12,
+    riskClass:["low","medium","high"].includes(riskRaw)?riskRaw:"medium",
+    targetWeight:opt(r.target_weight),
+    importMeta:{source,rowNumber:r._rowNumber||null,importedAt:new Date().toISOString(),provided},
+    instrument:{
+      schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:name,isin,listingTicker,mic,exchange,currency,providerSymbol,
+      dataKey:legacyDataKey(listingTicker),source,identification:explicitIdentity?"explicit-source":"unverified"
+    }
+  };
+}
+async function importTableText(text,source){
+  const parsed=parseImportTable(text);
+  const arr=parsed.rows.map(r=>holdingFromImportRow(r,source));
+  if(!arr.length)throw new Error("Taulukosta ei löytynyt tuotavia omistuksia.");
+  await startImportReview(arr);
+}
+async function importCsv(e){
+  const f=e.target.files?.[0];if(!f)return;
+  try{await importTableText(await f.text(),"file:"+f.name)}
+  catch(err){alert("Tiedostotuonti epäonnistui: "+(err?.message||err))}
+  finally{e.target.value=""}
+}
+async function importPastedTable(){
+  try{await importTableText($("importText").value,"pasted-table")}
+  catch(err){alert("Liitetyn taulukon tuonti epäonnistui: "+(err?.message||err))}
+}
+
 const installBtn=$("installAppBtn");
 const installStatus=$("installStatus");
 function updateInstallStatus(){
