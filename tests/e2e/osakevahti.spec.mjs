@@ -438,3 +438,48 @@ test('corrupt local state falls back to an empty app instead of crashing', async
   await expect(page.locator('#holdingsEmpty')).toContainText('Salkku on tyhjä');
   await expect(page.locator('#portfolioValue')).toContainText('0,00');
 });
+
+
+test('backup export excludes Finnhub API key', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState(
+      [stock({ id: 'f', symbol: 'FORTUM', currentPrice: 23.39, quoteTimestamp: friClose })],
+      { apiKey: 'SECRET-KEY-MUST-NOT-LEAVE-DEVICE' }
+    )
+  });
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#exportBtn').click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  let raw = '';
+  for await (const chunk of stream) raw += chunk.toString();
+  const backup = JSON.parse(raw);
+
+  expect(backup.apiKey).toBeUndefined();
+  expect(backup.holdings).toHaveLength(1);
+  expect(backup.holdings[0].symbol).toBe('FORTUM');
+});
+
+test('portfolio target weight is written in plain language', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({
+        id: 'f', symbol: 'FORTUM', quantity: 10, currentPrice: 20,
+        buyPrice: 18, targetWeight: 10, quoteTimestamp: friClose
+      }),
+      stock({
+        id: 'n', symbol: 'NDA-FI', quantity: 10, currentPrice: 10,
+        buyPrice: 9, targetWeight: 8, quoteTimestamp: friClose
+      })
+    ])
+  });
+
+  await page.locator('#detailsToggle').click();
+  const badge = page.locator('#holdings .weightBadge').first();
+  await expect(badge).toContainText('Paino');
+  await expect(badge).toContainText('tavoite');
+  await expect(badge).not.toContainText('→');
+});
