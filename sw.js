@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.15";
+const CACHE = "osakevahti-shell-v2.16-ocr-fix";
 const SHELL = [
   "./",
   "./index.html",
@@ -30,7 +30,7 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(req.url);
 
-  // Changing financial JSON must always come from the network.
+  // Financial JSON must never be served from the PWA cache.
   if (url.origin === self.location.origin && url.pathname.endsWith(".json")) {
     event.respondWith(fetch(req));
     return;
@@ -45,6 +45,20 @@ self.addEventListener("fetch", event => {
           return res;
         })
         .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  if (url.origin === self.location.origin && url.pathname.endsWith("/image-reader.js")) {
+    // Network first specifically for the OCR module; retain offline fallback.
+    event.respondWith(
+      fetch(req).then(res => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(cache => cache.put(req, copy));
+        }
+        return res;
+      }).catch(async () => (await caches.match(req)) || Response.error())
     );
     return;
   }
