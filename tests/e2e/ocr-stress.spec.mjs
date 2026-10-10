@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { createWorker } from 'tesseract.js';
 
 const KEY = 'osakevahti.single.v1';
 const WORKER = 'https://osakevahti-market-ed59.teemu-natunen84.workers.dev/**';
+
+let ocrWorker;
 
 function appState() {
   return {
@@ -13,6 +16,18 @@ function appState() {
     riskBudgetPct: 1.25,
     showDetails: false
   };
+}
+
+function normalizeQuery(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function findResolverCandidates(query, resolver) {
+  const q = normalizeQuery(query);
+  for (const [needle, candidates] of Object.entries(resolver)) {
+    if (q.includes(normalizeQuery(needle))) return candidates;
+  }
+  return [];
 }
 
 async function seed(page) {
@@ -32,9 +47,9 @@ async function mockNetwork(page, instrumentResolver = {}) {
         body: JSON.stringify({
           schema_version: 'instrument-resolver-v1',
           generated_at: new Date().toISOString(),
-          provider: 'Yahoo Finance search + chart metadata',
+          provider: 'Synthetic resolver fixture',
           query: q,
-          candidates: instrumentResolver[q] || []
+          candidates: findResolverCandidates(q, instrumentResolver)
         })
       });
     }
@@ -106,6 +121,7 @@ async function syntheticPortfolioImage(context, testInfo, {
       ${row.gav ? `<div class="meta">GAV ${row.gav} ${row.currency || ''}</div>` : ''}
     </section>
   `).join('');
+
   await p.setContent(`<!doctype html><html><body>
     <main class="screen">
       <div class="top">${title}</div>
@@ -122,18 +138,48 @@ async function syntheticPortfolioImage(context, testInfo, {
       .meta{font-size:${Math.max(20,fontSize-4)}px;line-height:1.35}
     </style>
   </body></html>`);
+
   const png = await p.locator('.screen').screenshot();
   await testInfo.attach('synthetic-portfolio.png', { body: png, contentType: 'image/png' });
   await p.close();
   return png;
 }
 
-test.describe('@ocr-stress real OCR pipeline', () => {
+async function realOcr(png, testInfo) {
+  const result = await ocrWorker.recognize(png);
+  const text = String(result?.data?.text || '').trim();
+  const confidence = Number.isFinite(result?.data?.confidence) ? result.data.confidence : null;
+  await testInfo.attach('ocr-output.txt', { body: Buffer.from(text, 'utf8'), contentType: 'text/plain' });
+  return {
+    text,
+    lines: text.split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map((line, i) => ({ text: line, confidence, top: i * 20, left: 0 }))
+  };
+}
+
+async function injectRealOcrResult(page, ocr) {
+  await page.evaluate(value => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => value;
+  }, ocr);
+}
+
+test.describe('@ocr-stress synthetic screenshots through real Tesseract OCR', () => {
+  test.describe.configure({ mode: 'serial' });
   test.setTimeout(120_000);
+
+  test.beforeAll(async () => {
+    ocrWorker = await createWorker('eng', 1);
+  });
+
+  test.afterAll(async () => {
+    if (ocrWorker) await ocrWorker.terminate();
+  });
 
   test('clear MSFT screenshot becomes a strong automatic listing candidate', async ({ page, context }, testInfo) => {
     await openApp(page, {
-      'Microsoft Corporation': [
+      'microsoft': [
         {
           symbol: 'MSFT',
           longname: 'Microsoft Corporation',
@@ -160,6 +206,8 @@ test.describe('@ocr-stress real OCR pipeline', () => {
     const png = await syntheticPortfolioImage(context, testInfo, {
       rows: [{ name: 'Microsoft Corporation', ticker: 'MSFT', quantity: 2, gav: '400.00', currency: 'USD' }]
     });
+    const ocr = await realOcr(png, testInfo);
+    await injectRealOcrResult(page, ocr);
 
     await page.locator('#importImage').setInputFiles({
       name: 'synthetic-msft.png',
@@ -168,14 +216,14 @@ test.describe('@ocr-stress real OCR pipeline', () => {
     });
 
     const dialog = page.locator('#importReviewDlg');
-    await expect(dialog).toBeVisible({ timeout: 90_000 });
-    await expect(dialog).toContainText('AUTOMAATTINEN', { timeout: 90_000 });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog).toContainText('AUTOMAATTINEN');
     await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
   });
 
   test('IQM screenshot without ticker stays ambiguous and requires a listing choice', async ({ page, context }, testInfo) => {
     await openApp(page, {
-      'IQM Quantum Computers': [
+      'iqm quantum': [
         {
           symbol: 'IQM',
           longname: 'IQM Quantum Computers',
@@ -202,6 +250,8 @@ test.describe('@ocr-stress real OCR pipeline', () => {
     const png = await syntheticPortfolioImage(context, testInfo, {
       rows: [{ name: 'IQM Quantum Computers', quantity: 55, gav: '9.84', currency: 'EUR' }]
     });
+    const ocr = await realOcr(png, testInfo);
+    await injectRealOcrResult(page, ocr);
 
     await page.locator('#importImage').setInputFiles({
       name: 'synthetic-iqm.png',
@@ -210,16 +260,16 @@ test.describe('@ocr-stress real OCR pipeline', () => {
     });
 
     const dialog = page.locator('#importReviewDlg');
-    await expect(dialog).toBeVisible({ timeout: 90_000 });
-    await expect(dialog).toContainText('TARKISTA', { timeout: 90_000 });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog).toContainText('TARKISTA');
     await expect(dialog).toContainText('IQM · NasdaqGS · USD');
     await expect(dialog).toContainText('IQMX.HE · Helsinki · EUR');
     await expect(page.locator('#confirmImportReview')).toBeDisabled();
   });
 
-  test('dark screenshot with smaller type still extracts a conservative holding candidate', async ({ page, context }, testInfo) => {
+  test('dark screenshot with smaller type still yields a conservative holding candidate', async ({ page, context }, testInfo) => {
     await openApp(page, {
-      'Advanced Micro Devices': [
+      'advanced micro': [
         {
           symbol: 'AMD',
           longname: 'Advanced Micro Devices, Inc.',
@@ -238,6 +288,8 @@ test.describe('@ocr-stress real OCR pipeline', () => {
       fontSize: 22,
       rows: [{ name: 'Advanced Micro Devices', ticker: 'AMD', quantity: 3, gav: '205.50', currency: 'USD' }]
     });
+    const ocr = await realOcr(png, testInfo);
+    await injectRealOcrResult(page, ocr);
 
     await page.locator('#importImage').setInputFiles({
       name: 'synthetic-amd-dark.png',
@@ -246,8 +298,8 @@ test.describe('@ocr-stress real OCR pipeline', () => {
     });
 
     const dialog = page.locator('#importReviewDlg');
-    await expect(dialog).toBeVisible({ timeout: 90_000 });
-    await expect(dialog).toContainText('AMD', { timeout: 90_000 });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog).toContainText('AMD');
     await expect(page.locator('#imageImportStatus')).toContainText('omistusehdokasta');
   });
 });
