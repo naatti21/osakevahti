@@ -157,7 +157,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <div id="ostPlan" class="planList"></div>
     </div>
   </details>
-  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><button id="addBtn" class="primary">+ Lisää</button></div>
+  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button></div></div>
   <button id="detailsToggle" class="detailToggle" type="button">Näytä tarkemmat luvut</button>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -261,7 +261,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     </div>
   </details>
 
-  <details>
+  <details id="portfolioImportBox">
     <summary>Salkun tuonti</summary>
     <div class="detailsBody">
       <p class="muted small">Helpoin tapa puhelimella on kuvakaappaus. Voit myös tuoda taulukon tiedostona tai kopioida solut suoraan Excelistä / Google Sheetsistä. Kaikki reitit päätyvät samaan esitarkistukseen.</p>
@@ -294,7 +294,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.15.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.16.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -371,6 +371,12 @@ const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
 $("addBtn").onclick=()=>openDlg();
+$("importPortfolioBtn").onclick=()=>{
+  const nav=[...document.querySelectorAll(".nav")].find(x=>x.dataset.view==="settingsView");
+  if(nav)nav.click();
+  const box=$("portfolioImportBox");
+  if(box){box.open=true;setTimeout(()=>box.scrollIntoView({behavior:"smooth",block:"start"}),0)}
+};
 $("detailsToggle").onclick=()=>{state.showDetails=!state.showDetails;save();render()};
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("closeQuickInfo").onclick=()=>$("quickInfoDlg").close();
@@ -1648,25 +1654,64 @@ async function resolveImportedHolding(h){
 function formatCandidate(c){
   return [c.symbol,c.full_exchange_name||c.exchange_display||c.exchange_name||c.exchange,c.currency].filter(Boolean).join(" · ");
 }
+function simpleListingKey(h){
+  const i=h.instrument||{};
+  const listing=normalizedIdText(i.listingTicker||h.symbol);
+  const currency=normalizedIdText(i.currency||h.currency);
+  return listing?[listing,currency||"noccy"].join("|"):"";
+}
+function findExistingHoldingMatch(h){
+  const exact=holdingIdentityKey(h);
+  const fallback=holdingFallbackKey(h);
+  let idx=exact?state.holdings.findIndex(x=>holdingIdentityKey(x)===exact):-1;
+  if(idx>=0)return {index:idx,type:"exact"};
+  if(fallback){
+    const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>holdingFallbackKey(x)===fallback);
+    if(matches.length===1)return {index:matches[0].i,type:"fallback"};
+  }
+  if(!String(h.account||"").trim()){
+    const simple=simpleListingKey(h);
+    if(simple){
+      const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>simpleListingKey(x)===simple);
+      if(matches.length===1)return {index:matches[0].i,type:"unique-listing"};
+      if(matches.length>1)return {index:-1,type:"multiple-accounts",matches:matches.map(m=>m.i)};
+    }
+  }
+  return {index:-1,type:"none"};
+}
+function importActionForRow(row){
+  if(!row.ready)return {kind:"review",label:"TARKISTA",detail:"Tunnistus pitää vahvistaa ennen muutosta."};
+  const match=findExistingHoldingMatch(row.holding);
+  if(match.type==="multiple-accounts"){
+    return {kind:"review",label:"TARKISTA TILI",detail:"Sama instrumentti löytyy useasta tilistä. Sovellus ei arvaa, mitä positiota pitäisi päivittää."};
+  }
+  if(match.index>=0){
+    const old=state.holdings[match.index];
+    const oq=n(old.quantity),nq=n(row.holding.quantity);
+    const detail="Määrä "+oq+" → "+nq+" kpl"+(old.account?" · tili "+old.account:"");
+    return {kind:"update",label:"PÄIVITETÄÄN",matchIndex:match.index,detail};
+  }
+  return {kind:"add",label:"LISÄTÄÄN",detail:"Uusi omistus nykyiseen salkkuun."};
+}
 function renderImportReview(){
   if(!pendingImport)return;
-  const unresolved=pendingImport.rows.filter(x=>!x.ready).length;
-  const auto=pendingImport.rows.filter(x=>x.status==="auto").length;
-  const explicit=pendingImport.rows.filter(x=>x.status==="explicit").length;
+  const actions=pendingImport.rows.map(importActionForRow);
+  const unresolved=actions.filter(a=>a.kind==="review").length;
+  const additions=actions.filter(a=>a.kind==="add").length;
+  const updates=actions.filter(a=>a.kind==="update").length;
   $("importReviewSummary").className=`statusBox ${unresolved?"":"statusOk"}`;
-  $("importReviewSummary").textContent=unresolved
-    ?`${pendingImport.rows.length} riviä · ${auto} automaattista · ${explicit} lähteen tunnisteilla · ${unresolved} vaatii valinnan`
-    :`${pendingImport.rows.length} riviä valmiina · ${auto} tunnistettu automaattisesti · ${explicit} lähteen tunnisteilla`;
+  $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}`;
   $("confirmImportReview").disabled=unresolved>0;
   $("importReviewList").innerHTML=pendingImport.rows.map((x,idx)=>{
     const h=x.holding,i=h.instrument||{};
-    const label=x.status==="auto"?"AUTOMAATTINEN":x.status==="explicit"?"LÄHTEESTÄ":x.ready&&x.status==="manual"?"VALITTU":x.status==="error"?"VIRHE":"TARKISTA";
-    const cls=x.status==="auto"||x.status==="explicit"?"ok":x.ready?"manual":"watch";
+    const action=actions[idx];
+    const label=action.label;
+    const cls=action.kind==="add"||action.kind==="update"?"ok":x.ready?"manual":"watch";
     const chosen=x.selected>=0?x.candidates[x.selected]:null;
     const resolvedLine=chosen?formatCandidate(chosen):x.status==="explicit"?[i.listingTicker,i.exchange,i.currency].filter(Boolean).join(" · "):"";
     const options=(x.candidates||[]).slice(0,3).map((cand,ci)=>`<button type="button" class="importCandidate ${x.selected===ci?"selected":""}" data-import-row="${idx}" data-candidate="${ci}"><strong>${esc(formatCandidate(cand)||cand.symbol)}</strong><span>${esc(cand.longname||cand.shortname||"")} · osuma ${cand._score??0} · ${esc((cand._reasons||[]).join(", ")||"ei lisäperustetta")}</span></button>`).join("");
     const leave=`<button type="button" class="importCandidate ${x.ready&&x.status==="unverified"?"selected":""}" data-import-row="${idx}" data-unverified="1"><strong>Jätä tunnistamatta</strong><span>Säilytä lähderivi ilman arvattua listausta. Kurssi- ja riskidata voivat jäädä puutteellisiksi.</span></button>`;
-    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(x.reason||"")}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${leave}</div>`}</div>`;
+    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}<br>${esc(action.detail)}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(x.reason||"")}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${leave}</div>`}</div>`;
   }).join("");
   $("importReviewList").querySelectorAll("[data-import-row]").forEach(btn=>btn.onclick=()=>{
     const ri=n(btn.dataset.importRow),row=pendingImport.rows[ri];
@@ -1735,8 +1780,13 @@ function mergeImportedHoldings(existing,incoming){
       const matches=fallback.get(fk)||[];
       if(matches.length===1)idx=matches[0];
     }
+    if(idx==null&&!String(h.account||"").trim()){
+      const simple=simpleListingKey(h);
+      const matches=out.map((x,i)=>({x,i})).filter(({x})=>simpleListingKey(x)===simple);
+      if(matches.length===1)idx=matches[0].i;
+    }
     if(idx!=null){
-      const old=out[idx],merged={...old,...h,id:old.id};
+      const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
       if(!h.manualStop)merged.manualStop=old.manualStop;
       if(!h.importMeta?.provided?.trailingPct)merged.trailingPct=old.trailingPct??h.trailingPct;
       if(!h.importMeta?.provided?.riskClass)merged.riskClass=old.riskClass||h.riskClass;
@@ -1750,7 +1800,7 @@ function mergeImportedHoldings(existing,incoming){
   return {holdings:out,added,updated};
 }
 function commitPendingImport(){
-  if(!pendingImport||pendingImport.rows.some(x=>!x.ready))return;
+  if(!pendingImport||pendingImport.rows.some(x=>importActionForRow(x).kind==="review"))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
   state.holdings=merged.holdings;
