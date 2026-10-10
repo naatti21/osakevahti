@@ -1696,13 +1696,30 @@ function holdingIdentityKey(h){
   if(!listing&&!isin&&!company)return "";
   return [account,isin||"noisin",listing||company,market||"nomarket",currency||"noccy"].join("|");
 }
+function holdingFallbackKey(h){
+  const i=h.instrument||{};
+  const account=cleanNameToken(h.account||"");
+  const listing=normalizedIdText(i.listingTicker||h.symbol);
+  const currency=normalizedIdText(i.currency||h.currency);
+  return listing?[account,listing,currency||"noccy"].join("|"):"";
+}
 function mergeImportedHoldings(existing,incoming){
   const out=(existing||[]).map(h=>({...h}));
-  const byKey=new Map();
-  out.forEach((h,idx)=>{const k=holdingIdentityKey(h);if(k)byKey.set(k,idx)});
+  const byKey=new Map(),fallback=new Map();
+  const indexHolding=(h,idx)=>{
+    const k=holdingIdentityKey(h);if(k)byKey.set(k,idx);
+    const fk=holdingFallbackKey(h);
+    if(fk){const arr=fallback.get(fk)||[];if(!arr.includes(idx))arr.push(idx);fallback.set(fk,arr)}
+  };
+  out.forEach(indexHolding);
   let added=0,updated=0;
   for(const raw of incoming||[]){
-    const h={...raw},key=holdingIdentityKey(h),idx=key?byKey.get(key):undefined;
+    const h={...raw},key=holdingIdentityKey(h),fk=holdingFallbackKey(h);
+    let idx=key?byKey.get(key):undefined;
+    if(idx==null&&fk){
+      const matches=fallback.get(fk)||[];
+      if(matches.length===1)idx=matches[0];
+    }
     if(idx!=null){
       const old=out[idx],merged={...old,...h,id:old.id};
       if(!h.manualStop)merged.manualStop=old.manualStop;
@@ -1710,10 +1727,9 @@ function mergeImportedHoldings(existing,incoming){
       if(!h.importMeta?.provided?.riskClass)merged.riskClass=old.riskClass||h.riskClass;
       if(!h.importMeta?.provided?.targetWeight)merged.targetWeight=old.targetWeight??h.targetWeight;
       merged.highWatermark=Math.max(n(old.highWatermark),n(old.currentPrice),n(h.currentPrice),n(h.manualPrice));
-      out[idx]=merged;updated++;
+      out[idx]=merged;indexHolding(merged,idx);updated++;
     }else{
-      out.push(h);added++;
-      if(key)byKey.set(key,out.length-1);
+      out.push(h);added++;indexHolding(h,out.length-1);
     }
   }
   return {holdings:out,added,updated};
