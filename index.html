@@ -308,6 +308,16 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 <script>
 const KEY="osakevahti.single.v1";
 const MARKET_WORKER_URL="https://osakevahti-market-ed59.teemu-natunen84.workers.dev";
+const INSTRUMENT_SCHEMA_VERSION=1;
+const LEGACY_DATA_KEYS={
+  "FORTUM":"FORTUM","FORTUM.HE":"FORTUM",
+  "NDA-FI":"NDA-FI","NDA-FI.HE":"NDA-FI",
+  "VERK":"VERK","VERK.HE":"VERK",
+  "METSO":"METSO","METSO.HE":"METSO",
+  "FRAMERY":"FRAMERY","FRAMERY.HE":"FRAMERY",
+  "IQMX":"IQMX","IQMX.HE":"IQMX",
+  "AMD":"AMD"
+};
 let state=load();save();
 let insights=null;
 let portfolioNews=null;
@@ -352,16 +362,6 @@ function load(){
     return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null,riskBudgetPct:1.25,showDetails:false}
   }
 }
-const INSTRUMENT_SCHEMA_VERSION=1;
-const LEGACY_DATA_KEYS={
-  "FORTUM":"FORTUM","FORTUM.HE":"FORTUM",
-  "NDA-FI":"NDA-FI","NDA-FI.HE":"NDA-FI",
-  "VERK":"VERK","VERK.HE":"VERK",
-  "METSO":"METSO","METSO.HE":"METSO",
-  "FRAMERY":"FRAMERY","FRAMERY.HE":"FRAMERY",
-  "IQMX":"IQMX","IQMX.HE":"IQMX",
-  "AMD":"AMD"
-};
 function normalizedIdText(v){return String(v??"").trim().toUpperCase()}
 function legacyDataKey(symbol){
   const raw=normalizedIdText(symbol);
