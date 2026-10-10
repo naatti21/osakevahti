@@ -450,6 +450,8 @@ test('backup export excludes Finnhub API key', async ({ page }) => {
   });
 
   await page.locator('[data-view="settingsView"]').click();
+  const backupDetails = page.locator('details').filter({ hasText: 'Varmuuskopio' });
+  await backupDetails.locator('summary').click();
   await expect(page.locator('#exportBtn')).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#exportBtn').click();
