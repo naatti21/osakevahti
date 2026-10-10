@@ -731,3 +731,219 @@ test('CSV import keeps explicit MIC and exchange identity without remote guessin
   expect(msft.instrument.providerSymbol).toBe('MSFT');
   expect(msft.instrument.identification).toBe('explicit-source');
 });
+
+
+test('pasted Finnish spreadsheet table imports through the same preview and preserves existing holdings', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'fortum-existing', symbol: 'FORTUM', name: 'Fortum', quantity: 86, buyPrice: 13, currentPrice: 14, currency: 'EUR', account: 'OST', quoteTimestamp: friClose })
+    ]),
+    network: {
+      instrumentResolver: {
+        'Microsoft Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tTili',
+    'MSFT\tMicrosoft Corporation\t2\t400\tUSD\tAOT'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(2);
+  expect(saved.holdings.some(h => h.id === 'fortum-existing')).toBeTruthy();
+  const msft = saved.holdings.find(h => h.symbol === 'MSFT');
+  expect(msft.quantity).toBe(2);
+  expect(msft.importMeta.source).toBe('pasted-table');
+});
+
+test('repeating the same explicit import updates the holding instead of duplicating it', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+
+  const first = [
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tTili\tMIC\tPörssi',
+    'MSFT\tMicrosoft Corporation\t2\t400\tUSD\tAOT\tXNAS\tNASDAQ'
+  ].join('\n');
+  await page.locator('#importText').fill(first);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toContainText('LÄHTEESTÄ');
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const firstSaved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(firstSaved.holdings).toHaveLength(1);
+  const firstId = firstSaved.holdings[0].id;
+
+  const second = [
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tTili\tMIC\tPörssi',
+    'MSFT\tMicrosoft Corporation\t3\t410\tUSD\tAOT\tXNAS\tNASDAQ'
+  ].join('\n');
+  await page.locator('#importText').fill(second);
+  await page.locator('#importTextBtn').click();
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].id).toBe(firstId);
+  expect(saved.holdings[0].quantity).toBe(3);
+  expect(saved.holdings[0].buyPrice).toBe(410);
+});
+
+test('table import refuses a missing quantity column without changing portfolio data', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'keep-me', symbol: 'FORTUM', name: 'Fortum', quantity: 10, quoteTimestamp: friClose })
+    ])
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKeskihinta\tValuutta',
+    'MSFT\tMicrosoft Corporation\t400\tUSD'
+  ].join('\n'));
+
+  let message = '';
+  page.once('dialog', async d => { message = d.message(); await d.accept(); });
+  await page.locator('#importTextBtn').click();
+  await expect.poll(() => message).toContain('puuttuu määrä');
+  await expect(page.locator('#importReviewDlg')).not.toBeVisible();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].id).toBe('keep-me');
+});
+
+test('missing currency is not silently defaulted to EUR and resolver may supply it', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'Microsoft Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          },
+          {
+            symbol: 'MSF.DE', longname: 'Microsoft Corporation',
+            exchange: 'GER', exchange_display: 'XETRA', full_exchange_name: 'XETRA',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importText').fill([
+    'Ticker\tCompany\tShares\tAvg Price\tAccount',
+    'MSFT\tMicrosoft Corporation\t2\t400\tAOT'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].currency).toBe('USD');
+});
+
+test('semicolon table supports Finnish headers and decimal comma', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importText').fill([
+    'Ticker;Nimi;Kpl;Keskihinta;Valuutta;Tili;MIC;Pörssi',
+    'NDA-FI;Nordea Bank;91;12,34;EUR;OST;XHEL;Helsinki'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toContainText('LÄHTEESTÄ');
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].symbol).toBe('NDA-FI');
+  expect(saved.holdings[0].quantity).toBe(91);
+  expect(saved.holdings[0].buyPrice).toBeCloseTo(12.34, 6);
+  expect(saved.holdings[0].instrument.mic).toBe('XHEL');
+});
+
+test('comma CSV keeps quoted company names intact', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'Microsoft, Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  const csv = [
+    'Ticker,Company,Shares,Avg Price,Currency,Account',
+    'MSFT,"Microsoft, Corporation",2,400.5,USD,AOT'
+  ].join('\n');
+  await page.locator('#importCsv').setInputFiles({
+    name: 'portfolio.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv)
+  });
+
+  await expect(page.locator('#importReviewDlg')).toContainText('AUTOMAATTINEN');
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].name).toBe('Microsoft, Corporation');
+  expect(saved.holdings[0].buyPrice).toBeCloseTo(400.5, 6);
+});
