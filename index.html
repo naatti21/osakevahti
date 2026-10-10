@@ -294,7 +294,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.16.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.16.1 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -1939,9 +1939,9 @@ function currencyFromOcr(text){
 function quantityFromOcrLine(text){
   const s=String(text||"").trim();
   let m=s.match(/(\d+(?:[.,]\d+)?)\s*(?:kpl|pcs?|shares?|osaketta|st)\b/i);
-  if(m)return {value:ocrNumber(m[1]),index:m.index||0};
+  if(m)return {value:ocrNumber(m[1]),index:m.index||0,strongUnit:true};
   m=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i);
-  return m?{value:ocrNumber(m[1]),index:m.index||0}:null;
+  return m?{value:ocrNumber(m[1]),index:m.index||0,strongUnit:false}:null;
 }
 function priceFromOcrLine(text){
   const s=String(text||"").trim();
@@ -1953,11 +1953,19 @@ function explicitTickerFromOcr(text){
   const m=String(text||"").match(/(?:ticker|symbol|tikkeri|tunnus)\s*[:\-]?\s*([A-Z0-9.^:=_-]{1,24})\b/i);
   return m?normalizedIdText(m[1]):"";
 }
+function cleanOcrName(text){
+  let s=String(text||"").replace(/\s+/g," ").trim();
+  s=s.replace(/^[^A-Za-zÅÄÖåäö0-9]+/,"").replace(/[^A-Za-zÅÄÖåäö0-9.)&-]+$/,"").trim();
+  s=s.replace(/^(?:i|l|s|o)[»›>:]+\s*/i,"").trim();
+  s=s.replace(/\s+[|>›»]+\s*$/,"").trim();
+  return s;
+}
 function plausibleOcrName(text){
-  const s=String(text||"").trim();
-  if(s.length<2 || !/[A-Za-zÅÄÖåäö]/.test(s))return false;
+  const s=cleanOcrName(text);
+  const letters=(s.match(/[A-Za-zÅÄÖåäö]/g)||[]).length;
+  if(s.length<3 || letters<4)return false;
   if(/^(?:ticker|symbol|tikkeri|tunnus)\b/i.test(s))return false;
-  if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell)$/i.test(s))return false;
+  if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell|osakkeet)\b/i.test(s))return false;
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
   return true;
 }
@@ -1971,14 +1979,16 @@ function screenshotCandidatesFromOcr(ocr){
   for(let i=0;i<lines.length;i++){
     const q=quantityFromOcrLine(lines[i].text);
     if(!q?.value || q.value<=0)continue;
-    if(lines[i].confidence!=null && lines[i].confidence<55)continue;
-    const context=lines.slice(Math.max(0,i-4),Math.min(lines.length,i+5));
+    if(!q.strongUnit && lines[i].confidence!=null && lines[i].confidence<55)continue;
+    const context=lines.slice(Math.max(0,i-5),Math.min(lines.length,i+5));
     let name="";
-    const sameLinePrefix=lines[i].text.slice(0,q.index).trim();
+    const sameLinePrefix=cleanOcrName(lines[i].text.slice(0,q.index));
     if(plausibleOcrName(sameLinePrefix))name=sameLinePrefix;
     if(!name){
-      for(let j=i-1;j>=Math.max(0,i-4);j--){
-        if(plausibleOcrName(lines[j].text)){name=lines[j].text;break}
+      for(let j=i-1;j>=Math.max(0,i-5);j--){
+        const candidate=cleanOcrName(lines[j].text);
+        if(quantityFromOcrLine(candidate))break;
+        if(plausibleOcrName(candidate)){name=candidate;break}
       }
     }
     if(!name)continue;
