@@ -35,9 +35,25 @@ async function mockNetwork(page, {
   workerAssets = {}, workerStatus = 200, marketQuotes = {}, fundQuotes = {},
   sharedAssets = {}, sharedGeneratedAt = '2026-10-09T12:00:00Z',
   marketGeneratedAt = '2026-10-09T12:00:00Z', fx = { USD: 0.86, SEK: 0.091 },
-  marketContext = { assets: {} }, portfolioNews = []
+  marketContext = { assets: {} }, portfolioNews = [], instrumentResolver = {}
 } = {}) {
   await page.route(WORKER, async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/resolve') {
+      const q = url.searchParams.get('q') || '';
+      const candidates = instrumentResolver[q] || [];
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'instrument-resolver-v1',
+          generated_at: marketGeneratedAt,
+          provider: 'Yahoo Finance search + chart metadata',
+          query: q,
+          candidates
+        })
+      });
+    }
     if (workerStatus !== 200) {
       return route.fulfill({ status: workerStatus, contentType: 'application/json', body: JSON.stringify({ error: 'mock failure' }) });
     }
@@ -570,7 +586,119 @@ test('instrument migration does not guess an ambiguous IQM listing from company 
   expect(h.instrument.identification).toBe('legacy-unverified');
 });
 
-test('CSV import preserves explicit instrument identity and leaves ambiguous rows unverified', async ({ page }) => {
+test('CSV import previews ambiguous IQM listing and never guesses it silently', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'IQM Quantum Computers': [
+          {
+            symbol: 'IQM', longname: 'IQM Quantum Computers',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          },
+          {
+            symbol: 'IQMX.HE', longname: 'IQM Quantum Computers',
+            exchange: 'HEL', exchange_display: 'Helsinki', full_exchange_name: 'Helsinki',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+
+  const csv = [
+    'symbol,name,quantity,buy_price,currency,account',
+    'IQM,IQM Quantum Computers,5,10,EUR,AOT'
+  ].join('\n');
+
+  await page.locator('#importCsv').setInputFiles({
+    name: 'portfolio.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv)
+  });
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('TARKISTA');
+  await expect(dialog).toContainText('IQM · NasdaqGS · USD');
+  await expect(dialog).toContainText('IQMX.HE · Helsinki · EUR');
+
+  const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(before.holdings).toHaveLength(0);
+
+  await dialog.getByRole('button', { name: 'Jätä tunnistamatta' }).click();
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].symbol).toBe('IQM');
+  expect(saved.holdings[0].providerSymbol).toBe('');
+  expect(saved.holdings[0].instrument.identification).toBe('unverified');
+});
+
+test('CSV import auto-resolves a clear MSFT listing but still requires preview approval', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'Microsoft Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          },
+          {
+            symbol: 'MSF.DE', longname: 'Microsoft Corporation',
+            exchange: 'GER', exchange_display: 'XETRA', full_exchange_name: 'XETRA',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+
+  const csv = [
+    'symbol,name,quantity,buy_price,currency,account',
+    'MSFT,Microsoft Corporation,2,400,USD,AOT'
+  ].join('\n');
+
+  await page.locator('#importCsv').setInputFiles({
+    name: 'portfolio.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv)
+  });
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+
+  const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(before.holdings).toHaveLength(0);
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].symbol).toBe('MSFT');
+  expect(saved.holdings[0].providerSymbol).toBe('MSFT');
+  expect(saved.holdings[0].instrument.identification).toBe('resolved');
+  expect(saved.holdings[0].instrument.exchange).toBe('NasdaqGS');
+});
+
+test('CSV import keeps explicit MIC and exchange identity without remote guessing', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
     state: appState([])
@@ -580,30 +708,24 @@ test('CSV import preserves explicit instrument identity and leaves ambiguous row
 
   const csv = [
     'symbol,name,quantity,buy_price,currency,account,isin,mic,exchange,listing_ticker,provider_symbol',
-    'IQM,IQM Quantum Computers,5,10,EUR,AOT,,,,IQM,',
     'MSFT,Microsoft Corporation,2,400,USD,AOT,,XNAS,NASDAQ,MSFT,MSFT'
   ].join('\n');
 
-  page.once('dialog', dialog => dialog.accept());
   await page.locator('#importCsv').setInputFiles({
     name: 'portfolio.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(csv)
   });
 
-  await expect.poll(async () => {
-    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
-    return saved.holdings?.length || 0;
-  }).toBe(2);
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('LÄHTEESTÄ');
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
 
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
-  const iqm = saved.holdings.find(h => h.symbol === 'IQM');
-  const msft = saved.holdings.find(h => h.symbol === 'MSFT');
-
-  expect(iqm.providerSymbol).toBe('');
-  expect(iqm.instrument.dataKey).toBe('IQM');
-  expect(iqm.instrument.identification).toBe('unverified');
-
+  const msft = saved.holdings[0];
   expect(msft.instrument.mic).toBe('XNAS');
   expect(msft.instrument.exchange).toBe('NASDAQ');
   expect(msft.instrument.providerSymbol).toBe('MSFT');
