@@ -117,7 +117,19 @@ nav{position:fixed;z-index:1000;bottom:0;left:50%;transform:translateX(-50%);wid
 nav button{position:relative;z-index:1001;touch-action:manipulation;border:0;background:transparent;color:var(--muted);font-size:11px;min-height:48px;padding:10px 4px;border-radius:13px}nav button.active{color:var(--text);background:var(--panel2)}
 dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow:auto;border:1px solid var(--line);border-radius:20px;background:#101419;color:var(--text);padding:16px}dialog::backdrop{background:#000b}.actions{display:flex;gap:8px;margin-top:16px}.spacer{flex:1}
 .hidden{display:none!important}.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px}
-.file input{display:none}details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
+.file input{display:none}
+.importReviewList{display:grid;gap:8px;margin-top:10px}
+.importReviewRow{border:1px solid var(--line);border-radius:12px;background:#0e1216;padding:10px}
+.importReviewTop{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.importReviewName{font-size:12px;font-weight:850}.importReviewMeta{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.35}
+.importStatus{font-size:9px;font-weight:850;border:1px solid var(--line);border-radius:999px;padding:3px 6px;white-space:nowrap}
+.importStatus.ok{color:var(--ok)}.importStatus.watch{color:var(--warn)}.importStatus.manual{color:#8fb7ff}
+.importCandidateList{display:grid;gap:5px;margin-top:8px}
+.importCandidate{width:100%;text-align:left;padding:8px 9px;background:var(--panel2)}
+.importCandidate strong{display:block;font-size:11px}.importCandidate span{display:block;font-size:9px;color:var(--muted);margin-top:2px;line-height:1.3}
+.importCandidate.selected{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.importSource{font-size:9px;color:var(--muted);margin-top:7px;line-height:1.35}
+details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -253,7 +265,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>CSV-tuonti</summary>
     <div class="detailsBody">
       <label class="file">Valitse CSV<input id="importCsv" type="file" accept=".csv,text/csv"></label>
-      <p class="muted small">Perussarakkeet: symbol,name,quantity,buy_price,currency,account. Tunnistusta voi vahvistaa sarakkeilla isin,mic,exchange,listing_ticker,provider_symbol. Puuttuvaa tunnistetta ei arvata.</p>
+      <p class="muted small">Perussarakkeet: symbol,name,quantity,buy_price,currency,account. Sovellus yrittää tunnistaa oikean listauksen automaattisesti ja näyttää aina esikatselun ennen tallennusta. Epävarmaa osumaa ei hyväksytä hiljaa.</p>
     </div>
   </details>
 
@@ -261,7 +273,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.12.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.13.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -305,6 +317,14 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
   <div id="quickInfoBody"></div>
 </dialog>
 
+<dialog id="importReviewDlg">
+  <div class="row"><div><div class="eyebrow">TUONNIN ESITARKISTUS</div><h2 style="margin:3px 0 0">Tarkista instrumentit</h2></div><button type="button" id="closeImportReview">×</button></div>
+  <p class="muted small" style="margin:10px 0 0">Osakevahti tallentaa salkun vasta hyväksynnän jälkeen. Automaattinen osuma hyväksytään vain, kun tunnistus on riittävän vahva ja selvästi muita vaihtoehtoja parempi.</p>
+  <div id="importReviewSummary" class="statusBox muted"></div>
+  <div id="importReviewList" class="importReviewList"></div>
+  <div class="actions"><button type="button" id="cancelImportReview">Peruuta</button><span class="spacer"></span><button type="button" id="confirmImportReview" class="primary">Hyväksy tuonti</button></div>
+</dialog>
+
 <script>
 const KEY="osakevahti.single.v1";
 const MARKET_WORKER_URL="https://osakevahti-market-ed59.teemu-natunen84.workers.dev";
@@ -325,6 +345,7 @@ let riskMetrics=null;
 let sharedStatus=null;
 let marketContext=null;
 let deferredInstallPrompt=null;
+let pendingImport=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -332,6 +353,8 @@ $("addBtn").onclick=()=>openDlg();
 $("detailsToggle").onclick=()=>{state.showDetails=!state.showDetails;save();render()};
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("closeQuickInfo").onclick=()=>$("quickInfoDlg").close();
+$("closeImportReview").onclick=$("cancelImportReview").onclick=()=>{pendingImport=null;$("importReviewDlg").close()};
+$("confirmImportReview").onclick=commitPendingImport;
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
 $("refreshBtn").onclick=()=>refreshMarket(true);
@@ -1498,9 +1521,177 @@ async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;
 function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
 async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
 async function fxRate(from,to){if(from===to)return 1;const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);const j=await r.json();return n(j.rates?.[to])||1}
+function cleanNameToken(v){
+  return String(v||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g," ").trim();
+}
+function meaningfulNameTokens(v){
+  const stop=new Set(["inc","corp","corporation","company","co","plc","oyj","oy","ab","ltd","limited","group","holdings","holding","the"]);
+  return cleanNameToken(v).split(/\s+/).filter(x=>x.length>1&&!stop.has(x));
+}
+function nameSimilarity(a,b){
+  const aa=new Set(meaningfulNameTokens(a)),bb=new Set(meaningfulNameTokens(b));
+  if(!aa.size||!bb.size)return 0;
+  let hit=0;for(const x of aa)if(bb.has(x))hit++;
+  return hit/Math.max(aa.size,bb.size);
+}
+function resolverQueryForHolding(h){
+  const i=h.instrument||{};
+  return String(i.isin||h.name||i.companyName||i.listingTicker||h.symbol||"").trim().slice(0,120);
+}
+function scoreInstrumentCandidate(h,candidate){
+  const i=h.instrument||{};
+  const sourceTicker=normalizedIdText(i.listingTicker||h.symbol);
+  const provider=normalizedIdText(i.providerSymbol||h.providerSymbol);
+  const cs=normalizedIdText(candidate.symbol);
+  const wantedCurrency=normalizedIdText(i.currency||h.currency);
+  const cc=normalizedIdText(candidate.currency);
+  const wantedExchange=cleanNameToken([i.exchange,i.mic].filter(Boolean).join(" "));
+  const candidateExchange=cleanNameToken([candidate.exchange,candidate.exchange_display,candidate.exchange_name,candidate.full_exchange_name].filter(Boolean).join(" "));
+  const candidateName=candidate.longname||candidate.shortname||"";
+  let score=0,reasons=[];
+  if(provider&&provider===cs){score+=70;reasons.push("datatunnus täsmää")}
+  else if(sourceTicker&&sourceTicker===cs){score+=55;reasons.push("tikkeri täsmää")}
+  const sim=nameSimilarity(h.name||i.companyName,candidateName);
+  if(sim>=.8){score+=30;reasons.push("nimi täsmää vahvasti")}
+  else if(sim>=.5){score+=20;reasons.push("nimi täsmää")}
+  else if(sim>0){score+=Math.round(sim*20)}
+  if(wantedCurrency&&cc){
+    if(wantedCurrency===cc){score+=15;reasons.push("valuutta täsmää")}
+    else{score-=20;reasons.push("valuutta poikkeaa")}
+  }
+  if(wantedExchange&&candidateExchange){
+    const words=wantedExchange.split(/\s+/).filter(Boolean);
+    if(words.some(x=>candidateExchange.includes(x))){score+=15;reasons.push("pörssi täsmää")}
+    else if(i.exchange||i.mic){score-=15;reasons.push("pörssi poikkeaa")}
+  }
+  if(String(candidate.quote_type||candidate.instrument_type||"").toUpperCase()==="EQUITY")score+=5;
+  return {score,reasons,similarity:sim};
+}
+function instrumentFromCandidate(h,candidate,identification="resolved"){
+  const current=h.instrument||{};
+  return {
+    schemaVersion:INSTRUMENT_SCHEMA_VERSION,
+    companyName:String(candidate.longname||candidate.shortname||current.companyName||h.name||"").trim(),
+    isin:normalizedIdText(current.isin),
+    listingTicker:normalizedIdText(candidate.symbol||current.listingTicker||h.symbol),
+    mic:normalizedIdText(current.mic),
+    exchange:String(candidate.full_exchange_name||candidate.exchange_display||candidate.exchange_name||candidate.exchange||current.exchange||"").trim(),
+    currency:normalizedIdText(candidate.currency||current.currency||h.currency),
+    providerSymbol:normalizedIdText(candidate.symbol||current.providerSymbol),
+    dataKey:legacyDataKey(candidate.symbol||current.listingTicker||h.symbol),
+    source:"Yahoo Finance resolver",
+    identification
+  };
+}
+async function fetchInstrumentCandidates(h){
+  const q=resolverQueryForHolding(h);
+  if(!q)return {provider:"",candidates:[],error:"Tunnistusta varten ei ole nimeä, tickeriä tai ISIN-tunnusta."};
+  const url=new URL(MARKET_WORKER_URL+"/resolve");
+  url.searchParams.set("q",q);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+  try{
+    const r=await fetch(url.toString(),{cache:"no-store",headers:{"Accept":"application/json"},signal:controller.signal});
+    if(!r.ok)throw new Error(`Resolver HTTP ${r.status}`);
+    const j=await r.json();
+    return {provider:j.provider||"Yahoo Finance resolver",candidates:Array.isArray(j.candidates)?j.candidates:[]};
+  }catch(err){
+    return {provider:"",candidates:[],error:String(err?.message||err||"Tunnistus epäonnistui")};
+  }finally{clearTimeout(timer)}
+}
+async function resolveImportedHolding(h){
+  const i=h.instrument||{};
+  if(i.identification==="explicit-source" && (i.isin||i.mic||i.exchange)){
+    return {status:"explicit",holding:h,ready:true,provider:"lähdetiedosto",candidates:[],selected:-1,reason:"Lähdetiedosto sisälsi listauksen tunnistetietoja."};
+  }
+  const found=await fetchInstrumentCandidates(h);
+  const ranked=(found.candidates||[]).map(c=>{
+    const s=scoreInstrumentCandidate(h,c);
+    return {...c,_score:s.score,_reasons:s.reasons};
+  }).sort((a,b)=>b._score-a._score).slice(0,5);
+  const top=ranked[0],second=ranked[1];
+  const margin=top?(top._score-(second?second._score:0)):0;
+  if(top && top._score>=85 && margin>=15){
+    h.instrument=instrumentFromCandidate(h,top,"resolved");
+    h.providerSymbol=h.instrument.providerSymbol;
+    h.symbol=h.instrument.listingTicker;
+    if(h.instrument.currency)h.currency=h.instrument.currency;
+    return {status:"auto",holding:h,ready:true,provider:found.provider,candidates:ranked,selected:0,reason:`Vahva automaattinen osuma (${top._score} pistettä, ero seuraavaan ${margin}).`};
+  }
+  return {
+    status:found.error?"error":ranked.length?"review":"none",
+    holding:h,ready:false,provider:found.provider,candidates:ranked,selected:-1,
+    reason:found.error||(!ranked.length?"Instrumentille ei löytynyt luotettavaa ehdokasta.":"Useampi mahdollinen listaus tai tunnistus ei ole riittävän vahva.")
+  };
+}
+function formatCandidate(c){
+  return [c.symbol,c.full_exchange_name||c.exchange_display||c.exchange_name||c.exchange,c.currency].filter(Boolean).join(" · ");
+}
+function renderImportReview(){
+  if(!pendingImport)return;
+  const unresolved=pendingImport.rows.filter(x=>!x.ready).length;
+  const auto=pendingImport.rows.filter(x=>x.status==="auto").length;
+  const explicit=pendingImport.rows.filter(x=>x.status==="explicit").length;
+  $("importReviewSummary").className=`statusBox ${unresolved?"":"statusOk"}`;
+  $("importReviewSummary").textContent=unresolved
+    ?`${pendingImport.rows.length} riviä · ${auto} automaattista · ${explicit} lähteen tunnisteilla · ${unresolved} vaatii valinnan`
+    :`${pendingImport.rows.length} riviä valmiina · ${auto} tunnistettu automaattisesti · ${explicit} lähteen tunnisteilla`;
+  $("confirmImportReview").disabled=unresolved>0;
+  $("importReviewList").innerHTML=pendingImport.rows.map((x,idx)=>{
+    const h=x.holding,i=h.instrument||{};
+    const label=x.status==="auto"?"AUTOMAATTINEN":x.status==="explicit"?"LÄHTEESTÄ":x.ready&&x.status==="manual"?"VALITTU":x.status==="error"?"VIRHE":"TARKISTA";
+    const cls=x.status==="auto"||x.status==="explicit"?"ok":x.ready?"manual":"watch";
+    const chosen=x.selected>=0?x.candidates[x.selected]:null;
+    const resolvedLine=chosen?formatCandidate(chosen):x.status==="explicit"?[i.listingTicker,i.exchange,i.currency].filter(Boolean).join(" · "):"";
+    const options=(x.candidates||[]).slice(0,3).map((cand,ci)=>`<button type="button" class="importCandidate ${x.selected===ci?"selected":""}" data-import-row="${idx}" data-candidate="${ci}"><strong>${esc(formatCandidate(cand)||cand.symbol)}</strong><span>${esc(cand.longname||cand.shortname||"")} · osuma ${cand._score??0} · ${esc((cand._reasons||[]).join(", ")||"ei lisäperustetta")}</span></button>`).join("");
+    const leave=`<button type="button" class="importCandidate ${x.ready&&x.status==="unverified"?"selected":""}" data-import-row="${idx}" data-unverified="1"><strong>Jätä tunnistamatta</strong><span>Säilytä lähderivi ilman arvattua listausta. Kurssi- ja riskidata voivat jäädä puutteellisiksi.</span></button>`;
+    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(x.reason||"")}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${leave}</div>`}</div>`;
+  }).join("");
+  $("importReviewList").querySelectorAll("[data-import-row]").forEach(btn=>btn.onclick=()=>{
+    const ri=n(btn.dataset.importRow),row=pendingImport.rows[ri];
+    if(!row)return;
+    if(btn.dataset.unverified==="1"){
+      row.ready=true;row.status="unverified";row.selected=-1;
+      row.holding.instrument={...row.holding.instrument,identification:"unverified",source:row.holding.instrument?.source||"csv"};
+      row.reason="Käyttäjä jätti instrumentin tarkoituksella tunnistamatta.";
+    }else{
+      const ci=n(btn.dataset.candidate),cand=row.candidates[ci];
+      if(!cand)return;
+      row.ready=true;row.status="manual";row.selected=ci;
+      row.holding.instrument=instrumentFromCandidate(row.holding,cand,"user-confirmed");
+      row.holding.providerSymbol=row.holding.instrument.providerSymbol;
+      row.holding.symbol=row.holding.instrument.listingTicker;
+      if(row.holding.instrument.currency)row.holding.currency=row.holding.instrument.currency;
+      row.reason="Käyttäjä vahvisti listauksen esikatselussa.";
+    }
+    renderImportReview();
+  });
+}
+async function startImportReview(holdings){
+  const box=$("importReviewSummary");
+  pendingImport={rows:[]};
+  $("importReviewList").innerHTML="";
+  box.className="statusBox muted";box.textContent=`Tunnistetaan ${holdings.length} instrumenttia…`;
+  $("confirmImportReview").disabled=true;
+  $("importReviewDlg").showModal();
+  for(const h of holdings){
+    pendingImport.rows.push(await resolveImportedHolding(h));
+    renderImportReview();
+  }
+}
+function commitPendingImport(){
+  if(!pendingImport||pendingImport.rows.some(x=>!x.ready))return;
+  state.holdings=pendingImport.rows.map(x=>x.holding);
+  save();render();
+  const unresolved=state.holdings.filter(h=>h.instrument?.identification==="unverified").length;
+  const count=state.holdings.length;
+  pendingImport=null;$("importReviewDlg").close();
+  alert(`Tuotu ${count} omistusta.${unresolved?` ${unresolved} jäi tarkoituksella tunnistamatta.`:""}`);
+}
+
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
 async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
-async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){const listingTicker=normalizedIdText(r.listing_ticker||r.symbol);if(!listingTicker)continue;const currency=normalizedIdText(r.currency||state.baseCurrency);const providerSymbol=normalizedIdText(r.provider_symbol);const isin=normalizedIdText(r.isin);const mic=normalizedIdText(r.mic);const exchange=String(r.exchange||"").trim();const explicitIdentity=!!(isin||mic||exchange);const h={id:uid(),symbol:listingTicker,name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency,account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol,manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium",instrument:{schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:(r.name||"").trim(),isin,listingTicker,mic,exchange,currency,providerSymbol,dataKey:legacyDataKey(listingTicker),source:"csv",identification:explicitIdentity?"explicit-source":"unverified"}};arr.push(h)}if(arr.length){state.holdings=arr;save();render();const unresolved=arr.filter(h=>h.instrument?.identification==="unverified").length;alert(`Tuotu ${arr.length} omistusta.${unresolved?` ${unresolved} instrumentin tunnistus jäi tarkistamatta; mitään listausta ei arvattu.`:""}`)}e.target.value=""}
+async function importCsv(e){const f=e.target.files?.[0];if(!f)return;try{const rows=parseCsv(await f.text()),arr=[];for(const r of rows){const listingTicker=normalizedIdText(r.listing_ticker||r.symbol);if(!listingTicker&&!r.name&&!r.isin)continue;const currency=normalizedIdText(r.currency||state.baseCurrency);const providerSymbol=normalizedIdText(r.provider_symbol);const isin=normalizedIdText(r.isin);const mic=normalizedIdText(r.mic);const exchange=String(r.exchange||"").trim();const explicitIdentity=!!(isin||mic||exchange);const h={id:uid(),symbol:listingTicker,name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency,account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol,manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium",instrument:{schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:(r.name||"").trim(),isin,listingTicker,mic,exchange,currency,providerSymbol,dataKey:legacyDataKey(listingTicker),source:"csv",identification:explicitIdentity?"explicit-source":"unverified"}};arr.push(h)}if(arr.length)await startImportReview(arr);else alert("CSV:stä ei löytynyt tuotavia omistuksia.")}catch(err){alert(`CSV-tuonti epäonnistui: ${err?.message||err}`)}finally{e.target.value=""}}
 function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
 function line(l,d){const o=[];let c="",q=false;for(let i=0;i<l.length;i++){const x=l[i];if(x=='"'){if(q&&l[i+1]=='"'){c+='"';i++}else q=!q}else if(x===d&&!q){o.push(c);c=""}else c+=x}o.push(c);return o}
 const installBtn=$("installAppBtn");
