@@ -483,7 +483,63 @@ test('portfolio target weight is written in plain language', async ({ page }) =>
 
   await page.locator('#detailsToggle').click();
   const badge = page.locator('#holdings .weightBadge').first();
-  await expect(badge).toContainText('Paino');
+  await expect(badge).toContainText('Salkusta');
   await expect(badge).toContainText('tavoite');
   await expect(badge).not.toContainText('→');
+});
+
+
+test('holding numbers explain value, return and price', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({
+        id: 'f', symbol: 'FORTUM', quantity: 10, currentPrice: 23.39,
+        buyPrice: 20, dayChangePct: 1.2, quoteTimestamp: friClose
+      })
+    ])
+  });
+
+  const card = page.locator('#holdings .item').first();
+  await expect(card).toContainText('Arvo');
+  await expect(card).toContainText('Tuotto');
+
+  await page.locator('#detailsToggle').click();
+  await expect(card).toContainText('Kurssi');
+});
+
+test('market context explains volatility indicators and semiconductor sector', async ({ page }) => {
+  const marketContext = {
+    assets: {
+      HELSINKI: { price: 5000, day_change_pct: -0.4 },
+      EUROPE: { price: 6100, day_change_pct: -0.6 },
+      SP_FUT: { price: 7000, day_change_pct: -0.3 },
+      NQ_FUT: { price: 26000, day_change_pct: -0.7 },
+      SOX: { price: 13000, day_change_pct: -1.8 },
+      VIX: { price: 25.4, day_change_pct: 8.2 },
+      VSTOXX: { price: 22.1, day_change_pct: 5.1 },
+      VXN: { price: 29.7, day_change_pct: 7.4 }
+    }
+  };
+
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([
+      stock({ id: 'amd', symbol: 'AMD', currentPrice: 200, dayChangePct: -4.5, quoteTimestamp: mon1059, currency: 'USD', fxRate: 0.86 })
+    ]),
+    network: { marketContext }
+  });
+
+  await page.locator('[data-view="riskView"]').click();
+  const context = page.locator('#marketContext');
+
+  await expect(context).toContainText('VIX');
+  await expect(context).toContainText('25.4');
+  await expect(context).toContainText('USA:n odotettu heilunta');
+  await expect(context).toContainText('SOX');
+  await expect(context).toContainText('Puolijohdesektori');
+
+  await context.locator('summary').click();
+  await expect(context).toContainText('ei automaattisesti laskua');
+  await expect(context).toContainText('Nasdaq-100:n odotettu');
 });
