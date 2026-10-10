@@ -1,4 +1,5 @@
 const CACHE_TTL_SECONDS = 60;
+const RESOLVER_CACHE_SECONDS = 300;
 
 const YAHOO_SYMBOLS = {
   FORTUM: "FORTUM.HE",
@@ -103,6 +104,94 @@ async function yahooQuote(ticker) {
   };
 }
 
+async function yahooSearch(query) {
+  const q = String(query || "").trim().slice(0, 120);
+  if (!q) throw new Error("resolver query missing");
+
+  const url =
+    "https://query2.finance.yahoo.com/v1/finance/search?" +
+    new URLSearchParams({
+      q,
+      quotesCount: "10",
+      newsCount: "0",
+      listsCount: "0",
+      enableFuzzyQuery: "true",
+    }).toString();
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 Osakevahti-InstrumentResolver/1.0",
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`Yahoo search: HTTP ${res.status}`);
+
+  const data = await res.json();
+  const raw = Array.isArray(data?.quotes) ? data.quotes : [];
+  return raw
+    .filter((x) => x?.symbol && ["EQUITY", "ETF", "MUTUALFUND"].includes(String(x.quoteType || "").toUpperCase()))
+    .slice(0, 8)
+    .map((x) => ({
+      symbol: String(x.symbol || ""),
+      shortname: String(x.shortname || ""),
+      longname: String(x.longname || ""),
+      exchange: String(x.exchange || ""),
+      exchange_display: String(x.exchDisp || ""),
+      quote_type: String(x.quoteType || ""),
+    }));
+}
+
+async function yahooInstrumentMeta(symbol) {
+  const url =
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+    "?range=1d&interval=1d&includePrePost=false";
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 Osakevahti-InstrumentResolver/1.0",
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`Yahoo meta ${symbol}: HTTP ${res.status}`);
+  const data = await res.json();
+  const meta = data?.chart?.result?.[0]?.meta || {};
+  return {
+    currency: String(meta.currency || ""),
+    exchange_name: String(meta.exchangeName || ""),
+    full_exchange_name: String(meta.fullExchangeName || ""),
+    instrument_type: String(meta.instrumentType || ""),
+  };
+}
+
+async function resolveInstrument(query) {
+  const candidates = await yahooSearch(query);
+  const enriched = await Promise.all(
+    candidates.map(async (candidate) => {
+      try {
+        return { ...candidate, ...(await yahooInstrumentMeta(candidate.symbol)) };
+      } catch {
+        return {
+          ...candidate,
+          currency: "",
+          exchange_name: "",
+          full_exchange_name: "",
+          instrument_type: "",
+        };
+      }
+    })
+  );
+  return {
+    schema_version: "instrument-resolver-v1",
+    generated_at: new Date().toISOString(),
+    provider: "Yahoo Finance search + chart metadata",
+    query: String(query || "").trim(),
+    candidates: enriched,
+    privacy: {
+      accepted_fields: ["company name", "ticker", "ISIN"],
+      portfolio_positions_received: false,
+    },
+  };
+}
+
 async function finnhubQuote(symbol, apiKey) {
   if (!apiKey) throw new Error("FINNHUB_API_KEY secret missing");
 
@@ -165,7 +254,7 @@ async function buildStatus(env) {
   });
 
   return {
-    schema_version: "worker-v1.1",
+    schema_version: "worker-v1.2",
     generated_at: new Date().toISOString(),
     cache_ttl_seconds: CACHE_TTL_SECONDS,
     assets,
@@ -188,6 +277,33 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/resolve") {
+      const q = String(url.searchParams.get("q") || "").trim();
+      if (!q || q.length > 120) {
+        return jsonResponse(
+          { error: "Invalid resolver query" },
+          400,
+          { "Cache-Control": "no-store" }
+        );
+      }
+      try {
+        const payload = await resolveInstrument(q);
+        return jsonResponse(payload, 200, {
+          "Cache-Control": `public, max-age=${RESOLVER_CACHE_SECONDS}`,
+        });
+      } catch (err) {
+        return jsonResponse(
+          {
+            error: "Instrument resolution failed",
+            message: String(err?.message || err),
+            generated_at: new Date().toISOString(),
+          },
+          502,
+          { "Cache-Control": "no-store" }
+        );
+      }
+    }
 
     if (url.pathname === "/health") {
       return jsonResponse(
