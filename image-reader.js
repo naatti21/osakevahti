@@ -1,21 +1,55 @@
+// Osakevahti: browser OCR (Tesseract.js 5.1.0).
+// Use the upstream-supported UMD browser build, not the CDN-generated /+esm wrapper.
 const TESSERACT_VERSION = "5.1.0";
-const TESSERACT_URL = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/+esm`;
+const TESSERACT_CDN_URLS = [
+  `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
+  `https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`
+];
 
 let tesseractPromise;
 
-export async function getTesseract() {
+function existingTesseract() {
+  const api = window.Tesseract;
+  return api && typeof api.createWorker === "function" ? api : null;
+}
+
+function loadTesseractScript(url) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = url;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.onload = () => {
+      const api = existingTesseract();
+      if (api) resolve(api);
+      else reject(new Error("OCR-kirjasto latautui, mutta createWorker puuttuu."));
+    };
+    script.onerror = () => reject(new Error("OCR-kirjaston lataus epäonnistui."));
+    document.head.appendChild(script);
+  });
+}
+
+export function getTesseract() {
+  const ready = existingTesseract();
+  if (ready) return Promise.resolve(ready);
+
   if (!tesseractPromise) {
-    tesseractPromise = import(TESSERACT_URL).then(mod => {
-      const api = typeof mod?.createWorker === "function"
-        ? mod
-        : typeof mod?.default?.createWorker === "function"
-          ? mod.default
-          : null;
-      if (!api) throw new Error("OCR-moottorin createWorker-rajapintaa ei löytynyt.");
-      return api;
-    });
+    tesseractPromise = (async () => {
+      for (const url of TESSERACT_CDN_URLS) {
+        try {
+          return await loadTesseractScript(url);
+        } catch {
+          // Continue with the alternate CDN. Never return a broken API.
+        }
+      }
+      throw new Error("OCR-kirjastoa ei voitu ladata. Tarkista verkkoyhteys ja yritä uudelleen.");
+    })();
   }
-  return tesseractPromise;
+  return tesseractPromise.catch(error => {
+    // Allow retry after a temporary offline/CDN failure.
+    tesseractPromise = null;
+    throw error;
+  });
 }
 
 function cleanOcrText(value) {
@@ -69,10 +103,14 @@ export function tsvToLines(tsv, fallbackText = "") {
 export async function extractImageText(file, { onProgress } = {}) {
   if (!(file instanceof Blob)) throw new Error("Kuvatiedosto puuttuu.");
 
-  const { createWorker } = await getTesseract();
+  const api = await getTesseract();
+  if (typeof api.createWorker !== "function") {
+    throw new Error("OCR-kirjaston rajapinta ei ole käytettävissä. Päivitä sovellus.");
+  }
+
   let worker;
   try {
-    worker = await createWorker(["fin", "eng"], 1, {
+    worker = await api.createWorker(["fin", "eng"], 1, {
       logger: message => {
         if (typeof onProgress === "function") {
           onProgress({
