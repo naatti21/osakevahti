@@ -294,7 +294,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.16.1 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.16.2 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -1958,6 +1958,7 @@ function cleanOcrName(text){
   s=s.replace(/^[^A-Za-zÅÄÖåäö0-9]+/,"").replace(/[^A-Za-zÅÄÖåäö0-9.)&-]+$/,"").trim();
   s=s.replace(/^(?:i|l|s|o)[»›>:]+\s*/i,"").trim();
   s=s.replace(/\s+[|>›»]+\s*$/,"").trim();
+  s=s.replace(/\s+\d[\d\s.,]*\s*(?:EUR|USD|SEK|NOK|GBP|€|\$|£)\s*$/i,"").trim();
   return s;
 }
 function plausibleOcrName(text){
@@ -1969,9 +1970,9 @@ function plausibleOcrName(text){
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
   return true;
 }
-function screenshotCandidatesFromOcr(ocr){
-  const lines=(ocr?.lines||[]).map((row,i)=>({
-    text:String(row?.text||"").replace(/\s+/g," ").trim(),
+function screenshotCandidatesFromLines(sourceLines){
+  const lines=(sourceLines||[]).map((row,i)=>({
+    text:String(row?.text??row??"").replace(/\s+/g," ").trim(),
     confidence:Number.isFinite(row?.confidence)?row.confidence:null,
     i
   })).filter(x=>x.text);
@@ -2008,6 +2009,12 @@ function screenshotCandidatesFromOcr(ocr){
     seen.add(key);dedup.push(x);
   }
   return dedup;
+}
+function screenshotCandidatesFromOcr(ocr){
+  const structured=screenshotCandidatesFromLines(ocr?.lines||[]);
+  if(structured.length)return structured;
+  const textLines=String(ocr?.text||"").split(/\r?\n/).map(text=>({text,confidence:null}));
+  return screenshotCandidatesFromLines(textLines);
 }
 function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
