@@ -1172,3 +1172,103 @@ test('image OCR helper module loads without contacting OCR CDN until recognition
   expect(result[0].text).toBe('Microsoft Corporation');
   expect(result[0].confidence).toBeGreaterThan(95);
 });
+
+
+test('portfolio always exposes separate import-update and manual add actions', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  await expect(page.locator('#importPortfolioBtn')).toBeVisible();
+  await expect(page.locator('#importPortfolioBtn')).toHaveText('Tuo / päivitä');
+  await expect(page.locator('#addBtn')).toHaveText('+ Lisää käsin');
+
+  await page.locator('#importPortfolioBtn').click();
+  await expect(page.locator('#settingsView')).toHaveClass(/active/);
+  await expect(page.locator('#portfolioImportBox')).toHaveJSProperty('open', true);
+  await expect(page.locator('#importImage')).toBeVisible();
+});
+
+test('import preview clearly distinguishes a new holding from an update', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'msft-existing', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose })
+    ])
+  });
+
+  await page.locator('#importPortfolioBtn').click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tTili\tMIC\tPörssi',
+    'MSFT\tMicrosoft Corporation\t3\t400\tUSD\tAOT\tXNAS\tNASDAQ',
+    'NVDA\tNVIDIA Corporation\t1\t180\tUSD\tAOT\tXNAS\tNASDAQ'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('1 lisätään');
+  await expect(dialog).toContainText('1 päivitetään');
+  await expect(dialog).toContainText('PÄIVITETÄÄN');
+  await expect(dialog).toContainText('Määrä 2 → 3 kpl');
+  await expect(dialog).toContainText('LISÄTÄÄN');
+});
+
+test('accountless import updates a unique existing listing and preserves its account', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'msft-existing', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose })
+    ])
+  });
+
+  await page.locator('#importPortfolioBtn').click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tMIC\tPörssi',
+    'MSFT\tMicrosoft Corporation\t4\t405\tUSD\tXNAS\tNASDAQ'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toContainText('PÄIVITETÄÄN');
+  await expect(dialog).toContainText('Määrä 2 → 4 kpl');
+  await expect(dialog).toContainText('tili AOT');
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].id).toBe('msft-existing');
+  expect(saved.holdings[0].quantity).toBe(4);
+  expect(saved.holdings[0].account).toBe('AOT');
+});
+
+test('accountless import refuses to guess when the same listing exists in multiple accounts', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'msft-aot', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose }),
+      stock({ id: 'msft-ost', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 1, buyPrice: 380, currentPrice: 410, currency: 'USD', account: 'OST', quoteTimestamp: friClose })
+    ])
+  });
+
+  await page.locator('#importPortfolioBtn').click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tMIC\tPörssi',
+    'MSFT\tMicrosoft Corporation\t4\t405\tUSD\tXNAS\tNASDAQ'
+  ].join('\n'));
+  await page.locator('#importTextBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toContainText('TARKISTA TILI');
+  await expect(dialog).toContainText('Sama instrumentti löytyy useasta tilistä');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(2);
+  expect(saved.holdings.find(h => h.id === 'msft-aot').quantity).toBe(2);
+  expect(saved.holdings.find(h => h.id === 'msft-ost').quantity).toBe(1);
+});
