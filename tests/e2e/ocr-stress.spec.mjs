@@ -165,6 +165,16 @@ async function injectRealOcrResult(page, ocr) {
   }, ocr);
 }
 
+test('@ocr-stress browser image reader resolves a real createWorker API', async ({ page }) => {
+  await page.goto('/index.html');
+  const result = await page.evaluate(async () => {
+    const mod = await import('./image-reader.js');
+    const api = await mod.getTesseract();
+    return { type: typeof api?.createWorker };
+  });
+  expect(result.type).toBe('function');
+});
+
 test.describe('@ocr-stress synthetic screenshots through real Tesseract OCR', () => {
   test.describe.configure({ mode: 'serial' });
   test.setTimeout(120_000);
