@@ -70,10 +70,11 @@ input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid va
 .dailyMovesHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:5px}
 .dailyMovesTitle{font-size:12px;font-weight:850}.dailyMovesMeta{font-size:9px;color:var(--muted)}
 .moveList{display:grid;gap:0}
-.moveRow{display:grid;grid-template-columns:minmax(70px,1fr) auto auto;gap:9px;align-items:center;padding:6px 0;border-top:1px solid #ffffff0a}
-.moveRow:first-child{border-top:0}
-.moveSymbol{font-size:11px;font-weight:850}.movePct{font-size:12px;font-weight:900;text-align:right;min-width:58px}
-.moveAge{font-size:9px;color:var(--muted);text-align:right;min-width:56px;white-space:nowrap}
+.moveRow{display:grid;grid-template-columns:minmax(64px,1fr) auto auto auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #ffffff0a;cursor:pointer;border-radius:8px}
+.moveRow:first-child{border-top:0}.moveRow:active{background:#ffffff08}
+.moveSymbol{font-size:11px;font-weight:850}.movePrice{font-size:11px;font-weight:800;text-align:right;white-space:nowrap;min-width:64px}.movePct{font-size:11px;font-weight:900;text-align:right;min-width:56px}
+.moveAge{font-size:9px;color:var(--muted);text-align:right;min-width:54px;white-space:nowrap}.quickHint{font-size:9px;color:var(--muted);margin-top:6px}.detailToggle{width:100%;margin:0 0 8px;background:transparent;color:var(--muted);font-size:10px;padding:8px 10px}.detailToggle.active{color:var(--text);border-color:#3a4652}
+.quickInfoHero{background:#0e1216;border:1px solid var(--line);border-radius:13px;padding:12px;margin:10px 0}.quickInfoPrice{font-size:28px;font-weight:900;letter-spacing:-.04em}.quickInfoGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.quickInfoCell{background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:8px}.quickInfoCell span{display:block;font-size:9px;color:var(--muted)}.quickInfoCell strong{display:block;font-size:12px;margin-top:3px}.plainExplain{font-size:12px;line-height:1.45;color:#c4cbd2;background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:10px;margin-top:8px}
 .dataDiag{display:grid;gap:5px;margin-top:8px}
 .dataDiagRow{display:grid;grid-template-columns:minmax(70px,1fr) auto auto;gap:8px;align-items:center;background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:7px 8px}
 .dataDiagRow strong{font-size:11px}.dataDiagRow span{font-size:9px;color:var(--muted);white-space:nowrap}
@@ -139,6 +140,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     </div>
   </details>
   <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><button id="addBtn" class="primary">+ Lisää</button></div>
+  <button id="detailsToggle" class="detailToggle" type="button">Näytä tarkemmat luvut</button>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
 
@@ -253,7 +255,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11.2 · tuorein kurssi voittaa, edellisen kaupankäyntipäivän liike erotellaan nykyisestä.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.11.3 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -292,6 +294,11 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 </form>
 </dialog>
 
+<dialog id="quickInfoDlg">
+  <div class="row"><div><div class="eyebrow">PIKANÄKYMÄN SELITYS</div><h2 id="quickInfoTitle" style="margin:3px 0 0">Osake</h2></div><button type="button" id="closeQuickInfo">×</button></div>
+  <div id="quickInfoBody"></div>
+</dialog>
+
 <script>
 const KEY="osakevahti.single.v1";
 const MARKET_WORKER_URL="https://osakevahti-market-ed59.teemu-natunen84.workers.dev";
@@ -306,7 +313,9 @@ const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
 $("addBtn").onclick=()=>openDlg();
+$("detailsToggle").onclick=()=>{state.showDetails=!state.showDetails;save();render()};
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
+$("closeQuickInfo").onclick=()=>$("quickInfoDlg").close();
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
 $("refreshBtn").onclick=()=>refreshMarket(true);
@@ -330,11 +339,11 @@ $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data
 
 function load(){
   try{
-    const s=Object.assign({baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null,riskBudgetPct:1.25},JSON.parse(localStorage.getItem(KEY)||"{}"));
+    const s=Object.assign({baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null,riskBudgetPct:1.25,showDetails:false},JSON.parse(localStorage.getItem(KEY)||"{}"));
     migrateState(s);
     return s
   }catch{
-    return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null,riskBudgetPct:1.25}
+    return{baseCurrency:"EUR",apiKey:"",holdings:[],news:[],quoteUpdatedAt:null,riskBudgetPct:1.25,showDetails:false}
   }
 }
 function migrateState(s){
@@ -509,6 +518,31 @@ function quoteAgeShort(h){
   return `${Math.floor(min/60)} h`;
 }
 
+function latestSessionLabel(h){
+  if(!h.quoteTimestamp) return "viimeisin kurssi";
+  if(hasCurrentTradingDayQuote(h)) return marketLikelyOpenForHolding(h)?"tänään":"päätös";
+  const tz=marketTimeZone(h);
+  const q=zonedDateParts(n(h.quoteTimestamp),tz);
+  const days={Mon:"ma",Tue:"ti",Wed:"ke",Thu:"to",Fri:"pe",Sat:"la",Sun:"su"};
+  return q.weekday?`${days[q.weekday]||q.weekday} päätös`:"ed. päätös";
+}
+function openQuickInfo(symbol){
+  const h=(state.holdings||[]).find(x=>(x.symbol||"").toUpperCase()===String(symbol||"").toUpperCase());
+  if(!h) return;
+  const p=n(h.currentPrice||h.manualPrice);
+  const hasQuote=!!h.quoteTimestamp;
+  const sessionCurrent=hasCurrentTradingDayQuote(h);
+  const change=n(h.dayChangePct);
+  const changeLabel=sessionCurrent?"Päivän muutos":"Viimeisen kaupankäyntipäivän muutos";
+  const source=h.quoteProvider||h.quoteSource||"ei tietoa";
+  const freshness=hasQuote?quoteContextLabel(h):"ei aikaleimaa";
+  const priceMeaning=marketLikelyOpenForHolding(h)
+    ?"Kurssi on viimeisin saatavilla oleva toteutunut kauppa. Se voi olla muutaman minuutin vanha, jos osakkeella käydään vähän kauppaa."
+    :"Päätöskurssi on viimeisin saatavilla oleva toteutunut hinta markkinan sulkeuduttua. Viikonloppuna se on tavallisesti perjantain päätös.";
+  $("quickInfoTitle").textContent=h.symbol||"Osake";
+  $("quickInfoBody").innerHTML=`<div class="quickInfoHero"><div class="muted small">${esc(latestSessionLabel(h))}</div><div class="quickInfoPrice">${p?money(p,h.currency):"—"}</div><div class="${change>0?"pos":change<0?"neg":"muted"}" style="margin-top:4px;font-weight:800">${changeLabel}: ${hasQuote?sPct(change):"—"}</div></div><div class="quickInfoGrid"><div class="quickInfoCell"><span>Kurssin tila</span><strong>${esc(freshness)}</strong></div><div class="quickInfoCell"><span>Datalähde</span><strong>${esc(source)}</strong></div></div><div class="plainExplain"><strong>Mitä tämä tarkoittaa?</strong><br>${esc(priceMeaning)}<br><br>Prosenttiluku kertoo muutoksen edelliseen päätöskurssiin. Se ei yksin tarkoita, että osakkeelle pitäisi tehdä mitään.</div>`;
+  $("quickInfoDlg").showModal();
+}
 function render(){
   renderMarketDataHealth();
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;
@@ -540,6 +574,8 @@ function render(){
 
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);
   $("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
+  $("detailsToggle").textContent=state.showDetails?"Piilota tarkemmat luvut":"Näytä tarkemmat luvut";
+  $("detailsToggle").classList.toggle("active",!!state.showDetails);
 
   rows.forEach(r=>{
     const h=r.h,p=r.p,val=r.val,pnl=r.pnl,pct=r.pct;
@@ -558,7 +594,9 @@ function render(){
     }
     const b=document.createElement("button");
     b.className="item";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")} · ${esc(h.currency)}</span><span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${p?`<div class="priceLine">${money(p,h.currency)}${day&&h.assetType!=="fund"?` · <span class="${day>0?"pos":"neg"}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:""}</div>`;
+    const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
+    const detailPrice=state.showDetails&&p?`<div class="priceLine">${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")}</span>${detailMeta}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -567,19 +605,21 @@ function render(){
   $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   const moves=rows
     .filter(r=>r.h.assetType!=="fund" && r.p)
-    .map(r=>({h:r.h,pct:hasCurrentTradingDayQuote(r.h)?n(r.h.dayChangePct):null}))
-    .sort((a,b)=>{
-      if(a.pct==null && b.pct!=null) return 1;
-      if(a.pct!=null && b.pct==null) return -1;
-      return Math.abs(n(b.pct))-Math.abs(n(a.pct));
-    });
+    .map(r=>({h:r.h,p:r.p,pct:n(r.h.dayChangePct),current:hasCurrentTradingDayQuote(r.h)}))
+    .sort((a,b)=>Math.abs(n(b.pct))-Math.abs(n(a.pct)));
   const staleMoves=moves.filter(x=>quoteIsStaleWhileOpen(x.h)).length;
-  $("dailyMoves").innerHTML=`<div class="dailyMovesHead"><div class="dailyMovesTitle">Päivän liikkeet</div><div class="dailyMovesMeta">${moves.length} osaketta${staleMoves?` · ${staleMoves} vanhaa markkinan ollessa auki`:""}</div></div><div class="moveList">${moves.map(x=>{
-    const age=quoteContextLabel(x.h);
-    const pctHtml=x.pct==null?"—":sPct(x.pct);
-    const pctClass=x.pct==null?"":x.pct>0?"pos":x.pct<0?"neg":"";
-    return `<div class="moveRow"><div class="moveSymbol">${esc(x.h.symbol)}</div><div class="movePct ${pctClass}">${pctHtml}</div><div class="moveAge">${esc(age)}</div></div>`;
-  }).join("")}</div>`;
+  const anyMarketOpen=moves.some(x=>marketLikelyOpenForHolding(x.h));
+  const quickMode=anyMarketOpen?"Markkina auki · kurssi ja päivän liike":"Markkinat kiinni · viimeisin päätös";
+  $("dailyMoves").innerHTML=`<div class="dailyMovesHead"><div><div class="dailyMovesTitle">Pikanäkymä</div><div class="quickHint">${quickMode}</div></div><div class="dailyMovesMeta">${moves.length} osaketta${staleMoves?` · ${staleMoves} vanhaa dataa`:""}</div></div><div class="moveList">${moves.map(x=>{
+    const status=x.current?quoteContextLabel(x.h):latestSessionLabel(x.h);
+    const pctHtml=sPct(x.pct);
+    const pctClass=x.pct>0?"pos":x.pct<0?"neg":"";
+    return `<div class="moveRow" role="button" tabindex="0" data-quick-symbol="${esc(x.h.symbol)}"><div class="moveSymbol">${esc(x.h.symbol)}</div><div class="movePrice">${money(x.p,x.h.currency)}</div><div class="movePct ${pctClass}">${pctHtml}</div><div class="moveAge">${esc(status)}</div></div>`;
+  }).join("")}</div><div class="quickHint">Napauta riviä: saat kurssin ja prosenttiluvun selityksen.</div>`;
+  $("dailyMoves").querySelectorAll("[data-quick-symbol]").forEach(el=>{
+    el.onclick=()=>openQuickInfo(el.dataset.quickSymbol);
+    el.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openQuickInfo(el.dataset.quickSymbol)}};
+  });
 
   const diag=$("dataDiagnostics");
   if(diag){
