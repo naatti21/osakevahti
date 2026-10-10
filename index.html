@@ -1906,6 +1906,7 @@ function explicitTickerFromOcr(text){
 function plausibleOcrName(text){
   const s=String(text||"").trim();
   if(s.length<2 || !/[A-Za-zÅÄÖåäö]/.test(s))return false;
+  if(/^(?:ticker|symbol|tikkeri|tunnus)\b/i.test(s))return false;
   if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell)$/i.test(s))return false;
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
   return true;
