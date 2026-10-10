@@ -1,10 +1,20 @@
 const TESSERACT_VERSION = "5.1.0";
-const TESSERACT_URL = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.esm.min.js`;
+const TESSERACT_URL = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/+esm`;
 
 let tesseractPromise;
 
-async function getTesseract() {
-  if (!tesseractPromise) tesseractPromise = import(TESSERACT_URL);
+export async function getTesseract() {
+  if (!tesseractPromise) {
+    tesseractPromise = import(TESSERACT_URL).then(mod => {
+      const api = typeof mod?.createWorker === "function"
+        ? mod
+        : typeof mod?.default?.createWorker === "function"
+          ? mod.default
+          : null;
+      if (!api) throw new Error("OCR-moottorin createWorker-rajapintaa ei löytynyt.");
+      return api;
+    });
+  }
   return tesseractPromise;
 }
 
