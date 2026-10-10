@@ -1,8 +1,9 @@
 name: Osakevahti Pages + market data
 
 on:
-  push:
-    branches: ["main"]
+  workflow_run:
+    workflows: ["Quality gate"]
+    types: [completed]
   workflow_dispatch:
   schedule:
     # 5 min välein arkisin. GitHub käyttää UTC-aikaa.
@@ -10,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -18,15 +20,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-green-ref:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+    steps:
+      - name: Resolve last green commit
+        id: ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            SHA="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/quality.yml/runs?branch=main&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha')"
+          fi
+
+          if [[ -z "${SHA}" || "${SHA}" == "null" ]]; then
+            echo "No successful Quality gate commit found." >&2
+            exit 1
+          fi
+
+          echo "Using green commit: ${SHA}"
+          echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+
   deploy:
+    needs: resolve-green-ref
+    if: needs.resolve-green-ref.result == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout green commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-green-ref.outputs.sha }}
 
       - name: Fetch Helsinki market data
         shell: bash
