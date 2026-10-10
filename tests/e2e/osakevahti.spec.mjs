@@ -543,3 +543,69 @@ test('market context explains volatility indicators and semiconductor sector', a
   await expect(context).toContainText('ei automaattisesti laskua');
   await expect(context).toContainText('Nasdaq-100:n odotettu');
 });
+
+
+test('instrument migration does not guess an ambiguous IQM listing from company name', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({
+        id: 'iqm-us-or-fi',
+        symbol: 'IQM',
+        name: 'IQM Quantum Computers',
+        currentPrice: 12,
+        buyPrice: 10,
+        currency: 'EUR',
+        quoteTimestamp: friClose
+      })
+    ])
+  });
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  const h = saved.holdings[0];
+
+  expect(h.symbol).toBe('IQM');
+  expect(h.instrument.listingTicker).toBe('IQM');
+  expect(h.instrument.dataKey).toBe('IQM');
+  expect(h.instrument.identification).toBe('legacy-unverified');
+});
+
+test('CSV import preserves explicit instrument identity and leaves ambiguous rows unverified', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+
+  const csv = [
+    'symbol,name,quantity,buy_price,currency,account,isin,mic,exchange,listing_ticker,provider_symbol',
+    'IQM,IQM Quantum Computers,5,10,EUR,AOT,,,,IQM,',
+    'MSFT,Microsoft Corporation,2,400,USD,AOT,,XNAS,NASDAQ,MSFT,MSFT'
+  ].join('\n');
+
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#importCsv').setInputFiles({
+    name: 'portfolio.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv)
+  });
+
+  await expect.poll(async () => {
+    const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+    return saved.holdings?.length || 0;
+  }).toBe(2);
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  const iqm = saved.holdings.find(h => h.symbol === 'IQM');
+  const msft = saved.holdings.find(h => h.symbol === 'MSFT');
+
+  expect(iqm.providerSymbol).toBe('');
+  expect(iqm.instrument.dataKey).toBe('IQM');
+  expect(iqm.instrument.identification).toBe('unverified');
+
+  expect(msft.instrument.mic).toBe('XNAS');
+  expect(msft.instrument.exchange).toBe('NASDAQ');
+  expect(msft.instrument.providerSymbol).toBe('MSFT');
+  expect(msft.instrument.identification).toBe('explicit-source');
+});
