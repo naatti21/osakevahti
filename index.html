@@ -39,7 +39,13 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .marketCell{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
 .marketCell span{display:block;font-size:8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .marketCell strong{display:block;margin-top:2px;font-size:11px;white-space:nowrap}
+.marketCell small{display:block;margin-top:2px;font-size:8px;line-height:1.2;color:var(--muted)}
 .marketStory{margin-top:8px;font-size:10px;line-height:1.4;color:#c0c7cf}
+.marketExplain{margin-top:8px;background:#0e1216;border-radius:10px}
+.marketExplain summary{padding:8px 9px;font-size:10px;color:#c0c7cf}
+.marketExplain .detailsBody{font-size:10px;line-height:1.45;color:#b7bec6}
+.marketExplain p{margin:7px 0}
+.numLabel{display:inline-block;margin-right:4px;color:var(--muted);font-size:8px;font-weight:750;letter-spacing:.02em}
 .decisionGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin:8px 0}
 .decisionCell{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:6px;min-width:0}
 .decisionCell span{display:block;font-size:8px;color:var(--muted)}
@@ -592,13 +598,13 @@ function render(){
       const cls=Math.abs(diff)<=1?"weightOk":diff>1?"weightHigh":"weightLow";
       const wf=weight.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1});
       const tf=target.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1});
-      weightHtml=`<span class="weightBadge ${cls}">Paino ${wf} % · tavoite ${tf} %</span>`;
+      weightHtml=`<span class="weightBadge ${cls}">Salkusta ${wf} % · tavoite ${tf} %</span>`;
     }
     const b=document.createElement("button");
     b.className="item";
     const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
-    const detailPrice=state.showDetails&&p?`<div class="priceLine">${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")}</span>${detailMeta}</div></div><div><div class="value">${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}">${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
+    const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -693,22 +699,50 @@ function marketStory(){
   if(hel>=1 && eur<.3) return "Helsinki on selvästi Eurooppaa vahvempi. Kotimarkkinassa on suhteellista vahvuutta.";
   return "Markkina on valikoiva tai liike on vielä maltillinen. Suhteellinen liike kertoo enemmän kuin pelkkä indeksin väri.";
 }
+function vixLevel(v){
+  if(!Number.isFinite(v)||v<=0) return "";
+  if(v<15) return "rauhallinen";
+  if(v<20) return "tavanomainen";
+  if(v<30) return "koholla";
+  return "korkea";
+}
 function renderMarketContext(){
   const box=$("marketContext"); if(!box) return;
   if(!marketContext?.assets){
     box.innerHTML=`<div class="marketContextHead"><div class="marketContextTitle">Markkinakonteksti</div><div class="marketContextPhase">${esc(marketPhase())}</div></div><div class="marketStory">Markkinakontekstia odotetaan taustasyötteestä. Älä tulkitse teknisiä hälytyksiä irrallaan koko markkinasta.</div>`;
     return;
   }
-  const cells=[
-    ["HELSINKI","Helsinki 25"],["EUROPE","Eurooppa"],["SP_FUT","S&P fut."],
-    ["NQ_FUT","Nasdaq fut."],["BRENT","Brent"],["VIX","VIX"]
-  ].map(([k,label])=>{
-    const a=mcAsset(k),v=a? n(a.day_change_pct):null;
-    const txt=a?`${v>0?"+":""}${v.toFixed(2)} %`:"—";
-    const cls=v==null?"":v>0?"pos":v<0?"neg":"";
-    return `<div class="marketCell"><span>${label}</span><strong class="${cls}">${txt}</strong></div>`;
+  const defs=[
+    ["HELSINKI","Helsinki 25","change","Suomen osakkeet"],
+    ["EUROPE","Eurooppa","change","Euro Stoxx 50"],
+    ["SP_FUT","S&P fut.","change","USA:n yleismarkkina"],
+    ["NQ_FUT","Nasdaq fut.","change","Kasvu ja teknologia"],
+    ["SOX","SOX","change","Puolijohdesektori"],
+    ["VIX","VIX","vol","USA:n odotettu heilunta"],
+    ["VSTOXX","VSTOXX","vol","Euroopan odotettu heilunta"],
+    ["VXN","VXN","vol","Nasdaq-100:n odotettu heilunta"]
+  ];
+  const cells=defs.map(([k,label,mode,note])=>{
+    const a=mcAsset(k);
+    if(!a) return `<div class="marketCell"><span>${label}</span><strong>—</strong><small>${note}</small></div>`;
+    const ch=n(a.day_change_pct);
+    if(mode==="vol"){
+      const level=n(a.price);
+      const levelText=level>0?level.toFixed(1):"—";
+      const extra=k==="VIX"&&level>0?vixLevel(level):"odotettu volatiliteetti";
+      return `<div class="marketCell"><span>${label}</span><strong>${levelText}</strong><small>${note} · ${extra}</small></div>`;
+    }
+    const txt=`${ch>0?"+":""}${ch.toFixed(2)} %`;
+    const cls=ch>0?"pos":ch<0?"neg":"";
+    return `<div class="marketCell"><span>${label}</span><strong class="${cls}">${txt}</strong><small>${note}</small></div>`;
   }).join("");
-  box.innerHTML=`<div class="marketContextHead"><div class="marketContextTitle">Markkinakonteksti</div><div class="marketContextPhase">${esc(marketPhase())}</div></div><div class="marketContextGrid">${cells}</div><div class="marketStory">${esc(marketStory())}</div>`;
+  box.innerHTML=`<div class="marketContextHead"><div class="marketContextTitle">Markkinakonteksti</div><div class="marketContextPhase">${esc(marketPhase())}</div></div><div class="marketContextGrid">${cells}</div><div class="marketStory">${esc(marketStory())}</div>
+  <details class="marketExplain"><summary>Mitä mittarit tarkoittavat?</summary><div class="detailsBody">
+    <p><strong>VIX</strong> = S&P 500 -optioista johdettu noin 30 päivän odotettu heilunta. Korkeampi luku tarkoittaa suurempaa odotettua liikettä, ei automaattisesti laskua.</p>
+    <p><strong>VSTOXX</strong> = vastaava odotetun heilunnan mittari Euro Stoxx 50:lle.</p>
+    <p><strong>VXN</strong> = Nasdaq-100:n odotettu noin 30 päivän heilunta.</p>
+    <p><strong>SOX</strong> = puolijohdeyhtiöiden sektori-indeksi. Se auttaa erottamaan esimerkiksi AMD:n oman liikkeen koko sirusektorin liikkeestä.</p>
+  </div></details>`;
 }
 function thesisFocus(h){
   const s=(h.symbol||"").toUpperCase();
@@ -738,15 +772,17 @@ function ownerDecision(row,r,portfolioValue,budgetUse,overweightTarget){
   const h=row.h, thesis=thesisSignal(h);
   const mins=new Date().getHours()*60+new Date().getMinutes();
   const isAMD=(h.symbol||"").toUpperCase()==="AMD";
-  const bench=isAMD ? (mins>=990 ? mcAsset("NASDAQ") : mcAsset("NQ_FUT")) : mcAsset("HELSINKI");
+  const sectorBench=isAMD?mcAsset("SOX"):null;
+  const bench=sectorBench || (isAMD ? (mins>=990 ? mcAsset("NASDAQ") : mcAsset("NQ_FUT")) : mcAsset("HELSINKI"));
   const benchPct=bench?n(bench.day_change_pct):null;
   const stockPct=n(h.dayChangePct);
   const rel=benchPct==null?null:stockPct-benchPct;
   const broadDown=n(mcAsset("HELSINKI")?.day_change_pct)<=-1 && n(mcAsset("EUROPE")?.day_change_pct)<=-.5;
+  const compareWord=sectorBench?"sirusektoria":"markkinaa";
   const marketLabel=benchPct==null?"konteksti puuttuu"
-    : rel<=-2?`markkinaa heikompi (${rel.toFixed(1)} %-yks.)`
-    : rel>=2?`markkinaa vahvempi (+${rel.toFixed(1)} %-yks.)`
-    : `lähellä markkinaa (${rel>=0?"+":""}${rel.toFixed(1)} %-yks.)`;
+    : rel<=-2?`${compareWord} heikompi (${rel.toFixed(1)} %-yks.)`
+    : rel>=2?`${compareWord} vahvempi (+${rel.toFixed(1)} %-yks.)`
+    : `lähellä ${compareWord} (${rel>=0?"+":""}${rel.toFixed(1)} %-yks.)`;
   const techLabel=r.status==="TRIGGERED"?"taso rikottu":r.status==="CRITICAL"?"lähellä tasoa":r.status==="WATCH"?"seuranta-alue":r.status==="STALE"?"data vanha":"normaali";
   const portfolioLabel=overweightTarget?"ylipaino / ei lisäystä":budgetUse>100?"riskibudjetti yli":budgetUse>75?"riskibudjetti korkea":"ok";
 
