@@ -1161,10 +1161,10 @@ test('image OCR helper module loads without contacting OCR CDN until recognition
   const result = await page.evaluate(async () => {
     const mod = await import('./image-reader.js');
     const tsv = [
-      'level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext',
-      '5\\t1\\t1\\t1\\t1\\t1\\t10\\t20\\t80\\t18\\t96\\tMicrosoft',
-      '5\\t1\\t1\\t1\\t1\\t2\\t100\\t20\\t100\\t18\\t95\\tCorporation'
-    ].join('\\n');
+      'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext',
+      '5\t1\t1\t1\t1\t1\t10\t20\t80\t18\t96\tMicrosoft',
+      '5\t1\t1\t1\t1\t2\t100\t20\t100\t18\t95\tCorporation'
+    ].join('\n');
     return mod.tsvToLines(tsv, '');
   });
 
