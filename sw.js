@@ -1,7 +1,8 @@
-const CACHE = "osakevahti-shell-v2.8";
+const CACHE = "osakevahti-shell-v2.15";
 const SHELL = [
   "./",
   "./index.html",
+  "./image-reader.js",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
