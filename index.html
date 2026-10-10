@@ -1970,7 +1970,7 @@ function plausibleOcrName(text){
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
   return true;
 }
-function screenshotCandidatesFromLines(sourceLines){
+function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={}){
   const lines=(sourceLines||[]).map((row,i)=>({
     text:String(row?.text??row??"").replace(/\s+/g," ").trim(),
     confidence:Number.isFinite(row?.confidence)?row.confidence:null,
@@ -1980,6 +1980,7 @@ function screenshotCandidatesFromLines(sourceLines){
   for(let i=0;i<lines.length;i++){
     const q=quantityFromOcrLine(lines[i].text);
     if(!q?.value || q.value<=0)continue;
+    if(requireStrongUnit&&!q.strongUnit)continue;
     if(!q.strongUnit && lines[i].confidence!=null && lines[i].confidence<55)continue;
     const context=lines.slice(Math.max(0,i-5),Math.min(lines.length,i+5));
     let name="";
@@ -2014,7 +2015,7 @@ function screenshotCandidatesFromOcr(ocr){
   const structured=screenshotCandidatesFromLines(ocr?.lines||[]);
   if(structured.length)return structured;
   const textLines=String(ocr?.text||"").split(/\r?\n/).map(text=>({text,confidence:null}));
-  return screenshotCandidatesFromLines(textLines);
+  return screenshotCandidatesFromLines(textLines,{requireStrongUnit:true});
 }
 function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
