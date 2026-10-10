@@ -217,7 +217,7 @@ test.describe('@ocr-stress synthetic screenshots through real Tesseract OCR', ()
 
     const dialog = page.locator('#importReviewDlg');
     await expect(dialog).toBeVisible({ timeout: 30_000 });
-    await expect(dialog).toContainText('AUTOMAATTINEN');
+    await expect(dialog).toContainText('LISÄTÄÄN');
     await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
   });
 
