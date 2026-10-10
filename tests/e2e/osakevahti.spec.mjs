@@ -1070,7 +1070,7 @@ test('screenshot IQM without explicit ticker stays in review instead of being gu
   expect(saved.holdings[0].instrument.identification).toBe('user-confirmed');
 });
 
-test('low confidence screenshot quantity does not change portfolio', async ({ page }) => {
+test('low confidence quantity without a strong unit does not change portfolio', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
     state: appState([
@@ -1080,10 +1080,10 @@ test('low confidence screenshot quantity does not change portfolio', async ({ pa
 
   await page.evaluate(() => {
     window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
-      text: 'Microsoft Corporation\\n2 kpl\\nGAV 400 USD',
+      text: 'Microsoft Corporation\\nQty 2\\nGAV 400 USD',
       lines: [
         { text: 'Microsoft Corporation', confidence: 98 },
-        { text: '2 kpl', confidence: 32 },
+        { text: 'Qty 2', confidence: 32 },
         { text: 'GAV 400 USD', confidence: 96 }
       ]
     });
