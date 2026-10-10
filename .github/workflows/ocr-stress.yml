@@ -1,0 +1,54 @@
+name: OCR stress
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+  push:
+    branches: ["main"]
+    paths:
+      - "image-reader.js"
+      - "index.html"
+      - "tests/e2e/ocr-stress.spec.mjs"
+      - "package.json"
+      - ".github/workflows/ocr-stress.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-stress-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run real OCR stress tests
+        run: npm run test:ocr
+
+      - name: Upload OCR stress report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-stress-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
