@@ -680,7 +680,7 @@ test('CSV import auto-resolves a clear MSFT listing but still requires preview a
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('LISÄTÄÄN');
   await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
   await expect(page.locator('#confirmImportReview')).toBeEnabled();
 
@@ -719,7 +719,7 @@ test('CSV import keeps explicit MIC and exchange identity without remote guessin
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('LÄHTEESTÄ');
+  await expect(dialog).toContainText('LISÄTÄÄN');
 
   page.once('dialog', d => d.accept());
   await page.locator('#confirmImportReview').click();
@@ -762,7 +762,7 @@ test('pasted Finnish spreadsheet table imports through the same preview and pres
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('LISÄTÄÄN');
   await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
 
   page.once('dialog', d => d.accept());
@@ -791,7 +791,7 @@ test('repeating the same explicit import updates the holding instead of duplicat
   ].join('\n');
   await page.locator('#importText').fill(first);
   await page.locator('#importTextBtn').click();
-  await expect(page.locator('#importReviewDlg')).toContainText('LÄHTEESTÄ');
+  await expect(page.locator('#importReviewDlg')).toContainText('LISÄTÄÄN');
   page.once('dialog', d => d.accept());
   await page.locator('#confirmImportReview').click();
 
@@ -872,7 +872,7 @@ test('missing currency is not silently defaulted to EUR and resolver may supply 
   await page.locator('#importTextBtn').click();
 
   const dialog = page.locator('#importReviewDlg');
-  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('LISÄTÄÄN');
   await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
 
   page.once('dialog', d => d.accept());
@@ -898,7 +898,7 @@ test('semicolon table supports Finnish headers and decimal comma', async ({ page
   await page.locator('#importTextBtn').click();
 
   const dialog = page.locator('#importReviewDlg');
-  await expect(dialog).toContainText('LÄHTEESTÄ');
+  await expect(dialog).toContainText('LISÄTÄÄN');
   page.once('dialog', d => d.accept());
   await page.locator('#confirmImportReview').click();
 
@@ -938,7 +938,7 @@ test('comma CSV keeps quoted company names intact', async ({ page }) => {
     buffer: Buffer.from(csv)
   });
 
-  await expect(page.locator('#importReviewDlg')).toContainText('AUTOMAATTINEN');
+  await expect(page.locator('#importReviewDlg')).toContainText('LISÄTÄÄN');
   page.once('dialog', d => d.accept());
   await page.locator('#confirmImportReview').click();
 
@@ -995,7 +995,7 @@ test('screenshot import uses local OCR text and keeps existing holdings intact',
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('LISÄTÄÄN');
   await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
 
   page.once('dialog', d => d.accept());
@@ -1149,7 +1149,7 @@ test('user can correct OCR text locally and re-run the same resolver pipeline', 
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('LISÄTÄÄN');
 });
 
 test('image OCR helper module loads without contacting OCR CDN until recognition is requested', async ({ page }) => {
@@ -1187,7 +1187,7 @@ test('portfolio always exposes separate import-update and manual add actions', a
   await page.locator('#importPortfolioBtn').click();
   await expect(page.locator('#settingsView')).toHaveClass(/active/);
   await expect(page.locator('#portfolioImportBox')).toHaveJSProperty('open', true);
-  await expect(page.locator('#importImage')).toBeVisible();
+  await expect(page.locator('#portfolioImportBox').getByText('Valitse kuva')).toBeVisible();
 });
 
 test('import preview clearly distinguishes a new holding from an update', async ({ page }) => {
