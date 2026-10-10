@@ -264,7 +264,22 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <details>
     <summary>Salkun tuonti</summary>
     <div class="detailsBody">
-      <p class="muted small">Tuo taulukko tiedostona tai kopioi solut suoraan Excelistä / Google Sheetsistä. Tuonti yhdistetään nykyiseen salkkuun eikä pyyhi muita omistuksia.</p>
+      <p class="muted small">Helpoin tapa puhelimella on kuvakaappaus. Voit myös tuoda taulukon tiedostona tai kopioida solut suoraan Excelistä / Google Sheetsistä. Kaikki reitit päätyvät samaan esitarkistukseen.</p>
+
+      <label class="txt">Kuvakaappaus</label>
+      <div class="actions">
+        <label class="file">Valitse kuva<input id="importImage" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      </div>
+      <div id="imageImportStatus" class="statusBox muted">Kuva käsitellään selaimessa. Ensimmäinen OCR-luku tarvitsee verkkoyhteyden tunnistusmallin lataamiseen; itse salkkukuvaa ei lähetetä Osakevahdin Workerille.</div>
+      <details id="ocrTextDetails" class="hidden">
+        <summary>Poimittu teksti</summary>
+        <div class="detailsBody">
+          <textarea id="imageOcrText" rows="8" aria-label="Kuvasta poimittu teksti"></textarea>
+          <div class="actions"><button type="button" id="reparseOcrBtn">Tunnista korjatusta tekstistä</button></div>
+        </div>
+      </details>
+
+      <label class="txt">Taulukko</label>
       <div class="actions">
         <label class="file">Valitse CSV / TSV / TXT<input id="importCsv" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"></label>
       </div>
@@ -279,7 +294,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.14.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti v2.15.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -379,7 +394,7 @@ $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
 $("testApiBtn").onclick=testFinnhub;
 $("testNordnetBtn").onclick=testNordnet;
 $("reloadMarketDataBtn").onclick=async()=>{await refreshMarket(true)};
-$("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;$("importTextBtn").onclick=importPastedTable;
+$("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;$("importTextBtn").onclick=importPastedTable;$("importImage").onchange=importImage;$("reparseOcrBtn").onclick=reparseOcrText;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value="";render()}};
 
 function load(){
@@ -1855,6 +1870,139 @@ async function importCsv(e){
 async function importPastedTable(){
   try{await importTableText($("importText").value,"pasted-table")}
   catch(err){alert("Liitetyn taulukon tuonti epäonnistui: "+(err?.message||err))}
+}
+
+function ocrNumber(value){
+  const cleaned=String(value||"").replace(/\s/g,"").replace(",",".").replace(/[^0-9.+-]/g,"");
+  const out=Number(cleaned);
+  return Number.isFinite(out)?out:null;
+}
+function currencyFromOcr(text){
+  const s=String(text||"").toUpperCase();
+  if(/\bUSD\b|\$/.test(s))return "USD";
+  if(/\bEUR\b|€/.test(s))return "EUR";
+  if(/\bSEK\b/.test(s))return "SEK";
+  if(/\bNOK\b/.test(s))return "NOK";
+  if(/\bGBP\b|£/.test(s))return "GBP";
+  return "";
+}
+function quantityFromOcrLine(text){
+  const s=String(text||"").trim();
+  let m=s.match(/(\d+(?:[.,]\d+)?)\s*(?:kpl|pcs?|shares?|osaketta|st)\b/i);
+  if(m)return {value:ocrNumber(m[1]),index:m.index||0};
+  m=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i);
+  return m?{value:ocrNumber(m[1]),index:m.index||0}:null;
+}
+function priceFromOcrLine(text){
+  const s=String(text||"").trim();
+  const m=s.match(/(?:gav|keskihinta|hankintahinta|ostohinta|avg(?:\.|erage)?\s*(?:price|cost))\s*[:\-]?\s*([0-9][0-9\s.,]*)\s*(EUR|USD|SEK|NOK|GBP|€|\$|£)?/i);
+  if(!m)return null;
+  return {value:ocrNumber(m[1]),currency:currencyFromOcr(m[2]||s)};
+}
+function explicitTickerFromOcr(text){
+  const m=String(text||"").match(/(?:ticker|symbol|tikkeri|tunnus)\s*[:\-]?\s*([A-Z0-9.^:=_-]{1,24})\b/i);
+  return m?normalizedIdText(m[1]):"";
+}
+function plausibleOcrName(text){
+  const s=String(text||"").trim();
+  if(s.length<2 || !/[A-Za-zÅÄÖåäö]/.test(s))return false;
+  if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell)$/i.test(s))return false;
+  if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
+  return true;
+}
+function screenshotCandidatesFromOcr(ocr){
+  const lines=(ocr?.lines||[]).map((row,i)=>({
+    text:String(row?.text||"").replace(/\s+/g," ").trim(),
+    confidence:Number.isFinite(row?.confidence)?row.confidence:null,
+    i
+  })).filter(x=>x.text);
+  const out=[];
+  for(let i=0;i<lines.length;i++){
+    const q=quantityFromOcrLine(lines[i].text);
+    if(!q?.value || q.value<=0)continue;
+    if(lines[i].confidence!=null && lines[i].confidence<55)continue;
+    const context=lines.slice(Math.max(0,i-4),Math.min(lines.length,i+5));
+    let name="";
+    const sameLinePrefix=lines[i].text.slice(0,q.index).trim();
+    if(plausibleOcrName(sameLinePrefix))name=sameLinePrefix;
+    if(!name){
+      for(let j=i-1;j>=Math.max(0,i-4);j--){
+        if(plausibleOcrName(lines[j].text)){name=lines[j].text;break}
+      }
+    }
+    if(!name)continue;
+    let buyPrice=0,currency="",symbol="";
+    for(const row of context){
+      const p=priceFromOcrLine(row.text);
+      if(p?.value!=null){buyPrice=p.value;if(p.currency)currency=p.currency}
+      if(!currency)currency=currencyFromOcr(row.text);
+      if(!symbol)symbol=explicitTickerFromOcr(row.text);
+    }
+    out.push({name,quantity:q.value,buyPrice,currency,symbol,sourceLine:i+1});
+  }
+  const dedup=[],seen=new Set();
+  for(const x of out){
+    const key=[cleanNameToken(x.name),x.quantity,x.symbol,x.currency].join("|");
+    if(seen.has(key))continue;
+    seen.add(key);dedup.push(x);
+  }
+  return dedup;
+}
+function holdingFromOcrCandidate(x,source){
+  const listingTicker=normalizedIdText(x.symbol);
+  return {
+    id:uid(),symbol:listingTicker,name:String(x.name||"").trim(),quantity:n(x.quantity),buyPrice:n(x.buyPrice),
+    currency:normalizedIdText(x.currency),account:"",providerSymbol:"",manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
+    importMeta:{source,rowNumber:x.sourceLine||null,importedAt:new Date().toISOString(),provided:{trailingPct:false,riskClass:false,targetWeight:false}},
+    instrument:{
+      schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:String(x.name||"").trim(),isin:"",listingTicker,mic:"",exchange:"",
+      currency:normalizedIdText(x.currency),providerSymbol:"",dataKey:legacyDataKey(listingTicker),source,identification:"unverified"
+    }
+  };
+}
+async function runOcrCandidateImport(ocr,source){
+  $("imageOcrText").value=String(ocr?.text||"").trim();
+  $("ocrTextDetails").classList.remove("hidden");
+  const candidates=screenshotCandidatesFromOcr(ocr);
+  if(!candidates.length){
+    $("imageImportStatus").className="statusBox statusBad";
+    $("imageImportStatus").textContent="Teksti saatiin kuvasta, mutta yhtään omistusriviä ei tunnistettu riittävän varmasti. Salkkua ei muutettu. Voit korjata poimittua tekstiä ja yrittää uudelleen.";
+    return;
+  }
+  $("imageImportStatus").className="statusBox statusOk";
+  $("imageImportStatus").textContent="Kuvasta löytyi "+candidates.length+" omistusehdokasta. Tarkista instrumentit ennen tallennusta.";
+  await startImportReview(candidates.map(x=>holdingFromOcrCandidate(x,source)));
+}
+async function extractScreenshotOcr(file,onProgress){
+  if(typeof window.__OSAKEVAHTI_TEST_OCR__==="function")return await window.__OSAKEVAHTI_TEST_OCR__(file,onProgress);
+  const mod=await import("./image-reader.js");
+  return mod.extractImageText(file,{onProgress});
+}
+async function importImage(e){
+  const file=e.target.files?.[0];if(!file)return;
+  const box=$("imageImportStatus");
+  box.className="statusBox muted";box.textContent="Valmistellaan paikallista tekstintunnistusta…";
+  try{
+    const ocr=await extractScreenshotOcr(file,p=>{
+      if(p?.progress!=null){
+        const pct=Math.round(Math.max(0,Math.min(1,p.progress))*100);
+        box.textContent="Luetaan kuvaa paikallisesti… "+pct+" %";
+      }else if(p?.status)box.textContent="Luetaan kuvaa paikallisesti… "+p.status;
+    });
+    if(!String(ocr?.text||"").trim()){
+      box.className="statusBox statusBad";box.textContent="Kuvasta ei löytynyt luettavaa tekstiä. Salkkua ei muutettu.";
+      return;
+    }
+    await runOcrCandidateImport(ocr,"screenshot:"+file.name);
+  }catch(err){
+    box.className="statusBox statusBad";box.textContent="Kuvan luku epäonnistui: "+(err?.message||err);
+  }finally{e.target.value=""}
+}
+async function reparseOcrText(){
+  const text=$("imageOcrText").value.trim();
+  if(!text){$("imageImportStatus").className="statusBox statusBad";$("imageImportStatus").textContent="Poimittu teksti on tyhjä.";return}
+  const lines=text.split(/\r?\n/).map((t,i)=>({text:t,confidence:null,top:i*20,left:0}));
+  await runOcrCandidateImport({text,lines},"edited-ocr-text");
 }
 
 const installBtn=$("installAppBtn");
