@@ -34,7 +34,8 @@ async function seed(page, state) {
 async function mockNetwork(page, {
   workerAssets = {}, workerStatus = 200, marketQuotes = {}, fundQuotes = {},
   sharedAssets = {}, sharedGeneratedAt = '2026-10-09T12:00:00Z',
-  marketGeneratedAt = '2026-10-09T12:00:00Z', fx = { USD: 0.86, SEK: 0.091 }
+  marketGeneratedAt = '2026-10-09T12:00:00Z', fx = { USD: 0.86, SEK: 0.091 },
+  marketContext = { assets: {} }, portfolioNews = []
 } = {}) {
   await page.route(WORKER, async route => {
     if (workerStatus !== 200) {
@@ -58,17 +59,17 @@ async function mockNetwork(page, {
 
   await page.route('**/portfolio-status.json*', route => route.fulfill({
     status: 200, contentType: 'application/json',
-    body: JSON.stringify({ generated_at: sharedGeneratedAt, assets: sharedAssets, market_context: { assets: {} } })
+    body: JSON.stringify({ generated_at: sharedGeneratedAt, assets: sharedAssets, market_context: marketContext })
   }));
 
   await page.route('**/risk-data.json*', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ assets: {} })
   }));
   await page.route('**/market-context.json*', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ assets: {} })
+    status: 200, contentType: 'application/json', body: JSON.stringify(marketContext)
   }));
   await page.route('**/portfolio-news.json*', route => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] })
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: portfolioNews })
   }));
   await page.route('**/dividend-rocket-insights.json*', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({})
@@ -232,4 +233,201 @@ test('mobile quick view is in the first viewport', async ({ page }) => {
   const box = await page.locator('#dailyMoves').boundingBox();
   expect(box).not.toBeNull();
   expect(box.y).toBeLessThan(915);
+});
+
+
+test('equal timestamp prefers Worker over GitHub fallback', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 22, quoteTimestamp: friClose })]),
+    network: {
+      marketGeneratedAt: '2026-10-12T07:59:00Z',
+      workerAssets: {
+        FORTUM: { price: 24.50, quote_timestamp: mon1059, day_change_pct: 1.2, source: 'Yahoo Finland', delayed: false }
+      },
+      marketQuotes: {
+        FORTUM: { price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
+      }
+    }
+  });
+
+  await page.locator('#refreshBtn').click();
+  await expect(page.locator('[data-quick-symbol="FORTUM"]')).toContainText('24,50');
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.holdings[0].quoteSource).toBe('WORKER');
+});
+
+test('GitHub snapshot fills a quote when Worker has no matching symbol', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 22, quoteTimestamp: friClose })]),
+    network: {
+      workerAssets: {},
+      marketQuotes: {
+        FORTUM: { price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
+      }
+    }
+  });
+
+  await page.locator('#refreshBtn').click();
+  await expect(page.locator('[data-quick-symbol="FORTUM"]')).toContainText('24,30');
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.holdings[0].quoteSource).toBe('HELSINKI_CACHE');
+});
+
+test('shared status without a timestamp cannot overwrite an existing quote', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 24.50, quoteTimestamp: mon1059 })]),
+    network: {
+      sharedGeneratedAt: null,
+      sharedAssets: {
+        FORTUM: { price: 21.00, day_change_pct: -4.2, source: 'timestamp missing' }
+      }
+    }
+  });
+
+  await expect(page.locator('[data-quick-symbol="FORTUM"]')).toContainText('24,50');
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.holdings[0].currentPrice).toBe(24.5);
+});
+
+test('newer shared status may fill a missing quote', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 0, quoteTimestamp: null })]),
+    network: {
+      sharedGeneratedAt: '2026-10-12T07:59:00Z',
+      sharedAssets: {
+        FORTUM: { price: 23.80, day_change_pct: 0.7, quote_timestamp: mon1059, source: 'shared status' }
+      }
+    }
+  });
+
+  await expect(page.locator('[data-quick-symbol="FORTUM"]')).toContainText('23,80');
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.holdings[0].quoteSource).toBe('PORTFOLIO_STATUS');
+});
+
+test('13 minute Helsinki trade is a recent trade, not stale data', async ({ page }) => {
+  const thirteenMinutesOld = ms('2026-10-12T10:47:00+03:00');
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([stock({
+      id: 'f', symbol: 'FORTUM', currentPrice: 24.10,
+      dayChangePct: 0.4, quoteTimestamp: thirteenMinutesOld
+    })])
+  });
+
+  const quick = page.locator('#dailyMoves');
+  await expect(quick).toContainText('kauppa 13 min');
+  await expect(quick).not.toContainText('vanhaa dataa');
+});
+
+test('details preference survives reload', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 23.39, quoteTimestamp: friClose })])
+  });
+
+  await page.locator('#detailsToggle').click();
+  await expect(page.locator('#detailsToggle')).toHaveText('Piilota tarkemmat luvut');
+  await page.reload();
+  await expect(page.locator('#detailsToggle')).toHaveText('Piilota tarkemmat luvut');
+  await expect(page.locator('#holdings .priceLine')).toHaveCount(1);
+});
+
+test('same ticker in OST and AOT stays as two separate holdings', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'ost-f', symbol: 'FORTUM', quantity: 10, account: 'OST', currentPrice: 23.39, quoteTimestamp: friClose }),
+      stock({ id: 'aot-f', symbol: 'FORTUM', quantity: 5, account: 'AOT', currentPrice: 23.39, quoteTimestamp: friClose })
+    ])
+  });
+
+  await expect(page.locator('#holdings .item')).toHaveCount(2);
+  await expect(page.locator('#holdings')).toContainText('10 kpl · OST');
+  await expect(page.locator('#holdings')).toContainText('5 kpl · AOT');
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.holdings.map(h => h.account).sort()).toEqual(['AOT', 'OST']);
+});
+
+test('fund NAV is excluded from stock daily moves', async ({ page }) => {
+  const fund = {
+    id: 'fund-1', symbol: 'FUND', name: 'Testirahasto', quantity: 12,
+    buyPrice: 10, currentPrice: 12, currency: 'EUR', account: 'Rahastot',
+    assetType: 'fund', fxRate: 1, navDate: '2026-10-09'
+  };
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([fund])
+  });
+
+  await expect(page.locator('#holdings')).toContainText('Testirahasto');
+  await expect(page.locator('#dailyMoves')).not.toContainText('FUND');
+});
+
+test('USD holding uses FX rate in portfolio value', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({
+        id: 'amd', symbol: 'AMD', quantity: 2, buyPrice: 100,
+        currentPrice: 200, currency: 'USD', fxRate: 0.86,
+        quoteTimestamp: ms('2026-10-09T15:59:00-04:00'), quoteProvider: 'Finnhub'
+      })
+    ])
+  });
+
+  await expect(page.locator('#portfolioValue')).toContainText('344,00');
+});
+
+test('mobile layout has no horizontal page overflow', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 23.39, quoteTimestamp: friClose })])
+  });
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('market-driven technical warning does not become an automatic sell action', async ({ page }) => {
+  const h = stock({
+    id: 'f', symbol: 'FORTUM', currentPrice: 100, buyPrice: 80,
+    dayChangePct: -2.2, quoteTimestamp: mon1059, targetWeight: 0
+  });
+  h.manualStop = 98;
+  h.trailingPct = 0;
+  h.highWatermark = 100;
+
+  const marketContext = {
+    assets: {
+      HELSINKI: { day_change_pct: -2.0 },
+      EUROPE: { day_change_pct: -1.0 },
+      SP_FUT: { day_change_pct: -1.0 },
+      NQ_FUT: { day_change_pct: -1.1 }
+    }
+  };
+
+  await openApp(page, {
+    time: '2026-10-12T11:00:00+03:00',
+    state: appState([h]),
+    network: { marketContext }
+  });
+
+  await page.locator('[data-view="riskView"]').click();
+  await expect(page.locator('#risks')).toContainText('EI TOIMENPIDETTÄ');
+  await expect(page.locator('#risks')).toContainText('Tekninen taso yksin ei riitä toimenpiteeseen');
+});
+
+test('corrupt local state falls back to an empty app instead of crashing', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-10T08:00:00+03:00') });
+  await page.addInitScript(key => localStorage.setItem(key, '{not-valid-json'), KEY);
+  await mockNetwork(page);
+  await page.goto('/index.html');
+
+  await expect(page.locator('#holdingsEmpty')).toContainText('Salkku on tyhjä');
+  await expect(page.locator('#portfolioValue')).toContainText('0,00');
 });
