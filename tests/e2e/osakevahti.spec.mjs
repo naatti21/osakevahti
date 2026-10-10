@@ -1272,3 +1272,82 @@ test('accountless import refuses to guess when the same listing exists in multip
   expect(saved.holdings.find(h => h.id === 'msft-aot').quantity).toBe(2);
   expect(saved.holdings.find(h => h.id === 'msft-ost').quantity).toBe(1);
 });
+
+
+test('noisy broker OCR text still finds holdings from explicit kpl anchors', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'Fortum 0': [
+          {
+            symbol: 'FORTUM.HE', longname: 'Fortum Oyj',
+            exchange: 'HEL', exchange_display: 'Helsinki', full_exchange_name: 'Helsinki',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ],
+        'Nordea Bank Abp N': [
+          {
+            symbol: 'NDA-FI.HE', longname: 'Nordea Bank Abp',
+            exchange: 'HEL', exchange_display: 'Helsinki', full_exchange_name: 'Helsinki',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ],
+        'Verkkokauppa.com Oyj SET -': [
+          {
+            symbol: 'VERK.HE', longname: 'Verkkokauppa.com Oyj',
+            exchange: 'HEL', exchange_display: 'Helsinki', full_exchange_name: 'Helsinki',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.evaluate(() => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text: [
+        'Osakkeet',
+        '= . 1 628,37 EUR',
+        'S Advanced Micro Devices, Inc. HE Ka >',
+        '. 2011,54 EUR',
+        "Fortum 0 ' >",
+        '> be 86 kpl',
+        'i» Nordea Bank Abp N >',
+        '91 kpl',
+        '. 18,17 EUR',
+        'i» Verkkokauppa.com Oyj SET - >',
+        '141 kpl'
+      ].join('\n'),
+      lines: [
+        { text: 'Osakkeet', confidence: 94 },
+        { text: '= . 1 628,37 EUR', confidence: 62 },
+        { text: 'S Advanced Micro Devices, Inc. HE Ka >', confidence: 61 },
+        { text: '. 2011,54 EUR', confidence: 54 },
+        { text: "Fortum 0 ' >", confidence: 49 },
+        { text: '> be 86 kpl', confidence: 42 },
+        { text: 'i» Nordea Bank Abp N >', confidence: 50 },
+        { text: '91 kpl', confidence: 47 },
+        { text: '. 18,17 EUR', confidence: 51 },
+        { text: 'i» Verkkokauppa.com Oyj SET - >', confidence: 52 },
+        { text: '141 kpl', confidence: 45 }
+      ]
+    });
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'broker-noisy.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([137, 80, 78, 71])
+  });
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#imageImportStatus')).toContainText('3 omistusehdokasta');
+  await expect(dialog).toContainText('Fortum');
+  await expect(dialog).toContainText('Nordea Bank');
+  await expect(dialog).toContainText('Verkkokauppa.com');
+});
