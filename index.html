@@ -590,7 +590,9 @@ function render(){
     if(h.assetType!=="fund"&&target>0){
       const diff=weight-target;
       const cls=Math.abs(diff)<=1?"weightOk":diff>1?"weightHigh":"weightLow";
-      weightHtml=`<span class="weightBadge ${cls}">${weight.toFixed(1)}→${target.toFixed(1)}%</span>`;
+      const wf=weight.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1});
+      const tf=target.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1});
+      weightHtml=`<span class="weightBadge ${cls}">Paino ${wf} % · tavoite ${tf} %</span>`;
     }
     const b=document.createElement("button");
     b.className="item";
@@ -1402,7 +1404,7 @@ async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;
 function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
 async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
 async function fxRate(from,to){if(from===to)return 1;const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);const j=await r.json();return n(j.rates?.[to])||1}
-function exportBackup(){const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
+function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
 async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
 async function importCsv(e){const f=e.target.files?.[0];if(!f)return;const rows=parseCsv(await f.text()),arr=[];for(const r of rows){if(!r.symbol)continue;arr.push({id:uid(),symbol:r.symbol.trim().toUpperCase(),name:(r.name||"").trim(),quantity:n(r.quantity),buyPrice:n(r.buy_price),currency:(r.currency||state.baseCurrency).trim().toUpperCase(),account:((r.account||"").trim()==="Nordea"?"OST":(r.account||"").trim()==="Nordnet"?"AOT":(r.account||"").trim()),providerSymbol:(r.provider_symbol||r.symbol).trim(),manualStop:opt(r.manual_stop),trailingPct:n(r.trailing_pct)||12,riskClass:["low","medium","high"].includes(r.risk_class)?r.risk_class:"medium"})}if(arr.length){state.holdings=arr;save();render();alert(`Tuotu ${arr.length} omistusta.`)}e.target.value=""}
 function parseCsv(t){const ls=t.replace(/^\uFEFF/,"").split(/\r?\n/).filter(x=>x.trim());if(ls.length<2)return[];const d=ls[0].includes(";")?";":",",h=line(ls[0],d).map(x=>x.trim().toLowerCase());return ls.slice(1).map(l=>{const v=line(l,d),o={};h.forEach((x,i)=>o[x]=v[i]||"");return o})}
