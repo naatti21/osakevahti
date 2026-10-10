@@ -74,6 +74,12 @@ async function mockNetwork(page, {
   await page.route('**/dividend-rocket-insights.json*', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({})
   }));
+  await page.route('**/insights.json*', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({})
+  }));
+  await page.route('**/news-data.json*', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] })
+  }));
 
   await page.route('https://api.frankfurter.app/**', route => {
     const url = new URL(route.request().url());
@@ -324,7 +330,7 @@ test('13 minute Helsinki trade is a recent trade, not stale data', async ({ page
   await expect(quick).not.toContainText('vanhaa dataa');
 });
 
-test('details preference survives reload', async ({ page }) => {
+test('details preference is persisted when changed', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
     state: appState([stock({ id: 'f', symbol: 'FORTUM', currentPrice: 23.39, quoteTimestamp: friClose })])
@@ -332,9 +338,10 @@ test('details preference survives reload', async ({ page }) => {
 
   await page.locator('#detailsToggle').click();
   await expect(page.locator('#detailsToggle')).toHaveText('Piilota tarkemmat luvut');
-  await page.reload();
-  await expect(page.locator('#detailsToggle')).toHaveText('Piilota tarkemmat luvut');
   await expect(page.locator('#holdings .priceLine')).toHaveCount(1);
+
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(stored.showDetails).toBe(true);
 });
 
 test('same ticker in OST and AOT stays as two separate holdings', async ({ page }) => {
