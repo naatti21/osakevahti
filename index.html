@@ -383,7 +383,7 @@ function ensureInstrumentIdentity(h,source="migration"){
     listingTicker,
     mic,
     exchange,
-    currency:normalizedIdText(old.currency||h.currency||state?.baseCurrency||"EUR"),
+    currency:normalizedIdText(old.currency||h.currency||"EUR"),
     providerSymbol,
     dataKey:normalizedIdText(old.dataKey||legacyDataKey(listingTicker)),
     source:String(old.source||source),
