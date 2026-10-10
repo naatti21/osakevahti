@@ -1351,3 +1351,74 @@ test('noisy broker OCR text still finds holdings from explicit kpl anchors', asy
   await expect(dialog).toContainText('Nordea Bank');
   await expect(dialog).toContainText('Verkkokauppa.com');
 });
+
+
+test('raw Nordea OCR text fallback recovers holdings when structured OCR lines are unusable', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  const rawText = [
+    'Sijoitukset N',
+    'Arvo yhteensä 6 207,31 EUR',
+    'Käytettävissä oleva saldo',
+    '23,30 EUR',
+    'Arvonmuutos',
+    '+48,83% (+2 028,88 EUR)',
+    'Arvonmuutos 1 päivä',
+    '-0,41% (-25,60 EUR) V',
+    'N Suodata tuloksia',
+    'Muutos Kurssi Omistus',
+    'Osakkeet',
+    '- . N ; R',
+    'S Advanced Micro Devices, Inc. GEENI a >',
+    '. 2011,54 EUR',
+    "Fortum 0 ' >",
+    '- % 86 kpl',
+    'i» Nordea Bank Abp N >',
+    '91 kpl',
+    '. 18,17 EUR',
+    'i» Verkkokauppa.com Oyj SET - >',
+    '141 kpl',
+    'Rahastot',
+    'Nordea Pohjoismaat Indeksi Select 503,04 EUR',
+    'N',
+    'A 49,7 kpl',
+    '&-',
+    'O S of E) O)',
+    'Katsaus Maksa Sijoita Palvelumme Tuki'
+  ].join('\n');
+
+  await page.evaluate(text => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text,
+      // Simulate the real failure mode: TSV grouping is unusable even though plain OCR text is readable.
+      lines: [
+        { text: 'Sijoitukset N Arvo yhteensä 6 207,31 EUR Muutos Kurssi Omistus', confidence: 70 },
+        { text: 'garbled layout row', confidence: 40 }
+      ]
+    });
+  }, rawText);
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'nordea-real-layout.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([137, 80, 78, 71])
+  });
+
+  await expect(page.locator('#imageImportStatus')).toContainText('4 omistusehdokasta');
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Fortum');
+  await expect(dialog).toContainText('86 kpl');
+  await expect(dialog).toContainText('Nordea Bank Abp N');
+  await expect(dialog).toContainText('91 kpl');
+  await expect(dialog).toContainText('Verkkokauppa.com Oyj SET -');
+  await expect(dialog).toContainText('141 kpl');
+  await expect(dialog).toContainText('Nordea Pohjoismaat Indeksi Select');
+  await expect(dialog).toContainText('49.7 kpl');
+  await expect(dialog).not.toContainText('Nordea Pohjoismaat Indeksi Select 503,04 EUR');
+});
