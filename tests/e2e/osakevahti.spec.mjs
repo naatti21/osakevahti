@@ -1124,7 +1124,7 @@ test('user can correct OCR text locally and re-run the same resolver pipeline', 
 
   await page.evaluate(() => {
     window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
-      text: 'Microsoft Corporation\\nTicker MSFT\\n2 kpI\\nGAV 400 USD',
+      text: 'Microsoft Corporation\nTicker MSFT\n2 kpI\nGAV 400 USD',
       lines: [
         { text: 'Microsoft Corporation', confidence: 98 },
         { text: 'Ticker MSFT', confidence: 98 },
@@ -1144,7 +1144,7 @@ test('user can correct OCR text locally and re-run the same resolver pipeline', 
 
   await expect(page.locator('#imageImportStatus')).toContainText('yhtään omistusriviä ei tunnistettu');
   await page.locator('#ocrTextDetails summary').click();
-  await page.locator('#imageOcrText').fill('Microsoft Corporation\\nTicker MSFT\\n2 kpl\\nGAV 400 USD');
+  await page.locator('#imageOcrText').fill('Microsoft Corporation\nTicker MSFT\n2 kpl\nGAV 400 USD');
   await page.locator('#reparseOcrBtn').click();
 
   const dialog = page.locator('#importReviewDlg');
