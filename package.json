@@ -3,8 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "test": "playwright test",
-    "test:smoke": "playwright test --grep @smoke"
+    "test": "playwright test --grep-invert @ocr-stress",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0"
