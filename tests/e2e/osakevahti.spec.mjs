@@ -947,3 +947,228 @@ test('comma CSV keeps quoted company names intact', async ({ page }) => {
   expect(saved.holdings[0].name).toBe('Microsoft, Corporation');
   expect(saved.holdings[0].buyPrice).toBeCloseTo(400.5, 6);
 });
+
+
+test('screenshot import uses local OCR text and keeps existing holdings intact', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'fortum-existing', symbol: 'FORTUM', name: 'Fortum', quantity: 86, currentPrice: 14, quoteTimestamp: friClose })
+    ]),
+    network: {
+      instrumentResolver: {
+        'Microsoft Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          },
+          {
+            symbol: 'MSF.DE', longname: 'Microsoft Corporation',
+            exchange: 'GER', exchange_display: 'XETRA', full_exchange_name: 'XETRA',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.evaluate(() => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text: 'Microsoft Corporation\\nTicker MSFT\\n2 kpl\\nGAV 400 USD',
+      lines: [
+        { text: 'Microsoft Corporation', confidence: 98 },
+        { text: 'Ticker MSFT', confidence: 98 },
+        { text: '2 kpl', confidence: 98 },
+        { text: 'GAV 400 USD', confidence: 98 }
+      ]
+    });
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'portfolio.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([137, 80, 78, 71])
+  });
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('AUTOMAATTINEN');
+  await expect(dialog).toContainText('MSFT · NasdaqGS · USD');
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(2);
+  expect(saved.holdings.some(h => h.id === 'fortum-existing')).toBeTruthy();
+  const msft = saved.holdings.find(h => h.symbol === 'MSFT');
+  expect(msft.quantity).toBe(2);
+  expect(msft.buyPrice).toBe(400);
+  expect(msft.importMeta.source).toBe('screenshot:portfolio.png');
+});
+
+test('screenshot IQM without explicit ticker stays in review instead of being guessed', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'IQM Quantum Computers': [
+          {
+            symbol: 'IQM', longname: 'IQM Quantum Computers',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          },
+          {
+            symbol: 'IQMX.HE', longname: 'IQM Quantum Computers',
+            exchange: 'HEL', exchange_display: 'Helsinki', full_exchange_name: 'Helsinki',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'EUR'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.evaluate(() => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text: 'IQM Quantum Computers\\n55 kpl\\nGAV 9,84 EUR',
+      lines: [
+        { text: 'IQM Quantum Computers', confidence: 97 },
+        { text: '55 kpl', confidence: 96 },
+        { text: 'GAV 9,84 EUR', confidence: 95 }
+      ]
+    });
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'iqm.jpg',
+    mimeType: 'image/jpeg',
+    buffer: Buffer.from([255, 216, 255])
+  });
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('TARKISTA');
+  await expect(dialog).toContainText('IQM · NasdaqGS · USD');
+  await expect(dialog).toContainText('IQMX.HE · Helsinki · EUR');
+
+  const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(before.holdings).toHaveLength(0);
+
+  await dialog.getByRole('button', { name: /IQMX\.HE/ }).click();
+  page.once('dialog', d => d.accept());
+  await page.locator('#confirmImportReview').click();
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].symbol).toBe('IQMX.HE');
+  expect(saved.holdings[0].instrument.identification).toBe('user-confirmed');
+});
+
+test('low confidence screenshot quantity does not change portfolio', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([
+      stock({ id: 'keep-me', symbol: 'FORTUM', name: 'Fortum', quantity: 10, quoteTimestamp: friClose })
+    ])
+  });
+
+  await page.evaluate(() => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text: 'Microsoft Corporation\\n2 kpl\\nGAV 400 USD',
+      lines: [
+        { text: 'Microsoft Corporation', confidence: 98 },
+        { text: '2 kpl', confidence: 32 },
+        { text: 'GAV 400 USD', confidence: 96 }
+      ]
+    });
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'blurry.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([137, 80, 78, 71])
+  });
+
+  await expect(page.locator('#importReviewDlg')).not.toBeVisible();
+  await expect(page.locator('#imageImportStatus')).toContainText('yhtään omistusriviä ei tunnistettu');
+
+  const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
+  expect(saved.holdings).toHaveLength(1);
+  expect(saved.holdings[0].id).toBe('keep-me');
+});
+
+test('user can correct OCR text locally and re-run the same resolver pipeline', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([]),
+    network: {
+      instrumentResolver: {
+        'Microsoft Corporation': [
+          {
+            symbol: 'MSFT', longname: 'Microsoft Corporation',
+            exchange: 'NMS', exchange_display: 'NASDAQ', full_exchange_name: 'NasdaqGS',
+            quote_type: 'EQUITY', instrument_type: 'EQUITY', currency: 'USD'
+          }
+        ]
+      }
+    }
+  });
+
+  await page.evaluate(() => {
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({
+      text: 'Microsoft Corporation\\nTicker MSFT\\n2 kpI\\nGAV 400 USD',
+      lines: [
+        { text: 'Microsoft Corporation', confidence: 98 },
+        { text: 'Ticker MSFT', confidence: 98 },
+        { text: '2 kpI', confidence: 96 },
+        { text: 'GAV 400 USD', confidence: 96 }
+      ]
+    });
+  });
+
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'ocr-typo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([137, 80, 78, 71])
+  });
+
+  await expect(page.locator('#imageImportStatus')).toContainText('yhtään omistusriviä ei tunnistettu');
+  await page.locator('#ocrTextDetails summary').click();
+  await page.locator('#imageOcrText').fill('Microsoft Corporation\\nTicker MSFT\\n2 kpl\\nGAV 400 USD');
+  await page.locator('#reparseOcrBtn').click();
+
+  const dialog = page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('AUTOMAATTINEN');
+});
+
+test('image OCR helper module loads without contacting OCR CDN until recognition is requested', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00',
+    state: appState([])
+  });
+
+  const result = await page.evaluate(async () => {
+    const mod = await import('./image-reader.js');
+    const tsv = [
+      'level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext',
+      '5\\t1\\t1\\t1\\t1\\t1\\t10\\t20\\t80\\t18\\t96\\tMicrosoft',
+      '5\\t1\\t1\\t1\\t1\\t2\\t100\\t20\\t100\\t18\\t95\\tCorporation'
+    ].join('\\n');
+    return mod.tsvToLines(tsv, '');
+  });
+
+  expect(result).toHaveLength(1);
+  expect(result[0].text).toBe('Microsoft Corporation');
+  expect(result[0].confidence).toBeGreaterThan(95);
+});
