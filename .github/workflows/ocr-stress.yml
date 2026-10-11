@@ -1,6 +1,15 @@
 name: OCR stress
 
 on:
+  # Test OCR changes on PRs before merge. This job is advisory on pull requests
+  # while known OCR stress limitations remain open; see step summary/artifacts.
+  pull_request:
+    paths:
+      - "image-reader.js"
+      - "index.html"
+      - "tests/e2e/**"
+      - "package.json"
+      - ".github/workflows/ocr-stress.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
@@ -40,7 +49,32 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run real OCR stress tests
+        id: ocr
+        # Keep existing push/schedule failures blocking. PR checks are advisory
+        # until the currently failing OCR fixtures are fixed and independently QA'd.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: npm run test:ocr
+
+      - name: Summarize OCR result
+        if: always()
+        shell: bash
+        env:
+          OCR_OUTCOME: ${{ steps.ocr.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          {
+            echo '### OCR stress — real Tesseract diagnostics'
+            echo "Result: **${OCR_OUTCOME}**"
+            if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
+              echo 'PR mode: **advisory**. Failures do not pass OCR QA and do not block the separate Quality gate.'
+            else
+              echo 'Main/scheduled/manual mode: test failures are **blocking** for this workflow.'
+            fi
+            echo 'See the test step and the uploaded report for failed assertions and OCR images.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$OCR_OUTCOME" != 'success' ]]; then
+            echo "::warning::OCR stress ${OCR_OUTCOME}; inspect report and fix failures before requiring this check."
+          fi
 
       - name: Upload OCR stress report
         if: always()
