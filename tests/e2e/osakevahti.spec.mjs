@@ -1098,7 +1098,7 @@ test('low confidence quantity without a strong unit does not change portfolio', 
   });
 
   await expect(page.locator('#importReviewDlg')).not.toBeVisible();
-  await expect(page.locator('#imageImportStatus')).toContainText('yhtään omistusriviä ei tunnistettu');
+  await expect(page.locator('#imageImportStatus')).toContainText('Korjaa poimittu teksti');
 
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
   expect(saved.holdings).toHaveLength(1);
@@ -1142,7 +1142,7 @@ test('user can correct OCR text locally and re-run the same resolver pipeline', 
     buffer: Buffer.from([137, 80, 78, 71])
   });
 
-  await expect(page.locator('#imageImportStatus')).toContainText('yhtään omistusriviä ei tunnistettu');
+  await expect(page.locator('#imageImportStatus')).toContainText('Korjaa poimittu teksti');
   await page.locator('#ocrTextDetails summary').click();
   await page.locator('#imageOcrText').fill('Microsoft Corporation\nTicker MSFT\n2 kpl\nGAV 400 USD');
   await page.locator('#reparseOcrBtn').click();
@@ -1346,7 +1346,10 @@ test('noisy broker OCR text still finds holdings from explicit kpl anchors', asy
 
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
-  await expect(page.locator('#imageImportStatus')).toContainText('3 omistusehdokasta');
+  await expect(page.locator('#imageImportStatus')).toContainText('4 omistusehdokasta');
+  await expect(dialog).toContainText('Advanced Micro Devices');
+  await expect(dialog).toContainText('Määrä puuttuu');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
   await expect(dialog).toContainText('Fortum');
   await expect(dialog).toContainText('Nordea Bank');
   await expect(dialog).toContainText('Verkkokauppa.com');
@@ -1409,9 +1412,11 @@ test('raw Nordea OCR text fallback recovers holdings when structured OCR lines a
     buffer: Buffer.from([137, 80, 78, 71])
   });
 
-  await expect(page.locator('#imageImportStatus')).toContainText('4 omistusehdokasta');
+  await expect(page.locator('#imageImportStatus')).toContainText('omistusehdokasta');
   const dialog = page.locator('#importReviewDlg');
   await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Advanced Micro Devices');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
   await expect(dialog).toContainText('Fortum');
   await expect(dialog).toContainText('86 kpl');
   await expect(dialog).toContainText('Nordea Bank Abp N');
@@ -1450,7 +1455,7 @@ test('OCR invalid neighboring record blocks entire import and survives reload', 
   await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
   await expect(dlg).toContainText('Virheellinen hankintahinta');
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
-  await expect(dlg.locator('[data-unverified="1"]')).toHaveCount(1);
+  await expect(dlg.locator('[data-unverified="1"]')).toHaveCount(0);
   const unchanged = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).holdings, KEY);
   expect(unchanged).toHaveLength(1);
   expect(unchanged[0].quantity).toBe(2);
