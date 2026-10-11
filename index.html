@@ -1635,7 +1635,12 @@ function instrumentIdentityConflict(h,c){
     if(cls(sourceName)&&cls(candidateName)&&cls(sourceName)!==cls(candidateName))return true;
   }
   const srcMarkets=[i.mic,i.exchange].filter(Boolean).map(canonicalImportMarket);
-  const dstMarkets=[c.mic,c.exchange,c.full_exchange_name,c.exchange_name,c.exchange_display].filter(Boolean).map(canonicalImportMarket);
+  // Display-only exchange brands (e.g. NASDAQ) are less specific than the trading venue.
+  // Still check every concrete venue field, including exchange_name (e.g. HEL).
+  const dstMarkets=[c.mic,c.exchange,c.full_exchange_name,c.exchange_name,c.exchange_display]
+    .filter(Boolean).map(canonicalImportMarket)
+    .filter(x=>x!=="nasdaq" || ![c.mic,c.exchange,c.full_exchange_name,c.exchange_name]
+      .filter(Boolean).map(canonicalImportMarket).some(m=>m==="xnas"));
   if(new Set(srcMarkets).size>1||new Set(dstMarkets).size>1)return true;
   if(srcMarkets.length&&dstMarkets.length&&srcMarkets[0]!==dstMarkets[0])return true;
   const sourceType=String(h.assetType||i.assetType||"").toLowerCase();
@@ -1662,6 +1667,10 @@ async function fetchInstrumentCandidates(h){
 }
 async function resolveImportedHolding(h){
   const i=h.instrument||{};
+  if(h.importMeta?.validationErrors?.length){
+    return {status:"invalid-ocr",holding:h,ready:false,provider:"",candidates:[],selected:-1,
+      reason:"Virheellinen tai ristiriitainen lähdetietue: "+h.importMeta.validationErrors.join("; ")+". Korjaa OCR-teksti ennen tallennusta."};
+  }
   if(false && i.identification==="explicit-source" && (i.isin||i.mic||i.exchange)){
     return {status:"explicit",holding:h,ready:true,provider:"lähdetiedosto",candidates:[],selected:-1,reason:"Lähdetiedosto sisälsi listauksen tunnistetietoja."};
   }
@@ -1753,13 +1762,15 @@ function renderImportReview(){
     const cls=action.kind==="add"||action.kind==="update"?"ok":x.ready?"manual":"watch";
     const chosen=x.selected>=0?x.candidates[x.selected]:null;
     const resolvedLine=chosen?formatCandidate(chosen):x.status==="explicit"?[i.listingTicker,i.exchange,i.currency].filter(Boolean).join(" · "):"";
-    const options=(x.candidates||[]).slice(0,3).map((cand,ci)=>`<button type="button" class="importCandidate ${x.selected===ci?"selected":""}" data-import-row="${idx}" data-candidate="${ci}"><strong>${esc(formatCandidate(cand)||cand.symbol)}</strong><span>${esc(cand.longname||cand.shortname||"")} · osuma ${cand._score??0} · ${esc((cand._reasons||[]).join(", ")||"ei lisäperustetta")}</span></button>`).join("");
+    const observed=h.importMeta?.sourceIdentifiers||{};
+    const observedText=[observed.mic?"MIC "+observed.mic:"",observed.isin?"ISIN "+observed.isin:"",observed.exchange?"Pörssi "+observed.exchange: ""].filter(Boolean).join(" · ");
+    const options=(x.status==="invalid-ocr"?[]:(x.candidates||[])).slice(0,3).map((cand,ci)=>`<button type="button" class="importCandidate ${x.selected===ci?"selected":""}" data-import-row="${idx}" data-candidate="${ci}"><strong>${esc(formatCandidate(cand)||cand.symbol)}</strong><span>${esc(cand.longname||cand.shortname||"")} · osuma ${cand._score??0} · ${esc((cand._reasons||[]).join(", ")||"ei lisäperustetta")}</span></button>`).join("");
     const leave=`<button type="button" class="importCandidate ${x.ready&&x.status==="unverified"?"selected":""}" data-import-row="${idx}" data-unverified="1"><strong>Jätä tunnistamatta</strong><span>Säilytä lähderivi ilman arvattua listausta. Kurssi- ja riskidata voivat jäädä puutteellisiksi.</span></button>`;
-    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}<br>${esc(action.detail)}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(x.reason||"")}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${leave}</div>`}</div>`;
+    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}${observedText?`<br>Lähdehavainto (vahvistamatta): ${esc(observedText)}`:""}<br>${esc(action.detail)}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(x.reason||"")}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${x.status==="invalid-ocr"?"":leave}</div>`}</div>`;
   }).join("");
   $("importReviewList").querySelectorAll("[data-import-row]").forEach(btn=>btn.onclick=()=>{
     const ri=n(btn.dataset.importRow),row=pendingImport.rows[ri];
-    if(!row)return;
+    if(!row||row.status==="invalid-ocr")return;
     if(btn.dataset.unverified==="1"){
       row.ready=true;row.status="unverified";row.selected=-1;
       row.holding.instrument={...row.holding.instrument,identification:"unverified",source:row.holding.instrument?.source||row.holding.importMeta?.source||"import"};
@@ -1874,7 +1885,7 @@ function mergeImportedHoldings(existing,incoming){
   return {holdings:out,added,updated};
 }
 function commitPendingImport(){
-  if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>importActionForRow(x).kind==="review"))return;
+  if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>x.holding?.importMeta?.validationErrors?.length||importActionForRow(x).kind==="review"))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
   state.holdings=merged.holdings;
@@ -2039,10 +2050,15 @@ function quantityFromOcrLine(text){
     try{value=parseImportBuyPrice(raw)}catch(_){}
     return {value,index:(m.index||0)+m[0].indexOf(m[1]),strongUnit:true};
   }
-  const named=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:=]?\s*([-+]?\d[\d\s.,]*)/i);
-  if(!named)return null;
-  let value=null;try{value=parseImportBuyPrice(named[1].trim())}catch(_){}
-  return {value,index:named.index||0,strongUnit:false};
+  const named=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:=]?\s*([^\s]+(?:\s+\d{3})*)/i);
+  if(named){
+    let value=null;try{value=parseImportBuyPrice(named[1].trim())}catch(_){}
+    return {value,index:named.index||0,strongUnit:false};
+  }
+  // Keep malformed quantities as invalid observations rather than name anchors.
+  const malformed=s.match(/(?:^|\s)([-+]?\S+)\s*(?:kpl|pcs?|shares?|osaketta|st)\b/i);
+  if(malformed)return {value:null,index:(malformed.index||0)+malformed[0].indexOf(malformed[1]),strongUnit:true};
+  return null;
 }
 function priceFromOcrLine(text){
   const s=String(text||"").trim();
@@ -2067,30 +2083,38 @@ function cleanOcrName(text){
 function plausibleOcrName(text){
   const s=cleanOcrName(text);
   const letters=(s.match(/[A-Za-zÅÄÖåäö]/g)||[]).length;
-  if(s.length<3 || letters<4)return false;
+  if(s.length<3 || letters<4 || /^[-+]?\d/.test(s))return false;
   if(/^(?:ticker|symbol|tikkeri|tunnus)\b/i.test(s))return false;
   if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell|osakkeet)\b/i.test(s))return false;
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
   return true;
 }
 function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={}){
-  // Each observation belongs to at most one semantic holding record.
+  // Preserve *every* recognizable record, including invalid records. Never silently
+  // turn a partially parsed image into an approved partial portfolio import.
   const lines=(sourceLines||[]).map((row,sourceIndex)=>({
     text:String(row?.text??row??"").replace(/\s+/g," ").trim(),
     confidence:Number.isFinite(row?.confidence)?row.confidence:null,
     sourceIndex
   })).filter(row=>row.text);
   const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
-  const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text));
+  const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
+  const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
+  const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
     const row=lines[i],q=quantityFromOcrLine(row.text);
     const prefix=q?cleanOcrName(row.text.slice(0,q.index)):"";
     if(q&&plausibleOcrName(prefix))names.push({index:i,name:prefix});
-    else if(!isField(row.text)&&plausibleOcrName(row.text))names.push({index:i,name:cleanOcrName(row.text)});
+    else if(!isField(row.text)&&plausibleOcrName(row.text)){
+      const word=cleanOcrName(row.text);
+      if(names.length && names[names.length-1].index===i-1 &&
+          /^(?:Corporation|Incorporated|Inc\.?|Ltd\.?|PLC|Oyj|Abp)$/i.test(word)){
+        names[names.length-1].name+=" "+word;
+      }else names.push({index:i,name:word});
+    }
   }
   if(!names.length)return [];
-  // The start of a record can precede its name (type/ticker labels).
   const starts=names.map((item,k)=>{
     let start=item.index;
     const floor=k?names[k-1].index+1:0;
@@ -2106,28 +2130,40 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   for(let k=0;k<names.length;k++){
     const begin=starts[k],end=k+1<names.length?starts[k+1]:lines.length;
     const rows=lines.slice(begin,end);
+    const errors=[];
     const quantities=rows.map(row=>({row,q:quantityFromOcrLine(row.text)})).filter(x=>x.q);
-    if(quantities.length!==1)continue;
-    const {row:quantityRow,q}=quantities[0];
-    if(!q.value||q.value<=0||requireStrongUnit&&!q.strongUnit)continue;
-    if(!q.strongUnit&&quantityRow.confidence!=null&&quantityRow.confidence<55)continue;
-    const prices=rows.map(row=>priceFromOcrLine(row.text)).filter(Boolean);
-    if(prices.some(p=>p.invalid)||prices.length>1)continue;
+    const validQuantities=quantities.filter(x=>x.q.value>0);
+    if(quantities.length!==1||validQuantities.length!==1)errors.push("Määrä puuttuu, on virheellinen tai ristiriitainen");
+    const quantityRow=quantities[0]?.row||lines[names[k].index],q=quantities[0]?.q;
+    if(q&&!q.strongUnit&&requireStrongUnit)errors.push("Määrän yksikkö puuttuu");
+    if(q&&!q.strongUnit&&quantityRow.confidence!=null&&quantityRow.confidence<55)errors.push("Määrän OCR-varmuus on liian heikko");
+    const prices=rows.map(row=>({row,price:priceFromOcrLine(row.text)})).filter(x=>x.price);
+    if(prices.some(x=>x.price.invalid))errors.push("Virheellinen hankintahinta");
+    const validPrices=prices.filter(x=>!x.price.invalid).map(x=>x.price);
+    const uniquePrices=new Set(validPrices.map(x=>x.value));
+    const uniquePriceCurrencies=new Set(validPrices.map(x=>x.currency).filter(Boolean));
+    if(uniquePrices.size>1||uniquePriceCurrencies.size>1)errors.push("Ristiriitaiset hankintahinnat");
     const tickers=[...new Set(rows.map(row=>explicitTickerFromOcr(row.text)).filter(Boolean))];
-    if(tickers.length>1)continue;
+    if(tickers.length>1)errors.push("Ristiriitaiset tickerit");
     const types=rows.map(row=>row.text.match(/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i)?.[1]?.toLowerCase()).filter(Boolean).map(v=>({rahasto:"fund",osake:"stock"})[v]||v);
-    if(new Set(types).size>1)continue;
-    const p=prices[0];
-    const currency=p?.currency||rows.map(row=>currencyFromOcr(row.text)).find(Boolean)||"";
-    out.push({name:names[k].name,quantity:q.value,buyPrice:p?.value??null,currency,symbol:tickers[0]||"",assetType:types[0]||"",sourceLine:quantityRow.sourceIndex+1});
+    if(new Set(types).size>1)errors.push("Ristiriitaiset instrumenttilajit");
+    const explicitCurrencies=rows.filter(row=>!isSummary(row.text)).map(row=>currencyFromOcr(row.text)).filter(Boolean);
+    if(new Set(explicitCurrencies).size>1)errors.push("Ristiriitaiset valuuttatiedot");
+    const currency=validPrices[0]?.currency||explicitCurrencies[0]||"";
+    const isinValues=rows.map(row=>row.text.match(/^\s*ISIN\s*[:\-]?\s*([A-Z0-9]{12})\b/i)?.[1]?.toUpperCase()).filter(Boolean);
+    const micValues=rows.map(row=>row.text.match(/^\s*MIC\s*[:\-]?\s*([A-Z0-9]{4})\b/i)?.[1]?.toUpperCase()).filter(Boolean);
+    const exchangeValues=rows.map(row=>row.text.match(/^\s*(?:Exchange|Market|Pörssi|Porssi)\s*[:\-]?\s*(.+)$/i)?.[1]?.trim()).filter(Boolean);
+    if(new Set(isinValues).size>1||isinValues.some(v=>!validImportIsin(v)))errors.push("Virheellinen tai ristiriitainen ISIN-lähdehavainto");
+    if(new Set(micValues).size>1)errors.push("Ristiriitaiset MIC-lähdehavainnot");
+    if(new Set(exchangeValues.map(canonicalImportMarket)).size>1)errors.push("Ristiriitaiset markkinapaikat");
+    if(micValues[0]&&exchangeValues[0]&&canonicalImportMarket(micValues[0])!==canonicalImportMarket(exchangeValues[0]))errors.push("MIC ja markkinapaikka ovat ristiriidassa");
+    out.push({name:names[k].name,quantity:q?.value??null,buyPrice:validPrices[0]?.value??null,
+      currency,symbol:tickers[0]||"",assetType:types[0]||"",isin:isinValues[0]||"",mic:micValues[0]||"",exchange:exchangeValues[0]||"",
+      sourceLine:quantityRow.sourceIndex+1,sourceRows:rows.map(r=>({line:r.sourceIndex+1,text:r.text})),validationErrors:errors});
   }
-  const dedup=[],seen=new Set();
-  for(const x of out){
-    const key=[cleanNameToken(x.name),x.quantity,x.symbol,x.currency].join("|");
-    if(seen.has(key))continue;
-    seen.add(key);dedup.push(x);
-  }
-  return dedup;
+  // Do not deduplicate at this stage: duplicates with different quantities, MICs or
+  // invalid evidence must remain available to the batch conflict guard.
+  return out;
 }
 function screenshotCandidatesFromOcr(ocr){
   const structured=screenshotCandidatesFromLines(ocr?.lines||[]);
@@ -2140,9 +2176,11 @@ function holdingFromOcrCandidate(x,source){
   return {
     id:uid(),symbol:listingTicker,name:String(x.name||"").trim(),quantity:n(x.quantity),buyPrice:n(x.buyPrice),
     currency:normalizedIdText(x.currency),account:"",providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
-    importMeta:{source,rowNumber:x.sourceLine||null,importedAt:new Date().toISOString(),provided:{buyPrice:x.buyPrice!=null&&Number.isFinite(Number(x.buyPrice)),trailingPct:false,riskClass:false,targetWeight:false}},
+    importMeta:{source,rowNumber:x.sourceLine||null,sourceRows:x.sourceRows||[],validationErrors:x.validationErrors||[],
+      sourceIdentifiers:{isin:normalizedIdText(x.isin),mic:normalizedIdText(x.mic),exchange:String(x.exchange||""),verification:"unverified"},
+      importedAt:new Date().toISOString(),provided:{buyPrice:x.buyPrice!=null&&Number.isFinite(Number(x.buyPrice)),trailingPct:false,riskClass:false,targetWeight:false}},
     instrument:{
-      schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:String(x.name||"").trim(),isin:"",listingTicker,mic:"",exchange:"",
+      schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:String(x.name||"").trim(),isin:"",listingTicker,mic:normalizedIdText(x.mic),exchange:String(x.exchange||""),
       currency:normalizedIdText(x.currency),providerSymbol:"",dataKey:legacyDataKey(listingTicker),assetType:x.assetType||"",source,identification:"unverified"
     }
   };
@@ -2156,8 +2194,10 @@ async function runOcrCandidateImport(ocr,source){
     $("imageImportStatus").textContent="Teksti saatiin kuvasta, mutta yhtään omistusriviä ei tunnistettu riittävän varmasti. Salkkua ei muutettu. Voit korjata poimittua tekstiä ja yrittää uudelleen.";
     return;
   }
-  $("imageImportStatus").className="statusBox statusOk";
-  $("imageImportStatus").textContent="Kuvasta löytyi "+candidates.length+" omistusehdokasta. Tarkista instrumentit ennen tallennusta.";
+  const invalidCount=candidates.filter(x=>x.validationErrors?.length).length;
+  $("imageImportStatus").className="statusBox "+(invalidCount?"statusBad":"statusOk");
+  $("imageImportStatus").textContent="Kuvasta löytyi "+candidates.length+" omistusehdokasta."+
+    (invalidCount?" "+invalidCount+" tietueessa on ristiriita. Korjaa poimittu teksti: tallennus estetty.":" Tarkista instrumentit ennen tallennusta.");
   await startImportReview(candidates.map(x=>holdingFromOcrCandidate(x,source)));
 }
 async function extractScreenshotOcr(file,onProgress){
