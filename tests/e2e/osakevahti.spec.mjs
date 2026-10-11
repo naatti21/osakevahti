@@ -1593,3 +1593,90 @@ test('distinct unverified source ISIN values never merge in same batch', async (
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
 });
+
+
+async function pasteQa8Table(page, text) {
+  await page.locator('[data-view="settingsView"]').click();
+  if(!(await page.locator('#importText').isVisible())) {
+    await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  }
+  await page.locator('#importText').fill(text);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toBeVisible();
+}
+function qa8Listing(q,isin='',mic='XNAS') {
+  return ['Ticker;Nimi;Kpl;Keskihinta;Valuutta;ISIN;MIC',
+    'ASTR;Aster Devices Corporation;'+q+';35;USD;'+isin+';'+mic].join('\n');
+}
+
+test('QA8: omitted ISIN keeps earlier source evidence and later conflict blocks approval', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
+    instrumentResolver:{'Aster Devices Corporation':[{
+      symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
+      quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS'
+    }]}
+  }});
+  await pasteQa8Table(page,qa8Listing(12,'US5949181045'));
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  await page.reload();
+  await pasteQa8Table(page,qa8Listing(15,''));
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  await page.reload();
+  const afterOmitted=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(afterOmitted).toHaveLength(1);
+  expect(afterOmitted[0].quantity).toBe(15);
+  expect(afterOmitted[0].importMeta.sourceIdentifiers.isin).toBe('US5949181045');
+  const originalId=afterOmitted[0].id;
+  await pasteQa8Table(page,qa8Listing(20,'FI4000297767'));
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  await page.reload();
+  const afterConflict=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(afterConflict).toHaveLength(1);
+  expect(afterConflict[0].id).toBe(originalId);
+  expect(afterConflict[0].quantity).toBe(15);
+  expect(afterConflict[0].importMeta.sourceIdentifiers.isin).toBe('US5949181045');
+});
+
+test('QA8: two identifiers on one OCR line must block approval', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  for(const conflictingLine of ['ISIN US5949181045 FI4000297767','MIC XNAS XHEL']){
+    await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\n'+conflictingLine);
+    await expect(page.locator('#imageImportStatus')).toContainText('Korjaa poimittu teksti');
+    await expect(page.locator('#confirmImportReview')).not.toBeVisible();
+    expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+  }
+});
+
+test('QA8: two different MIC and source ISIN listings import as separate holdings', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
+    instrumentResolver:{'Aster Devices Corporation':[
+      {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XNAS',exchange:'XNAS',full_exchange_name:'NasdaqGS'},
+      {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XHEL',exchange:'XHEL',full_exchange_name:'Helsinki'}
+    ]}
+  }});
+  const table=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;ISIN;MIC',
+    'ASTR;Aster Devices Corporation;12;35;USD;US5949181045;XNAS',
+    'ASTR;Aster Devices Corporation;15;35;USD;FI4000297767;XHEL'].join('\n');
+  await pasteQa8Table(page,table);
+  await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  await page.reload();
+  const holdings=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(holdings).toHaveLength(2);
+  expect(new Set(holdings.map(h=>h.instrument.mic))).toEqual(new Set(['XNAS','XHEL']));
+  expect(new Set(holdings.map(h=>h.importMeta.sourceIdentifiers.isin))).toEqual(new Set(['US5949181045','FI4000297767']));
+});
+
+test('QA8: compatible XNAS and NASDAQ OCR venues are not contradictory', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nMIC XNAS\nExchange NASDAQ');
+  await expect(page.locator('#importReviewDlg')).toBeVisible();
+  await expect(page.locator('#importReviewDlg')).not.toContainText('MIC ja markkinapaikka ovat ristiriidassa');
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+});
