@@ -1422,3 +1422,70 @@ test('raw Nordea OCR text fallback recovers holdings when structured OCR lines a
   await expect(dialog).toContainText('49.7 kpl');
   await expect(dialog).not.toContainText('Nordea Pohjoismaat Indeksi Select 503,04 EUR');
 });
+
+
+test('OCR invalid neighboring record blocks entire import and survives reload', async ({ page }) => {
+  const initial = stock({ id: 'old', symbol: 'ASTR', name: 'Aster Devices Corporation',
+    quantity: 2, buyPrice: 100, currency: 'USD', account: '' });
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00', state: appState([initial]),
+    network: { instrumentResolver: {
+      'Aster Devices Corporation': [{ symbol: 'ASTR', longname: 'Aster Devices Corporation',
+        currency: 'USD', quote_type: 'EQUITY', exchange: 'NMS',
+        full_exchange_name: 'NasdaqGS', exchange_display: 'NASDAQ' }]
+    } }
+  });
+  await page.evaluate(() => {
+    const text = 'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\n'
+      + 'Aster Devices Corporation\nTicker ASTR\n15 kpl\nGAV 12oops USD';
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({ text, lines: [] });
+  });
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'contradiction.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71])
+  });
+  const dlg = page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
+  await expect(dlg).toContainText('Virheellinen hankintahinta');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  await expect(dlg.locator('[data-unverified="1"]')).toHaveCount(1);
+  const unchanged = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).holdings, KEY);
+  expect(unchanged).toHaveLength(1);
+  expect(unchanged[0].quantity).toBe(2);
+  expect(unchanged[0].buyPrice).toBe(100);
+  await page.reload();
+  const after = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).holdings, KEY);
+  expect(after[0].id).toBe('old');
+  expect(after[0].quantity).toBe(2);
+  expect(after[0].buyPrice).toBe(100);
+});
+
+test('OCR distinct MIC evidence stays visible and cannot be auto-merged', async ({ page }) => {
+  await openApp(page, {
+    time: '2026-10-10T08:00:00+03:00', state: appState([]),
+    network: { instrumentResolver: {
+      'Aster Devices Corporation': [{ symbol: 'ASTR', longname: 'Aster Devices Corporation',
+        currency: 'USD', quote_type: 'EQUITY', exchange: 'NMS',
+        full_exchange_name: 'NasdaqGS', exchange_display: 'NASDAQ' }]
+    } }
+  });
+  await page.evaluate(() => {
+    const text = 'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nMIC XHEL\n'
+      + 'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nMIC XNAS';
+    window.__OSAKEVAHTI_TEST_OCR__ = async () => ({ text, lines: [] });
+  });
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({
+    name: 'markets.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71])
+  });
+  const dlg = page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
+  await expect(dlg).toContainText('MIC XHEL');
+  await expect(dlg).toContainText('MIC XNAS');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).holdings, KEY)).toHaveLength(0);
+});
