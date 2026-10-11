@@ -1818,10 +1818,20 @@ function canonicalImportMarket(value){
     xetr:"xetr",ger:"xetr",xetra:"xetr"};
   return aliases[v]||v;
 }
+function sourceIsinConflict(a,b){
+  const rawA=normalizedIdText(a.importMeta?.sourceIdentifiers?.isin);
+  const rawB=normalizedIdText(b.importMeta?.sourceIdentifiers?.isin);
+  if(rawA&&rawB&&rawA!==rawB)return true;
+  const verifiedA=normalizedIdText(a.instrument?.isin),verifiedB=normalizedIdText(b.instrument?.isin);
+  if(rawA&&verifiedB&&rawA!==verifiedB)return true;
+  if(rawB&&verifiedA&&rawB!==verifiedA)return true;
+  return false;
+}
 function strongIdentityConflict(a,b){
   const ai=a.instrument||{},bi=b.instrument||{};
   const aIsin=normalizedIdText(ai.isin),bIsin=normalizedIdText(bi.isin);
   if(aIsin&&bIsin&&aIsin!==bIsin)return true;
+  if(sourceIsinConflict(a,b))return true;
   const am=normalizedIdText(ai.mic),bm=normalizedIdText(bi.mic);
   if(am&&bm&&am!==bm)return true;
   const ae=canonicalImportMarket(ai.mic||ai.exchange),be=canonicalImportMarket(bi.mic||bi.exchange);
@@ -1834,6 +1844,7 @@ function batchImportConflicts(rows){
   for(let x=0;x<rows.length;x++)for(let y=x+1;y<rows.length;y++){
     const a=rows[x].holding,b=rows[y].holding;
     const same=holdingIdentityKey(a)===holdingIdentityKey(b) || (holdingFallbackKey(a)&&holdingFallbackKey(a)===holdingFallbackKey(b)) || (simpleListingKey(a)&&simpleListingKey(a)===simpleListingKey(b) && (!a.account||!b.account));
+    if(same&&sourceIsinConflict(a,b))return true;
     if(same&&strongIdentityConflict(a,b))continue;
     if(same && Number(a.quantity)!==Number(b.quantity))return true;
   }
@@ -1869,6 +1880,7 @@ function mergeImportedHoldings(existing,incoming){
       if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))idx=matches[0].i;
     }
     if(idx!=null){
+      if(sourceIsinConflict(h,out[idx]))return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
       if(old.instrument?.identification==="resolved" && old.instrument?.isin && !h.instrument?.isin && normalizedIdText(old.instrument.listingTicker)===normalizedIdText(h.instrument?.listingTicker))merged.instrument={...h.instrument,isin:old.instrument.isin};
       if(!h.manualStop)merged.manualStop=old.manualStop;
@@ -1886,8 +1898,11 @@ function mergeImportedHoldings(existing,incoming){
 }
 function commitPendingImport(){
   if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>x.holding?.importMeta?.validationErrors?.length||importActionForRow(x).kind==="review"))return;
+  // A previous observation cannot be overwritten by a different unverified ISIN.
+  if(pendingImport.rows.some(r=>state.holdings.some(old=>simpleListingKey(old) && simpleListingKey(old)===simpleListingKey(r.holding) && sourceIsinConflict(old,r.holding))))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
+  if(merged.conflict)return;
   state.holdings=merged.holdings;
   save();render();
   const unresolved=incoming.filter(h=>h.instrument?.identification==="unverified").length;
@@ -2041,18 +2056,32 @@ function currencyFromOcr(text){
   if(/\bGBP\b|£/.test(s))return "GBP";
   return "";
 }
+function parseOcrQuantityToken(raw){
+  try{return parseImportBuyPrice(raw)}catch(_){
+    if(/^[+-]?\d{1,3}(?: \d{3})+(?:\.\d+)?$/.test(String(raw).trim())){
+      const value=Number(String(raw).trim().replace(/ /g,""));
+      return Number.isFinite(value)?value:null;
+    }
+    return null;
+  }
+}
+function currenciesObservedInOcr(text){
+  const s=String(text||"").toUpperCase();
+  return [...s.matchAll(/\b(?:USD|EUR|SEK|NOK|GBP)\b|[$€£]/g)]
+    .map(m=>({"$":"USD","€":"EUR","£":"GBP"})[m[0]]||m[0]);
+}
 function quantityFromOcrLine(text){
   const s=String(text||"").trim();
   const m=s.match(/(?:^|\s)([-+]?\d[\d\s.,]*)(?=\s*(?:kpl|pcs?|shares?|osaketta|st)\b)/i);
   if(m){
     const raw=m[1].trim();
     let value=null;
-    try{value=parseImportBuyPrice(raw)}catch(_){}
+    value=parseOcrQuantityToken(raw);
     return {value,index:(m.index||0)+m[0].indexOf(m[1]),strongUnit:true};
   }
-  const named=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:=]?\s*([^\s]+(?:\s+\d{3})*)/i);
+  const named=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:=]?\s*([^\s]+(?:\s+\d[\d.,]*)*)/i);
   if(named){
-    let value=null;try{value=parseImportBuyPrice(named[1].trim())}catch(_){}
+    const value=parseOcrQuantityToken(named[1].trim());
     return {value,index:named.index||0,strongUnit:false};
   }
   // Keep malformed quantities as invalid observations rather than name anchors.
@@ -2100,7 +2129,7 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
   const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
   const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
-  const isDocumentNoise=text=>/^\s*(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings\s+summary)\b/i.test(text);
+  const isDocumentNoise=text=>/^\s*(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings(?:\s+summary)?|positions(?:\s+summary)?)\b/i.test(text);
   const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||isDocumentNoise(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
@@ -2115,9 +2144,20 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
       }else names.push({index:i,name:word});
     }
   }
-  if(!names.length)return [];
+  const meaningfulPrefix=lines.map((row,index)=>({row,index}))
+    .filter(({row,index})=>index<(names[0]?.index??lines.length)&&isField(row.text)&&!isDocumentNoise(row.text)&&!isSummary(row.text));
+  if(!names.length){
+    if(!meaningfulPrefix.length)return [];
+    return [{name:"Tunnistamaton omistus",quantity:null,buyPrice:null,currency:"",symbol:"",assetType:"",isin:"",mic:"",exchange:"",
+      sourceLine:meaningfulPrefix[0].row.sourceIndex+1,
+      sourceRows:lines.map(row=>({line:row.sourceIndex+1,text:row.text})),
+      validationErrors:["Lähde sisältää omistuskenttiä ilman tunnistettavaa nimeä"]}];
+  }
+  const leadingComplete=meaningfulPrefix.some(({row})=>quantityFromOcrLine(row.text)||priceFromOcrLine(row.text));
+  const firstField=meaningfulPrefix[0]?.index??names[0].index;
   const starts=names.map((item,k)=>{
     let start=item.index;
+    if(k===0&&!leadingComplete&&firstField<start)start=firstField;
     const floor=k?names[k-1].index+1:0;
     while(start>floor){
       const prior=lines[start-1].text;
@@ -2128,13 +2168,21 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     return start;
   });
   const out=[];
+  if(leadingComplete){
+    const orphan=lines.slice(firstField,names[0].index);
+    out.push({name:"Tunnistamaton omistus",quantity:null,buyPrice:null,currency:"",symbol:"",assetType:"",isin:"",mic:"",exchange:"",
+      sourceLine:orphan[0].sourceIndex+1,sourceRows:orphan.map(row=>({line:row.sourceIndex+1,text:row.text})),
+      validationErrors:["Omistuskentät ennen ensimmäistä tunnistettua nimeä: tarkista tietueiden rajat"]});
+  }
   for(let k=0;k<names.length;k++){
     const begin=starts[k],end=k+1<names.length?starts[k+1]:lines.length;
     const rows=lines.slice(begin,end);
     const errors=[];
     const quantities=rows.map(row=>({row,q:quantityFromOcrLine(row.text)})).filter(x=>x.q);
     const validQuantities=quantities.filter(x=>x.q.value>0);
-    if(quantities.length!==1||validQuantities.length!==1)errors.push("Määrä puuttuu, on virheellinen tai ristiriitainen");
+    const quantityValues=new Set(validQuantities.map(x=>x.q.value));
+    if(!quantities.length||quantities.some(x=>!(x.q.value>0))||quantityValues.size!==1)
+      errors.push("Määrä puuttuu, on virheellinen tai ristiriitainen");
     const quantityRow=quantities[0]?.row||lines[names[k].index],q=quantities[0]?.q;
     if(q&&!q.strongUnit&&requireStrongUnit)errors.push("Määrän yksikkö puuttuu");
     if(q&&!q.strongUnit&&quantityRow.confidence!=null&&quantityRow.confidence<55)errors.push("Määrän OCR-varmuus on liian heikko");
@@ -2148,14 +2196,17 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     if(tickers.length>1)errors.push("Ristiriitaiset tickerit");
     const types=rows.map(row=>row.text.match(/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i)?.[1]?.toLowerCase()).filter(Boolean).map(v=>({rahasto:"fund",osake:"stock"})[v]||v);
     if(new Set(types).size>1)errors.push("Ristiriitaiset instrumenttilajit");
-    const explicitCurrencies=rows.filter(row=>!isSummary(row.text)).map(row=>currencyFromOcr(row.text)).filter(Boolean);
+    const explicitCurrencies=rows.filter(row=>!isSummary(row.text)).flatMap(row=>currenciesObservedInOcr(row.text));
     if(new Set(explicitCurrencies).size>1)errors.push("Ristiriitaiset valuuttatiedot");
     const currency=validPrices[0]?.currency||explicitCurrencies[0]||"";
-    const isinValues=rows.map(row=>row.text.match(/^\s*ISIN\s*[:\-]?\s*([A-Z0-9]{12})\b/i)?.[1]?.toUpperCase()).filter(Boolean);
-    const micValues=rows.map(row=>row.text.match(/^\s*MIC\s*[:\-]?\s*([A-Z0-9]{4})\b/i)?.[1]?.toUpperCase()).filter(Boolean);
+    // Capture the full raw identifier BEFORE validation: otherwise e.g. 13-digit
+    // ISIN / 5-character MIC can disappear and look like no source evidence.
+    const isinValues=rows.map(row=>row.text.match(/^\s*ISIN\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
+    const micValues=rows.map(row=>row.text.match(/^\s*MIC\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
     const exchangeValues=rows.map(row=>row.text.match(/^\s*(?:Exchange|Market|Pörssi|Porssi)\s*[:\-]?\s*(.+)$/i)?.[1]?.trim()).filter(Boolean);
     if(new Set(isinValues).size>1||isinValues.some(v=>!validImportIsin(v)))errors.push("Virheellinen tai ristiriitainen ISIN-lähdehavainto");
-    if(new Set(micValues).size>1)errors.push("Ristiriitaiset MIC-lähdehavainnot");
+    if(new Set(micValues).size>1||micValues.some(v=>!/^[A-Z0-9]{4}$/.test(v)))
+      errors.push("Virheellinen tai ristiriitainen MIC-lähdehavainto");
     if(new Set(exchangeValues.map(canonicalImportMarket)).size>1)errors.push("Ristiriitaiset markkinapaikat");
     if(micValues[0]&&exchangeValues[0]&&canonicalImportMarket(micValues[0])!==canonicalImportMarket(exchangeValues[0]))errors.push("MIC ja markkinapaikka ovat ristiriidassa");
     out.push({name:names[k].name,quantity:q?.value??null,buyPrice:validPrices[0]?.value??null,
