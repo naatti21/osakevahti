@@ -27,7 +27,7 @@ function appState(holdings = [], extra = {}) {
 
 async function seed(page, state) {
   await page.addInitScript(({ key, value }) => {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(value));
   }, { key: KEY, value: state });
 }
 
@@ -698,10 +698,14 @@ test('CSV import auto-resolves a clear MSFT listing but still requires preview a
   expect(saved.holdings[0].instrument.exchange).toBe('NasdaqGS');
 });
 
-test('CSV import keeps explicit MIC and exchange identity without remote guessing', async ({ page }) => {
+test('CSV import retains explicit MIC evidence after verified resolver match', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
-    state: appState([])
+    state: appState([]),
+    network: { instrumentResolver: { 'Microsoft Corporation': [
+      {symbol:'MSFT',longname:'Microsoft Corporation',currency:'USD',quote_type:'EQUITY',
+       exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}
+    ] } }
   });
 
   await page.locator('[data-view="settingsView"]').click();
@@ -727,9 +731,11 @@ test('CSV import keeps explicit MIC and exchange identity without remote guessin
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
   const msft = saved.holdings[0];
   expect(msft.instrument.mic).toBe('XNAS');
-  expect(msft.instrument.exchange).toBe('NASDAQ');
+  expect(msft.instrument.exchange).toBe('NasdaqGS');
+  expect(msft.importMeta.sourceIdentifiers.mic).toBe('XNAS');
+  expect(msft.importMeta.sourceIdentifiers.exchange).toBe('NASDAQ');
   expect(msft.instrument.providerSymbol).toBe('MSFT');
-  expect(msft.instrument.identification).toBe('explicit-source');
+  expect(msft.instrument.identification).toBe('resolved');
 });
 
 
@@ -779,7 +785,11 @@ test('pasted Finnish spreadsheet table imports through the same preview and pres
 test('repeating the same explicit import updates the holding instead of duplicating it', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
-    state: appState([])
+    state: appState([]),
+    network: { instrumentResolver: { 'Microsoft Corporation': [
+      {symbol:'MSFT',longname:'Microsoft Corporation',currency:'USD',quote_type:'EQUITY',
+       exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}
+    ] } }
   });
 
   await page.locator('[data-view="settingsView"]').click();
@@ -886,7 +896,11 @@ test('missing currency is not silently defaulted to EUR and resolver may supply 
 test('semicolon table supports Finnish headers and decimal comma', async ({ page }) => {
   await openApp(page, {
     time: '2026-10-10T08:00:00+03:00',
-    state: appState([])
+    state: appState([]),
+    network: { instrumentResolver: { 'Nordea Bank': [
+      {symbol:'NDA-FI',longname:'Nordea Bank',currency:'EUR',quote_type:'EQUITY',
+       exchange:'HEL',full_exchange_name:'Helsinki'}
+    ] } }
   });
 
   await page.locator('[data-view="settingsView"]').click();
@@ -1195,7 +1209,11 @@ test('import preview clearly distinguishes a new holding from an update', async 
     time: '2026-10-10T08:00:00+03:00',
     state: appState([
       stock({ id: 'msft-existing', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose })
-    ])
+    ]),
+    network: { instrumentResolver: {
+      'Microsoft Corporation': [{symbol:'MSFT',longname:'Microsoft Corporation',currency:'USD',quote_type:'EQUITY',exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}],
+      'NVIDIA Corporation': [{symbol:'NVDA',longname:'NVIDIA Corporation',currency:'USD',quote_type:'EQUITY',exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}]
+    } }
   });
 
   await page.locator('#importPortfolioBtn').click();
@@ -1220,7 +1238,11 @@ test('accountless import updates a unique existing listing and preserves its acc
     time: '2026-10-10T08:00:00+03:00',
     state: appState([
       stock({ id: 'msft-existing', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose })
-    ])
+    ]),
+    network: { instrumentResolver: { 'Microsoft Corporation': [
+      {symbol:'MSFT',longname:'Microsoft Corporation',currency:'USD',quote_type:'EQUITY',
+       exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}
+    ] } }
   });
 
   await page.locator('#importPortfolioBtn').click();
@@ -1252,7 +1274,11 @@ test('accountless import refuses to guess when the same listing exists in multip
     state: appState([
       stock({ id: 'msft-aot', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 2, buyPrice: 390, currentPrice: 410, currency: 'USD', account: 'AOT', quoteTimestamp: friClose }),
       stock({ id: 'msft-ost', symbol: 'MSFT', name: 'Microsoft Corporation', quantity: 1, buyPrice: 380, currentPrice: 410, currency: 'USD', account: 'OST', quoteTimestamp: friClose })
-    ])
+    ]),
+    network: { instrumentResolver: { 'Microsoft Corporation': [
+      {symbol:'MSFT',longname:'Microsoft Corporation',currency:'USD',quote_type:'EQUITY',
+       exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'}
+    ] } }
   });
 
   await page.locator('#importPortfolioBtn').click();
