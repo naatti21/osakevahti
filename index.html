@@ -1634,10 +1634,9 @@ function instrumentIdentityConflict(h,c){
     const cls=v=>String(v).match(/\b(?:class|series|sarja)\s*([A-Z])\b/i)?.[1]?.toUpperCase()||"";
     if(cls(sourceName)&&cls(candidateName)&&cls(sourceName)!==cls(candidateName))return true;
   }
-  const sourceMarket=normalizedIdText(i.mic);
-  const candidateMarket=normalizedIdText(c.mic||c.exchange);
+  const sourceMarket=canonicalImportMarket(i.mic||i.exchange);
+  const candidateMarket=canonicalImportMarket(c.mic||c.exchange||c.full_exchange_name);
   if(sourceMarket&&candidateMarket&&sourceMarket!==candidateMarket)return true;
-  if(i.exchange&&c.full_exchange_name&&cleanNameToken(i.exchange)!==cleanNameToken(c.full_exchange_name))return true;
   const sourceType=String(h.assetType||i.assetType||"").toLowerCase();
   const candidateType=String(c.instrument_type||c.quote_type||"").toUpperCase();
   if(sourceType==="fund"&&candidateType&&candidateType!=="MUTUALFUND"&&candidateType!=="FUND")return true;
@@ -1672,7 +1671,10 @@ async function resolveImportedHolding(h){
   }).sort((a,b)=>b._score-a._score).slice(0,5);
   const top=ranked[0],second=ranked[1];
   const margin=top?(top._score-(second?second._score:0)):0;
-  if(top && top._score>=85 && margin>=15 && !instrumentIdentityConflict(h,top)){
+  const marketEvidence=!i.mic || (canonicalImportMarket(i.mic) && canonicalImportMarket(top?.mic||top?.exchange||top?.full_exchange_name)===canonicalImportMarket(i.mic));
+  const currencyEvidence=!(i.currency||h.currency) || !!normalizedIdText(top?.currency);
+  const sourceMicKnown=!i.mic || /^(XHEL|XNAS|XETR)$/.test(normalizedIdText(i.mic));
+  if(top && top._score>=85 && margin>=15 && marketEvidence && currencyEvidence && sourceMicKnown && !instrumentIdentityConflict(h,top)){
     h.instrument=instrumentFromCandidate(h,top,"resolved");
     h.providerSymbol=h.instrument.providerSymbol;
     h.symbol=h.instrument.listingTicker;
@@ -1791,13 +1793,20 @@ function holdingIdentityKey(h){
   if(!listing&&!isin&&!company)return "";
   return [account,isin||"noisin",listing||company,market||"nomarket",currency||"noccy"].join("|");
 }
+function canonicalImportMarket(value){
+  const v=cleanNameToken(value).replace(/[^a-z0-9]/g,"");
+  const aliases={xhel:"xhel",hel:"xhel",helsinki:"xhel",nasdaqhelsinki:"xhel",
+    xnas:"xnas",nms:"xnas",nasdaqgs:"xnas",nasdaqglobalmarket:"xnas",
+    xetr:"xetr",ger:"xetr",xetra:"xetr"};
+  return aliases[v]||v;
+}
 function strongIdentityConflict(a,b){
   const ai=a.instrument||{},bi=b.instrument||{};
   const aIsin=normalizedIdText(ai.isin),bIsin=normalizedIdText(bi.isin);
   if(aIsin&&bIsin&&aIsin!==bIsin)return true;
   const am=normalizedIdText(ai.mic),bm=normalizedIdText(bi.mic);
   if(am&&bm&&am!==bm)return true;
-  const ae=cleanNameToken(ai.exchange),be=cleanNameToken(bi.exchange);
+  const ae=canonicalImportMarket(ai.mic||ai.exchange),be=canonicalImportMarket(bi.mic||bi.exchange);
   if(ae&&be&&ae!==be)return true;
   const ac=normalizedIdText(ai.currency||a.currency),bc=normalizedIdText(bi.currency||b.currency);
   if(ac&&bc&&ac!==bc)return true;
@@ -1928,6 +1937,18 @@ function normalizedAccount(v){
   if(raw==="Nordnet")return "AOT";
   return raw;
 }
+function parseImportBuyPrice(raw){
+  const t=String(raw??"").trim();
+  if(!t)return null;
+  let normalized;
+  if(/^[+-]?\d+(?:\.\d+)?$/.test(t))normalized=t;
+  else if(/^[+-]?\d+(?:,\d+)?$/.test(t))normalized=t.replace(",",".");
+  else if(/^[+-]?\d{1,3}(?:[ .]\d{3})+,(?:\d+)$/.test(t))normalized=t.replace(/[ .]/g,"").replace(",",".");
+  else throw new Error("Virheellinen hankintahinnan numeromuoto.");
+  const value=Number(normalized);
+  if(!Number.isFinite(value))throw new Error("Hankintahinta on liian suuri.");
+  return value;
+}
 function holdingFromImportRow(r,source){
   const listingTicker=normalizedIdText(r.listing_ticker||r.symbol);
   const name=String(r.name||"").trim();
@@ -1951,10 +1972,12 @@ function holdingFromImportRow(r,source){
     targetWeight:String(r.target_weight??"").trim()!=="",
     buyPrice:String(r.buy_price??"").trim()!==""
   };
-  if(provided.buyPrice && !/^[+-]?(?:\d+(?:[.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:,\d+)?)$/.test(String(r.buy_price).trim()))throw new Error("Rivi "+(r._rowNumber||"?")+": virheellinen hankintahinta.");
+  let parsedBuyPrice=null;
+  if(provided.buyPrice)try{parsedBuyPrice=parseImportBuyPrice(r.buy_price)}
+  catch(err){throw new Error("Rivi "+(r._rowNumber||"?")+": "+err.message)}
   return {
     id:uid(),symbol:listingTicker,name,quantity,
-    buyPrice:provided.buyPrice?Number(String(r.buy_price).trim().replace(/[ .](?=\d{3}(?:[ .,]|$))/g,"").replace(",",".")):0,
+    buyPrice:provided.buyPrice?parsedBuyPrice:0,
     currency,account:normalizedAccount(r.account),providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
     manualStop:opt(r.manual_stop),
     trailingPct:provided.trailingPct?n(r.trailing_pct):12,
@@ -2056,14 +2079,16 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
       }
     }
     if(!name)continue;
-    let buyPrice=0,currency="",symbol="";
+    let buyPrice=null,currency="",symbol="",assetType="";
     for(const row of context){
       const p=priceFromOcrLine(row.text);
       if(p?.value!=null){buyPrice=p.value;if(p.currency)currency=p.currency}
       if(!currency)currency=currencyFromOcr(row.text);
       if(!symbol)symbol=explicitTickerFromOcr(row.text);
+      const tm=row.text.match(/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i);
+      if(tm)assetType=({rahasto:"fund",osake:"stock"})[tm[1].toLowerCase()]||tm[1].toLowerCase();
     }
-    out.push({name,quantity:q.value,buyPrice,currency,symbol,sourceLine:i+1});
+    out.push({name,quantity:q.value,buyPrice,currency,symbol,assetType,sourceLine:i+1});
   }
   const dedup=[],seen=new Set();
   for(const x of out){
@@ -2083,11 +2108,11 @@ function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
   return {
     id:uid(),symbol:listingTicker,name:String(x.name||"").trim(),quantity:n(x.quantity),buyPrice:n(x.buyPrice),
-    currency:normalizedIdText(x.currency),account:"",providerSymbol:"",manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
+    currency:normalizedIdText(x.currency),account:"",providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
     importMeta:{source,rowNumber:x.sourceLine||null,importedAt:new Date().toISOString(),provided:{buyPrice:x.buyPrice!=null&&Number.isFinite(Number(x.buyPrice)),trailingPct:false,riskClass:false,targetWeight:false}},
     instrument:{
       schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:String(x.name||"").trim(),isin:"",listingTicker,mic:"",exchange:"",
-      currency:normalizedIdText(x.currency),providerSymbol:"",dataKey:legacyDataKey(listingTicker),source,identification:"unverified"
+      currency:normalizedIdText(x.currency),providerSymbol:"",dataKey:legacyDataKey(listingTicker),assetType:x.assetType||"",source,identification:"unverified"
     }
   };
 }
