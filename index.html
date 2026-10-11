@@ -2019,7 +2019,7 @@ function holdingFromImportRow(r,source){
     trailingPct:provided.trailingPct?n(r.trailing_pct):12,
     riskClass:["low","medium","high"].includes(riskRaw)?riskRaw:"medium",
     targetWeight:opt(r.target_weight),
-    importMeta:{source,rowNumber:r._rowNumber||null,importedAt:new Date().toISOString(),provided},
+    importMeta:{source,rowNumber:r._rowNumber||null,sourceIdentifiers:{isin,mic,exchange,verification:"unverified"},importedAt:new Date().toISOString(),provided},
     instrument:{
       schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:name,isin,listingTicker,mic,exchange,currency,providerSymbol,
       dataKey:legacyDataKey(listingTicker),assetType:sourceType,source,identification:explicitIdentity?"explicit-source":"unverified"
