@@ -1634,7 +1634,8 @@ function instrumentIdentityConflict(h,c){
     const cls=v=>String(v).match(/\b(?:class|series|sarja)\s*([A-Z])\b/i)?.[1]?.toUpperCase()||"";
     if(cls(sourceName)&&cls(candidateName)&&cls(sourceName)!==cls(candidateName))return true;
   }
-  const srcMarkets=[i.mic,i.exchange].filter(Boolean).map(canonicalImportMarket);
+  const srcMarkets=[i.mic,i.exchange].filter(Boolean).map(canonicalImportMarket)
+    .filter(x=>x!=="nasdaq" || canonicalImportMarket(i.mic)!=="xnas");
   // Display-only exchange brands (e.g. NASDAQ) are less specific than the trading venue.
   // Still check every concrete venue field, including exchange_name (e.g. HEL).
   const dstMarkets=[c.mic,c.exchange,c.full_exchange_name,c.exchange_name,c.exchange_display]
@@ -2201,8 +2202,8 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     const currency=validPrices[0]?.currency||explicitCurrencies[0]||"";
     // Capture the full raw identifier BEFORE validation: otherwise e.g. 13-digit
     // ISIN / 5-character MIC can disappear and look like no source evidence.
-    const isinValues=rows.map(row=>row.text.match(/^\s*ISIN\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
-    const micValues=rows.map(row=>row.text.match(/^\s*MIC\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
+    const isinValues=rows.map(row=>row.text.match(/^\s*ISIN\b\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
+    const micValues=rows.map(row=>row.text.match(/^\s*MIC\b\s*[:\-]?\s*(\S*)/i)?.[1]?.toUpperCase()).filter(v=>v!=null);
     const exchangeValues=rows.map(row=>row.text.match(/^\s*(?:Exchange|Market|Pörssi|Porssi)\s*[:\-]?\s*(.+)$/i)?.[1]?.trim()).filter(Boolean);
     if(new Set(isinValues).size>1||isinValues.some(v=>!validImportIsin(v)))errors.push("Virheellinen tai ristiriitainen ISIN-lähdehavainto");
     if(new Set(micValues).size>1||micValues.some(v=>!/^[A-Z0-9]{4}$/.test(v)))
