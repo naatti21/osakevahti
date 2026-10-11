@@ -1520,3 +1520,76 @@ test('OCR distinct MIC evidence stays visible and cannot be auto-merged', async 
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).holdings, KEY)).toHaveLength(0);
 });
+
+
+async function importOcrText(page, text) {
+  await page.evaluate(value => { window.__OSAKEVAHTI_TEST_OCR__ = async () => ({text:value,lines:[]}); }, text);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({ hasText: 'Salkun tuonti' }).click();
+  await page.locator('#importImage').setInputFiles({name:'source.png',mimeType:'image/png',buffer:Buffer.from([137,80,78,71])});
+}
+const ASTR_MATCH = { 'Aster Devices Corporation': [{
+  symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',
+  exchange:'NMS',full_exchange_name:'NasdaqGS',exchange_display:'NASDAQ'
+}] };
+
+test('orphan quantity before first OCR name is visible and blocks batch', async ({ page }) => {
+  await openApp(page, {time:'2026-10-10T08:00:00+03:00',state:appState([stock({id:'old',symbol:'ASTR',name:'Aster Devices Corporation',account:'',currency:'USD',quantity:2,buyPrice:100})]),network:{instrumentResolver:ASTR_MATCH}});
+  await importOcrText(page,'Ticker ASTR\n15 kpl\nGAV 100 USD\nAster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD');
+  const dialog=page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
+  await expect(dialog).toContainText('Tunnistamaton omistus');
+  await expect(dialog).toContainText('Omistuskentät ennen ensimmäistä');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  const before=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(before[0].id).toBe('old');expect(before[0].quantity).toBe(2);
+  expect(before[0].buyPrice).toBe(100);
+});
+
+test('invalid long ISIN remains visible and prevents OCR approval', async ({ page }) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nISIN US59491810450');
+  await expect(page.locator('#imageImportStatus')).toContainText('Korjaa poimittu teksti');
+  await expect(page.locator('#confirmImportReview')).not.toBeVisible();
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
+
+test('same-row USD/EUR currency contradiction blocks OCR batch', async ({ page }) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nCurrency USD EUR');
+  await expect(page.locator('#imageImportStatus')).toContainText('Korjaa poimittu teksti');
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
+
+test('OCR Holdings heading does not prevent verified import and reload persists it', async ({ page }) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  await importOcrText(page,'Holdings\nAster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD');
+  await expect(page.locator('#importReviewSummary')).toContainText('1 riviä');
+  await expect(page.locator('#importReviewDlg')).toContainText('LISÄTÄÄN');
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(saved).toHaveLength(1);expect(saved[0].quantity).toBe(12);expect(saved[0].buyPrice).toBe(35);
+  const stableId=saved[0].id;
+  await page.reload();
+  const after=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+  expect(after).toHaveLength(1);expect(after[0].id).toBe(stableId);
+  expect(after[0].quantity).toBe(12);expect(after[0].buyPrice).toBe(35);
+});
+
+test('distinct unverified source ISIN values never merge in same batch', async ({ page }) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{instrumentResolver:ASTR_MATCH}});
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  await page.locator('#importText').fill([
+    'Ticker\tNimi\tKpl\tKeskihinta\tValuutta\tISIN',
+    'ASTR\tAster Devices Corporation\t12\t35\tUSD\tUS0079031078',
+    'ASTR\tAster Devices Corporation\t12\t35\tUSD\tFI4000297767'].join('\n'));
+  await page.locator('#importTextBtn').click();
+  const dialog=page.locator('#importReviewDlg');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#importReviewSummary')).toContainText('2 riviä');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
