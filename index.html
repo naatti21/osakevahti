@@ -1600,7 +1600,7 @@ function instrumentFromCandidate(h,candidate,identification="resolved"){
   return {
     schemaVersion:INSTRUMENT_SCHEMA_VERSION,
     companyName:String(candidate.longname||candidate.shortname||current.companyName||h.name||"").trim(),
-    isin:normalizedIdText(candidate.isin||""),
+    isin:normalizedIdText(candidate.isin||((current.identification==="resolved" && current.isin)?current.isin:"")),
     listingTicker:normalizedIdText(candidate.symbol||current.listingTicker||h.symbol),
     mic:normalizedIdText(current.mic),
     exchange:String(candidate.full_exchange_name||candidate.exchange_display||candidate.exchange_name||candidate.exchange||current.exchange||"").trim(),
@@ -1635,7 +1635,7 @@ function instrumentIdentityConflict(h,c){
     if(cls(sourceName)&&cls(candidateName)&&cls(sourceName)!==cls(candidateName))return true;
   }
   const srcMarkets=[i.mic,i.exchange].filter(Boolean).map(canonicalImportMarket);
-  const dstMarkets=[c.mic,c.exchange,c.full_exchange_name].filter(Boolean).map(canonicalImportMarket);
+  const dstMarkets=[c.mic,c.exchange,c.full_exchange_name,c.exchange_name,c.exchange_display].filter(Boolean).map(canonicalImportMarket);
   if(new Set(srcMarkets).size>1||new Set(dstMarkets).size>1)return true;
   if(srcMarkets.length&&dstMarkets.length&&srcMarkets[0]!==dstMarkets[0])return true;
   const sourceType=String(h.assetType||i.assetType||"").toLowerCase();
@@ -1664,6 +1664,10 @@ async function resolveImportedHolding(h){
   const i=h.instrument||{};
   if(false && i.identification==="explicit-source" && (i.isin||i.mic||i.exchange)){
     return {status:"explicit",holding:h,ready:true,provider:"lähdetiedosto",candidates:[],selected:-1,reason:"Lähdetiedosto sisälsi listauksen tunnistetietoja."};
+  }
+  if(i.isin){
+    h.importMeta=h.importMeta||{};
+    h.importMeta.sourceIdentifiers={...(h.importMeta.sourceIdentifiers||{}),isin:normalizedIdText(i.isin),verification:"unverified"};
   }
   const found=await fetchInstrumentCandidates(h);
   const ranked=(found.candidates||[]).map(c=>{
@@ -1855,6 +1859,7 @@ function mergeImportedHoldings(existing,incoming){
     }
     if(idx!=null){
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
+      if(old.instrument?.identification==="resolved" && old.instrument?.isin && !h.instrument?.isin && normalizedIdText(old.instrument.listingTicker)===normalizedIdText(h.instrument?.listingTicker))merged.instrument={...h.instrument,isin:old.instrument.isin};
       if(!h.manualStop)merged.manualStop=old.manualStop;
       if(!h.importMeta?.provided?.buyPrice)merged.buyPrice=old.buyPrice;
       if(!h.importMeta?.provided?.trailingPct)merged.trailingPct=old.trailingPct??h.trailingPct;
@@ -2073,7 +2078,7 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     text:String(row?.text??row??"").replace(/\s+/g," ").trim(),
     confidence:Number.isFinite(row?.confidence)?row.confidence:null,
     i
-  })).filter(x=>x.text);
+  })).filter(x=>x.text).map((row,i)=>({...row,i}));
   const out=[];
   for(let i=0;i<lines.length;i++){
     const q=quantityFromOcrLine(lines[i].text);
