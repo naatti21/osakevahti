@@ -64,11 +64,13 @@ export function tsvToLines(tsv, fallbackText = "") {
       .filter(row => row.text);
   }
 
-  const header = rows[0].split("\t");
+  const standardColumns = "level page_num block_num par_num line_num word_num left top width height conf text".split(" ");
+  const hasHeader = rows[0].split("\t")[0] === "level";
+  const header = hasHeader ? rows[0].split("\t") : standardColumns;
   const index = Object.fromEntries(header.map((name, i) => [name, i]));
   const grouped = new Map();
 
-  for (const row of rows.slice(1)) {
+  for (const row of (hasHeader ? rows.slice(1) : rows)) {
     const cols = row.split("\t");
     if (cols[index.level] !== "5") continue;
     const text = cleanOcrText(cols[index.text]);
