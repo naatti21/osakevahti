@@ -2100,7 +2100,8 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
   const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
   const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
-  const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
+  const isDocumentNoise=text=>/^\s*(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings\s+summary)\b/i.test(text);
+  const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||isDocumentNoise(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
     const row=lines[i],q=quantityFromOcrLine(row.text);
@@ -2167,9 +2168,12 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
 }
 function screenshotCandidatesFromOcr(ocr){
   const structured=screenshotCandidatesFromLines(ocr?.lines||[]);
-  if(structured.length)return structured;
+  // A TSV group containing only headings/noise is not evidence that the holdings
+  // were captured. Prefer raw OCR text if the structured grouping has no quantity.
+  if(structured.some(record=>record.quantity!=null))return structured;
   const textLines=String(ocr?.text||"").split(/\r?\n/).map(text=>({text,confidence:null}));
-  return screenshotCandidatesFromLines(textLines,{requireStrongUnit:true});
+  const fallback=screenshotCandidatesFromLines(textLines,{requireStrongUnit:true});
+  return fallback.length?fallback:structured;
 }
 function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
@@ -2198,6 +2202,9 @@ async function runOcrCandidateImport(ocr,source){
   $("imageImportStatus").className="statusBox "+(invalidCount?"statusBad":"statusOk");
   $("imageImportStatus").textContent="Kuvasta löytyi "+candidates.length+" omistusehdokasta."+
     (invalidCount?" "+invalidCount+" tietueessa on ristiriita. Korjaa poimittu teksti: tallennus estetty.":" Tarkista instrumentit ennen tallennusta.");
+  // When every candidate is invalid, keep the OCR editor reachable instead of
+  // covering it with a modal that cannot yet lead to any safe approval.
+  if(invalidCount===candidates.length)return;
   await startImportReview(candidates.map(x=>holdingFromOcrCandidate(x,source)));
 }
 async function extractScreenshotOcr(file,onProgress){
