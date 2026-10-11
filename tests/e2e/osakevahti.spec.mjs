@@ -1611,10 +1611,12 @@ function qa8Listing(q,isin='',mic='XNAS') {
 
 test('QA8: omitted ISIN keeps earlier source evidence and later conflict blocks approval', async ({page}) => {
   await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
-    instrumentResolver:{'Aster Devices Corporation':[{
-      symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
-      quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS'
-    }]}
+    instrumentResolver:Object.fromEntries(
+      ['Aster Devices Corporation','US5949181045','FI4000297767'].map(query=>[query,[{
+        symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
+        quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS'
+      }]])
+    )
   }});
   await pasteQa8Table(page,qa8Listing(12,'US5949181045'));
   await expect(page.locator('#confirmImportReview')).toBeEnabled();
@@ -1653,10 +1655,12 @@ test('QA8: two identifiers on one OCR line must block approval', async ({page}) 
 
 test('QA8: two different MIC and source ISIN listings import as separate holdings', async ({page}) => {
   await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
-    instrumentResolver:{'Aster Devices Corporation':[
-      {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XNAS',exchange:'XNAS',full_exchange_name:'NasdaqGS'},
-      {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XHEL',exchange:'XHEL',full_exchange_name:'Helsinki'}
-    ]}
+    instrumentResolver:Object.fromEntries(
+      ['Aster Devices Corporation','US5949181045','FI4000297767'].map(query=>[query,[
+        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XNAS',exchange:'XNAS',full_exchange_name:'NasdaqGS'},
+        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XHEL',exchange:'XHEL',full_exchange_name:'Helsinki'}
+      ]])
+    )
   }});
   const table=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;ISIN;MIC',
     'ASTR;Aster Devices Corporation;12;35;USD;US5949181045;XNAS',
