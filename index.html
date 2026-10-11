@@ -1611,6 +1611,23 @@ function instrumentFromCandidate(h,candidate,identification="resolved"){
     identification
   };
 }
+function instrumentIdentityConflict(h,c){
+  const i=h.instrument||{};
+  const srcCurrency=normalizedIdText(i.currency||h.currency);
+  const dstCurrency=normalizedIdText(c.currency);
+  if(srcCurrency&&dstCurrency&&srcCurrency!==dstCurrency)return true;
+  const srcTicker=normalizedIdText(i.listingTicker||h.symbol);
+  const dstTicker=normalizedIdText(c.symbol);
+  const sourceName=String(h.name||i.companyName||"").trim();
+  const candidateName=String(c.longname||c.shortname||"").trim();
+  if(sourceName&&candidateName&&nameSimilarity(sourceName,candidateName)<0.5)return true;
+  const sourceType=String(h.assetType||i.assetType||"").toLowerCase();
+  const candidateType=String(c.instrument_type||c.quote_type||"").toUpperCase();
+  if(sourceType==="fund"&&candidateType&&candidateType!=="MUTUALFUND"&&candidateType!=="FUND")return true;
+  if(sourceType==="etf"&&candidateType&&candidateType!=="ETF")return true;
+  if(sourceType==="stock"&&candidateType&&candidateType!=="EQUITY")return true;
+  return false;
+}
 async function fetchInstrumentCandidates(h){
   const q=resolverQueryForHolding(h);
   if(!q)return {provider:"",candidates:[],error:"Tunnistusta varten ei ole nimeä, tickeriä tai ISIN-tunnusta."};
@@ -1628,7 +1645,7 @@ async function fetchInstrumentCandidates(h){
 }
 async function resolveImportedHolding(h){
   const i=h.instrument||{};
-  if(i.identification==="explicit-source" && (i.isin||i.mic||i.exchange)){
+  if(false && i.identification==="explicit-source" && (i.isin||i.mic||i.exchange)){
     return {status:"explicit",holding:h,ready:true,provider:"lähdetiedosto",candidates:[],selected:-1,reason:"Lähdetiedosto sisälsi listauksen tunnistetietoja."};
   }
   const found=await fetchInstrumentCandidates(h);
@@ -1638,7 +1655,7 @@ async function resolveImportedHolding(h){
   }).sort((a,b)=>b._score-a._score).slice(0,5);
   const top=ranked[0],second=ranked[1];
   const margin=top?(top._score-(second?second._score:0)):0;
-  if(top && top._score>=85 && margin>=15){
+  if(top && top._score>=85 && margin>=15 && !instrumentIdentityConflict(h,top)){
     h.instrument=instrumentFromCandidate(h,top,"resolved");
     h.providerSymbol=h.instrument.providerSymbol;
     h.symbol=h.instrument.listingTicker;
@@ -1667,13 +1684,13 @@ function findExistingHoldingMatch(h){
   if(idx>=0)return {index:idx,type:"exact"};
   if(fallback){
     const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>holdingFallbackKey(x)===fallback);
-    if(matches.length===1)return {index:matches[0].i,type:"fallback"};
+    if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))return {index:matches[0].i,type:"fallback"};
   }
   if(!String(h.account||"").trim()){
     const simple=simpleListingKey(h);
     if(simple){
       const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>simpleListingKey(x)===simple);
-      if(matches.length===1)return {index:matches[0].i,type:"unique-listing"};
+      if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))return {index:matches[0].i,type:"unique-listing"};
       if(matches.length>1)return {index:-1,type:"multiple-accounts",matches:matches.map(m=>m.i)};
     }
   }
@@ -1696,11 +1713,12 @@ function importActionForRow(row){
 function renderImportReview(){
   if(!pendingImport)return;
   const actions=pendingImport.rows.map(importActionForRow);
-  const unresolved=actions.filter(a=>a.kind==="review").length;
+  const batchConflict=batchImportConflicts(pendingImport.rows);
+  const unresolved=actions.filter(a=>a.kind==="review").length+(batchConflict?1:0);
   const additions=actions.filter(a=>a.kind==="add").length;
   const updates=actions.filter(a=>a.kind==="update").length;
   $("importReviewSummary").className=`statusBox ${unresolved?"":"statusOk"}`;
-  $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}`;
+  $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}${batchConflict?" · Ristiriitaiset rivit: korjaa lähde ennen tuontia.":""}`;
   $("confirmImportReview").disabled=unresolved>0;
   $("importReviewList").innerHTML=pendingImport.rows.map((x,idx)=>{
     const h=x.holding,i=h.instrument||{};
@@ -1756,6 +1774,22 @@ function holdingIdentityKey(h){
   if(!listing&&!isin&&!company)return "";
   return [account,isin||"noisin",listing||company,market||"nomarket",currency||"noccy"].join("|");
 }
+function strongIdentityConflict(a,b){
+  const ai=a.instrument||{},bi=b.instrument||{};
+  const aIsin=normalizedIdText(ai.isin),bIsin=normalizedIdText(bi.isin);
+  if(aIsin&&bIsin&&aIsin!==bIsin)return true;
+  const ac=normalizedIdText(ai.currency||a.currency),bc=normalizedIdText(bi.currency||b.currency);
+  if(ac&&bc&&ac!==bc)return true;
+  return false;
+}
+function batchImportConflicts(rows){
+  for(let x=0;x<rows.length;x++)for(let y=x+1;y<rows.length;y++){
+    const a=rows[x].holding,b=rows[y].holding;
+    const same=holdingIdentityKey(a)===holdingIdentityKey(b) || (holdingFallbackKey(a)&&holdingFallbackKey(a)===holdingFallbackKey(b));
+    if(same && (strongIdentityConflict(a,b)||Number(a.quantity)!==Number(b.quantity)))return true;
+  }
+  return false;
+}
 function holdingFallbackKey(h){
   const i=h.instrument||{};
   const account=cleanNameToken(h.account||"");
@@ -1778,16 +1812,17 @@ function mergeImportedHoldings(existing,incoming){
     let idx=key?byKey.get(key):undefined;
     if(idx==null&&fk){
       const matches=fallback.get(fk)||[];
-      if(matches.length===1)idx=matches[0];
+      if(matches.length===1 && !strongIdentityConflict(h,out[matches[0]]))idx=matches[0];
     }
     if(idx==null&&!String(h.account||"").trim()){
       const simple=simpleListingKey(h);
       const matches=out.map((x,i)=>({x,i})).filter(({x})=>simpleListingKey(x)===simple);
-      if(matches.length===1)idx=matches[0].i;
+      if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))idx=matches[0].i;
     }
     if(idx!=null){
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
       if(!h.manualStop)merged.manualStop=old.manualStop;
+      if(!h.importMeta?.provided?.buyPrice)merged.buyPrice=old.buyPrice;
       if(!h.importMeta?.provided?.trailingPct)merged.trailingPct=old.trailingPct??h.trailingPct;
       if(!h.importMeta?.provided?.riskClass)merged.riskClass=old.riskClass||h.riskClass;
       if(!h.importMeta?.provided?.targetWeight)merged.targetWeight=old.targetWeight??h.targetWeight;
@@ -1800,7 +1835,7 @@ function mergeImportedHoldings(existing,incoming){
   return {holdings:out,added,updated};
 }
 function commitPendingImport(){
-  if(!pendingImport||pendingImport.rows.some(x=>importActionForRow(x).kind==="review"))return;
+  if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>importActionForRow(x).kind==="review"))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
   state.holdings=merged.holdings;
@@ -1883,13 +1918,15 @@ function holdingFromImportRow(r,source){
   const providerSymbol=normalizedIdText(r.provider_symbol);
   const mic=normalizedIdText(r.mic);
   const exchange=String(r.exchange||"").trim();
-  const explicitIdentity=!!(isin||mic||exchange);
+  const explicitIdentity=false; // Source identifiers are evidence, not verified identity.
   const riskRaw=String(r.risk_class||"").trim().toLowerCase();
   const provided={
     trailingPct:String(r.trailing_pct??"").trim()!=="",
     riskClass:!!riskRaw,
-    targetWeight:String(r.target_weight??"").trim()!==""
+    targetWeight:String(r.target_weight??"").trim()!=="",
+    buyPrice:String(r.buy_price??"").trim()!==""
   };
+  if(provided.buyPrice && (!Number.isFinite(n(r.buy_price)) || String(r.buy_price).trim() && !/[0-9]/.test(String(r.buy_price))))throw new Error("Rivi "+(r._rowNumber||"?")+": virheellinen hankintahinta.");
   return {
     id:uid(),symbol:listingTicker,name,quantity,
     buyPrice:String(r.buy_price??"").trim()===""?0:n(r.buy_price),
