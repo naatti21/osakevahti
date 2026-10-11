@@ -2074,46 +2074,52 @@ function plausibleOcrName(text){
   return true;
 }
 function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={}){
-  const lines=(sourceLines||[]).map((row,i)=>({
+  // Each observation belongs to at most one semantic holding record.
+  const lines=(sourceLines||[]).map((row,sourceIndex)=>({
     text:String(row?.text??row??"").replace(/\s+/g," ").trim(),
     confidence:Number.isFinite(row?.confidence)?row.confidence:null,
-    i
-  })).filter(x=>x.text).map((row,i)=>({...row,i}));
-  const out=[];
+    sourceIndex
+  })).filter(row=>row.text);
+  const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
+  const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text));
+  const names=[];
   for(let i=0;i<lines.length;i++){
-    const q=quantityFromOcrLine(lines[i].text);
-    if(!q?.value || q.value<=0)continue;
-    if(requireStrongUnit&&!q.strongUnit)continue;
-    if(!q.strongUnit && lines[i].confidence!=null && lines[i].confidence<55)continue;
-    const prevQuantity=(()=>{for(let j=i-1;j>=0;j--)if(quantityFromOcrLine(lines[j].text)?.value>0)return j;return -1})();
-    const nextQuantity=(()=>{for(let j=i+1;j<lines.length;j++)if(quantityFromOcrLine(lines[j].text)?.value>0)return j;return lines.length})();
-    const blockStart=prevQuantity+1;
-    const blockEnd=nextQuantity;
-    const context=lines.slice(blockStart,Math.min(blockEnd,i+5));
-    let name="";
-    const sameLinePrefix=cleanOcrName(lines[i].text.slice(0,q.index));
-    if(plausibleOcrName(sameLinePrefix))name=sameLinePrefix;
-    if(!name){
-      for(let j=i-1;j>=Math.max(0,i-5);j--){
-        const candidate=cleanOcrName(lines[j].text);
-        if(quantityFromOcrLine(candidate))break;
-        if(plausibleOcrName(candidate)){name=candidate;break}
-      }
+    const row=lines[i],q=quantityFromOcrLine(row.text);
+    const prefix=q?cleanOcrName(row.text.slice(0,q.index)):"";
+    if(q&&plausibleOcrName(prefix))names.push({index:i,name:prefix});
+    else if(!isField(row.text)&&plausibleOcrName(row.text))names.push({index:i,name:cleanOcrName(row.text)});
+  }
+  if(!names.length)return [];
+  // The start of a record can precede its name (type/ticker labels).
+  const starts=names.map((item,k)=>{
+    let start=item.index;
+    const floor=k?names[k-1].index+1:0;
+    while(start>floor){
+      const prior=lines[start-1].text;
+      if(quantityFromOcrLine(prior)||priceFromOcrLine(prior))break;
+      if(explicitTickerFromOcr(prior)||isType(prior)){start--;continue}
+      break;
     }
-    if(!name)continue;
-    let buyPrice=null,currency="",symbol="",assetType="";
-    const nextTicker=(()=>{for(let j=i+1;j<blockEnd;j++)if(explicitTickerFromOcr(lines[j].text))return j;return blockEnd})();
-    const scopedContext=context.filter(row=>row.i<nextTicker);
-    for(const row of scopedContext){
-      const p=priceFromOcrLine(row.text);
-      if(p?.invalid)return [];
-      if(p?.value!=null){buyPrice=p.value;if(p.currency)currency=p.currency}
-      if(!currency)currency=currencyFromOcr(row.text);
-      if(!symbol)symbol=explicitTickerFromOcr(row.text);
-      const tm=row.text.match(/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i);
-      if(tm)assetType=({rahasto:"fund",osake:"stock"})[tm[1].toLowerCase()]||tm[1].toLowerCase();
-    }
-    out.push({name,quantity:q.value,buyPrice,currency,symbol,assetType,sourceLine:i+1});
+    return start;
+  });
+  const out=[];
+  for(let k=0;k<names.length;k++){
+    const begin=starts[k],end=k+1<names.length?starts[k+1]:lines.length;
+    const rows=lines.slice(begin,end);
+    const quantities=rows.map(row=>({row,q:quantityFromOcrLine(row.text)})).filter(x=>x.q);
+    if(quantities.length!==1)continue;
+    const {row:quantityRow,q}=quantities[0];
+    if(!q.value||q.value<=0||requireStrongUnit&&!q.strongUnit)continue;
+    if(!q.strongUnit&&quantityRow.confidence!=null&&quantityRow.confidence<55)continue;
+    const prices=rows.map(row=>priceFromOcrLine(row.text)).filter(Boolean);
+    if(prices.some(p=>p.invalid)||prices.length>1)continue;
+    const tickers=[...new Set(rows.map(row=>explicitTickerFromOcr(row.text)).filter(Boolean))];
+    if(tickers.length>1)continue;
+    const types=rows.map(row=>row.text.match(/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i)?.[1]?.toLowerCase()).filter(Boolean).map(v=>({rahasto:"fund",osake:"stock"})[v]||v);
+    if(new Set(types).size>1)continue;
+    const p=prices[0];
+    const currency=p?.currency||rows.map(row=>currencyFromOcr(row.text)).find(Boolean)||"";
+    out.push({name:names[k].name,quantity:q.value,buyPrice:p?.value??null,currency,symbol:tickers[0]||"",assetType:types[0]||"",sourceLine:quantityRow.sourceIndex+1});
   }
   const dedup=[],seen=new Set();
   for(const x of out){
