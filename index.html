@@ -1600,7 +1600,7 @@ function instrumentFromCandidate(h,candidate,identification="resolved"){
   return {
     schemaVersion:INSTRUMENT_SCHEMA_VERSION,
     companyName:String(candidate.longname||candidate.shortname||current.companyName||h.name||"").trim(),
-    isin:normalizedIdText(current.isin),
+    isin:normalizedIdText(candidate.isin||""),
     listingTicker:normalizedIdText(candidate.symbol||current.listingTicker||h.symbol),
     mic:normalizedIdText(current.mic),
     exchange:String(candidate.full_exchange_name||candidate.exchange_display||candidate.exchange_name||candidate.exchange||current.exchange||"").trim(),
@@ -1634,9 +1634,10 @@ function instrumentIdentityConflict(h,c){
     const cls=v=>String(v).match(/\b(?:class|series|sarja)\s*([A-Z])\b/i)?.[1]?.toUpperCase()||"";
     if(cls(sourceName)&&cls(candidateName)&&cls(sourceName)!==cls(candidateName))return true;
   }
-  const sourceMarket=canonicalImportMarket(i.mic||i.exchange);
-  const candidateMarket=canonicalImportMarket(c.mic||c.exchange||c.full_exchange_name);
-  if(sourceMarket&&candidateMarket&&sourceMarket!==candidateMarket)return true;
+  const srcMarkets=[i.mic,i.exchange].filter(Boolean).map(canonicalImportMarket);
+  const dstMarkets=[c.mic,c.exchange,c.full_exchange_name].filter(Boolean).map(canonicalImportMarket);
+  if(new Set(srcMarkets).size>1||new Set(dstMarkets).size>1)return true;
+  if(srcMarkets.length&&dstMarkets.length&&srcMarkets[0]!==dstMarkets[0])return true;
   const sourceType=String(h.assetType||i.assetType||"").toLowerCase();
   const candidateType=String(c.instrument_type||c.quote_type||"").toUpperCase();
   if(sourceType==="fund"&&candidateType&&candidateType!=="MUTUALFUND"&&candidateType!=="FUND")return true;
@@ -1671,7 +1672,9 @@ async function resolveImportedHolding(h){
   }).sort((a,b)=>b._score-a._score).slice(0,5);
   const top=ranked[0],second=ranked[1];
   const margin=top?(top._score-(second?second._score:0)):0;
-  const marketEvidence=!i.mic || (canonicalImportMarket(i.mic) && canonicalImportMarket(top?.mic||top?.exchange||top?.full_exchange_name)===canonicalImportMarket(i.mic));
+  const sourceMarket=i.mic||i.exchange;
+  const candidateMarket=top?.mic||top?.exchange||top?.full_exchange_name;
+  const marketEvidence=!sourceMarket || (!!candidateMarket && canonicalImportMarket(sourceMarket)===canonicalImportMarket(candidateMarket));
   const currencyEvidence=!(i.currency||h.currency) || !!normalizedIdText(top?.currency);
   const sourceMicKnown=!i.mic || /^(XHEL|XNAS|XETR)$/.test(normalizedIdText(i.mic));
   if(top && top._score>=85 && margin>=15 && marketEvidence && currencyEvidence && sourceMicKnown && !instrumentIdentityConflict(h,top)){
@@ -1816,7 +1819,8 @@ function batchImportConflicts(rows){
   for(let x=0;x<rows.length;x++)for(let y=x+1;y<rows.length;y++){
     const a=rows[x].holding,b=rows[y].holding;
     const same=holdingIdentityKey(a)===holdingIdentityKey(b) || (holdingFallbackKey(a)&&holdingFallbackKey(a)===holdingFallbackKey(b)) || (simpleListingKey(a)&&simpleListingKey(a)===simpleListingKey(b) && (!a.account||!b.account));
-    if(same && (strongIdentityConflict(a,b)||Number(a.quantity)!==Number(b.quantity)))return true;
+    if(same&&strongIdentityConflict(a,b))continue;
+    if(same && Number(a.quantity)!==Number(b.quantity))return true;
   }
   return false;
 }
@@ -2023,16 +2027,25 @@ function currencyFromOcr(text){
 }
 function quantityFromOcrLine(text){
   const s=String(text||"").trim();
-  let m=s.match(/(\d+(?:[.,]\d+)?)\s*(?:kpl|pcs?|shares?|osaketta|st)\b/i);
-  if(m)return {value:ocrNumber(m[1]),index:m.index||0,strongUnit:true};
-  m=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i);
-  return m?{value:ocrNumber(m[1]),index:m.index||0,strongUnit:false}:null;
+  const m=s.match(/(?:^|\s)([-+]?\d[\d\s.,]*)(?=\s*(?:kpl|pcs?|shares?|osaketta|st)\b)/i);
+  if(m){
+    const raw=m[1].trim();
+    let value=null;
+    try{value=parseImportBuyPrice(raw)}catch(_){}
+    return {value,index:(m.index||0)+m[0].indexOf(m[1]),strongUnit:true};
+  }
+  const named=s.match(/(?:määrä|maara|quantity|qty|shares?)\s*[:=]?\s*([-+]?\d[\d\s.,]*)/i);
+  if(!named)return null;
+  let value=null;try{value=parseImportBuyPrice(named[1].trim())}catch(_){}
+  return {value,index:named.index||0,strongUnit:false};
 }
 function priceFromOcrLine(text){
   const s=String(text||"").trim();
-  const m=s.match(/(?:gav|keskihinta|hankintahinta|ostohinta|avg(?:\.|erage)?\s*(?:price|cost))\s*[:\-]?\s*([0-9][0-9\s.,]*)\s*(EUR|USD|SEK|NOK|GBP|€|\$|£)?/i);
+  const m=s.match(/(?:gav|keskihinta|hankintahinta|ostohinta|avg(?:\.|erage)?\s*(?:price|cost))\s*[:=]?\s*(\S+(?:\s+\d{3})*(?:[.,]\d+)?)\s*(EUR|USD|SEK|NOK|GBP|€|\$|£)?/i);
   if(!m)return null;
-  return {value:ocrNumber(m[1]),currency:currencyFromOcr(m[2]||s)};
+  let value=null;
+  try{value=parseImportBuyPrice(m[1])}catch(_){}
+  return {value,currency:currencyFromOcr(m[2]||s),invalid:value==null};
 }
 function explicitTickerFromOcr(text){
   const m=String(text||"").match(/(?:ticker|symbol|tikkeri|tunnus)\s*[:\-]?\s*([A-Z0-9.^:=_-]{1,24})\b/i);
@@ -2067,7 +2080,11 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     if(!q?.value || q.value<=0)continue;
     if(requireStrongUnit&&!q.strongUnit)continue;
     if(!q.strongUnit && lines[i].confidence!=null && lines[i].confidence<55)continue;
-    const context=lines.slice(Math.max(0,i-5),Math.min(lines.length,i+5));
+    const prevQuantity=(()=>{for(let j=i-1;j>=0;j--)if(quantityFromOcrLine(lines[j].text)?.value>0)return j;return -1})();
+    const nextQuantity=(()=>{for(let j=i+1;j<lines.length;j++)if(quantityFromOcrLine(lines[j].text)?.value>0)return j;return lines.length})();
+    const blockStart=prevQuantity+1;
+    const blockEnd=nextQuantity;
+    const context=lines.slice(blockStart,Math.min(blockEnd,i+5));
     let name="";
     const sameLinePrefix=cleanOcrName(lines[i].text.slice(0,q.index));
     if(plausibleOcrName(sameLinePrefix))name=sameLinePrefix;
@@ -2080,8 +2097,11 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
     }
     if(!name)continue;
     let buyPrice=null,currency="",symbol="",assetType="";
-    for(const row of context){
+    const nextTicker=(()=>{for(let j=i+1;j<blockEnd;j++)if(explicitTickerFromOcr(lines[j].text))return j;return blockEnd})();
+    const scopedContext=context.filter(row=>row.i<nextTicker);
+    for(const row of scopedContext){
       const p=priceFromOcrLine(row.text);
+      if(p?.invalid)return [];
       if(p?.value!=null){buyPrice=p.value;if(p.currency)currency=p.currency}
       if(!currency)currency=currencyFromOcr(row.text);
       if(!symbol)symbol=explicitTickerFromOcr(row.text);
