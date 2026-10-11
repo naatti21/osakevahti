@@ -1734,6 +1734,13 @@ function findExistingHoldingMatch(h){
 }
 function importActionForRow(row){
   if(!row.ready)return {kind:"review",label:"TARKISTA",detail:"Tunnistus pitää vahvistaa ennen muutosta."};
+  // Show conflicts with existing source evidence in preview, not only inside the save guard.
+  const incoming=row.holding,simple=simpleListingKey(incoming);
+  if(simple&&state.holdings.some(old=>simpleListingKey(old)===simple
+    && !distinctKnownMic(old,incoming) && sourceIsinConflict(old,incoming))){
+    return {kind:"review",label:"TARKISTA ISIN",
+      detail:"Lähde-ISIN on ristiriidassa aiemman tuonnin kanssa. Korjaa lähde ennen tallennusta."};
+  }
   const match=findExistingHoldingMatch(row.holding);
   if(match.type==="multiple-accounts"){
     return {kind:"review",label:"TARKISTA TILI",detail:"Sama instrumentti löytyy useasta tilistä. Sovellus ei arvaa, mitä positiota pitäisi päivittää."};
