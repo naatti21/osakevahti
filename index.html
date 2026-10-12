@@ -131,6 +131,8 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 .importSource{font-size:9px;color:var(--muted);margin-top:7px;line-height:1.35}
 details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
+.accountNotice{display:flex;align-items:center;justify-content:space-between;gap:12px;border-color:#ae8a4d;margin:0 0 12px}.accountNotice #accountReviewBannerText{font-size:13px;line-height:1.45}.accountNotice button{flex-shrink:0}.accountHelp{margin:6px 0 12px}.accountHelp summary{font-size:12px;cursor:pointer;color:var(--muted)}.accountHelp p{font-size:12px;line-height:1.5;margin:8px 0}.accountReviewWarning{font-weight:700;color:#ffcd82}@media(max-width:480px){.accountNotice{flex-direction:column;align-items:stretch}.accountNotice button{width:100%}}
+.accountNotice.hidden{display:none}
 </style>
 </head>
 <body>
@@ -147,6 +149,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="accountSummary" class="summaryGrid"></div>
+  <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
   <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
   <details id="targetMapBox">
@@ -320,8 +323,12 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </div>
   <div class="grid2">
     <div><label class="txt">Valuutta</label><select id="currency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
-    <div><label class="txt">Tili</label><input id="account" placeholder="Nordnet / Nordea"></div>
+    <div><label class="txt" for="accountType">Tilityyppi</label><select id="accountType"><option value="">Valitse tilityyppi</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select></div>
   </div>
+  <details class="accountHelp"><summary aria-label="Tilityyppien selitteet">ⓘ Mitä tilityypit tarkoittavat?</summary><p><strong>AOT</strong> = arvo-osuustili, yleinen osakkeiden ja ETF:ien säilytys. <strong>OST</strong> = osakesäästötili; rahasto-osuuksia ja ETF:iä ei voi pitää OST:llä. <strong>Rahastotili</strong> = sovelluksen yleisnimitys rahasto-omistusten säilytykselle, ei pankin virallinen tilinimi. <strong>Muu</strong> = muu järjestely tai epävarma tilityyppi.</p></details>
+  <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect"><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
+  <label class="txt" for="accountLabel">Tilin tai salkun oma nimi (valinnainen)</label><input id="accountLabel" maxlength="80" placeholder="Esim. pitkäaikainen salkku"><p class="muted small">Erottaa useita saman palvelun tilejä. Älä kirjoita tilinumeroa tai henkilötietoja.</p>
+  <div id="accountFormHint" class="statusBox muted hidden"></div>
   <label class="txt">Nykykurssi käsin</label><input id="manualPrice" type="number" step="any" min="0">
   <div class="grid2">
     <div><label class="txt">Oma stop</label><input id="manualStop" type="number" step="any" min="0"></div>
@@ -332,6 +339,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div class="actions"><button type="button" id="deleteBtn" class="danger hidden">Poista</button><span class="spacer"></span><button type="button" id="cancelDlg">Peruuta</button><button type="submit" class="primary">Tallenna</button></div>
 </form>
 </dialog>
+
+<dialog id="accountReviewDlg"><div class="row"><h2>Tarkista vanhan salkun tilit</h2><button type="button" id="closeAccountReview">×</button></div><p class="muted small">Vanha versio saattoi muuntaa Nordea-tilin OST:ksi tai Nordnet-tilin AOT:ksi ilman varmistusta. Valitse oikeat tiedot. Omistuksia ja hintoja ei muuteta.</p><div id="accountReviewProgress" class="muted small"></div><h3 id="accountReviewName"></h3><div id="accountReviewOld" class="statusBox muted"></div><label class="txt" for="reviewAccountType">Tilityyppi</label><select id="reviewAccountType"><option value="">Valitse</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select><label class="txt" for="reviewBroker">Palveluntarjoaja</label><select id="reviewBroker"><option value="">Valitse</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select><div id="reviewBrokerOtherBox" class="hidden"><label class="txt" for="reviewBrokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="reviewBrokerOther" maxlength="80"></div><label class="txt" for="reviewAccountLabel">Tilin oma nimi (valinnainen)</label><input id="reviewAccountLabel" maxlength="80" placeholder="Älä kirjoita tilinumeroa"><div class="actions"><button type="button" id="laterAccountReview">Myöhemmin</button><button type="button" id="confirmAccountReview" class="primary">Vahvista ja jatka</button></div></dialog>
 
 <dialog id="quickInfoDlg">
   <div class="row"><div><div class="eyebrow">PIKANÄKYMÄN SELITYS</div><h2 id="quickInfoTitle" style="margin:3px 0 0">Osake</h2></div><button type="button" id="closeQuickInfo">×</button></div>
@@ -359,6 +368,7 @@ const LEGACY_DATA_KEYS={
   "IQMX":"IQMX","IQMX.HE":"IQMX",
   "AMD":"AMD"
 };
+const VALID_ACCOUNT_TYPES=["AOT","OST","FUND","OTHER"];
 let state=load();save();
 let insights=null;
 let portfolioNews=null;
@@ -367,6 +377,7 @@ let sharedStatus=null;
 let marketContext=null;
 let deferredInstallPrompt=null;
 let pendingImport=null;
+let accountReviewCurrentId=null;
 const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
@@ -380,6 +391,11 @@ $("importPortfolioBtn").onclick=()=>{
 $("detailsToggle").onclick=()=>{state.showDetails=!state.showDetails;save();render()};
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("closeQuickInfo").onclick=()=>$("quickInfoDlg").close();
+$("brokerSelect").onchange=()=>$("brokerOtherBox").classList.toggle("hidden",$("brokerSelect").value!=="OTHER");
+$("reviewBroker").onchange=()=>$("reviewBrokerOtherBox").classList.toggle("hidden",$("reviewBroker").value!=="OTHER");
+$("openAccountReviewBtn").onclick=openAccountReview;
+$("closeAccountReview").onclick=$("laterAccountReview").onclick=()=>$("accountReviewDlg").close();
+$("confirmAccountReview").onclick=confirmAccountReview;
 $("closeImportReview").onclick=$("cancelImportReview").onclick=()=>{pendingImport=null;$("importReviewDlg").close()};
 $("confirmImportReview").onclick=commitPendingImport;
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
@@ -445,12 +461,62 @@ function instrumentDataKey(h){
   const i=ensureInstrumentIdentity(h);
   return normalizedIdText(i?.dataKey||h?.symbol);
 }
+
+function accountTypeLabel(v){return ({AOT:"AOT",OST:"OST",FUND:"Rahastotili",OTHER:"Muu"})[v]||"Tilityyppi tuntematon"}
+function suggestedLegacyAccountType(h){
+  const a=String(h.account||"").trim().toUpperCase();
+  // Only suggestions: old versions erroneously mapped some bank names to OST/AOT.
+  if(a==="AOT"||a==="OST")return a;
+  if(a==="RAHASTOT" || a==="RAHASTOTILI")return "FUND";
+  return h.assetType==="fund"?"FUND":"";
+}
+function migrateAccountDetails(h){
+  // Never rewrite the legacy account key; it is part of import identity/matching.
+  // In particular, Nordea is NOT evidence of OST, nor Nordnet of AOT.
+  if(typeof h.account!=="string")h.account=String(h.account??"");
+  if(!Object.hasOwn(h,"legacyAccount"))h.legacyAccount=h.account;
+  // R7-03: validate original data before replacing an invalid type with a suggestion.
+  const originalTypeValid=VALID_ACCOUNT_TYPES.includes(h.accountType);
+  if(!originalTypeValid)h.accountType=suggestedLegacyAccountType(h);
+  if(!h.broker){
+    const a=h.account.trim().toLowerCase();
+    h.broker=a==="nordea"?"Nordea":a==="nordnet"?"Nordnet":"";
+  }
+  h.broker=String(h.broker||"").slice(0,80);
+  h.accountLabel=String(h.accountLabel||"").slice(0,80);
+  // Existing legacy data did not record whether account metadata was verified.
+  if(h.accountDetailsConfirmed!==true || !originalTypeValid || !h.broker.trim())h.accountDetailsConfirmed=false;
+}
+function unconfirmedAccountHoldings(){return state.holdings.filter(h=>h.accountDetailsConfirmed!==true)}
+function displayAccount(h){
+  if(h.accountDetailsConfirmed!==true)return "Tili tarkistamatta"+(h.account?" · "+h.account:"");
+  return [h.broker,accountTypeLabel(h.accountType),h.accountLabel].filter(Boolean).join(" · ");
+}
+function formBrokerValue(selectId,otherId){
+  const selected=$(selectId).value;
+  return selected==="OTHER"?($(otherId).value.trim().slice(0,80)||"Muu"):selected;
+}
+function setBrokerSelect(selectId,otherId,containerId,value){
+  const v=String(value||"").trim();
+  $(selectId).value=!v?"":(v==="Nordea"||v==="Nordnet"?v:"OTHER");
+  $(otherId).value=v&&v!=="Nordea"&&v!=="Nordnet"&&v!=="Muu"?v:"";
+  $(containerId).classList.toggle("hidden",$(selectId).value!=="OTHER");
+}
+function accountFormFields(typeId,brokerId,otherId,labelId){
+  const type=$(typeId).value,broker=formBrokerValue(brokerId,otherId);
+  if(!VALID_ACCOUNT_TYPES.includes(type)||!broker){
+    alert("Valitse tilityyppi ja palveluntarjoaja. Käytä Muu-vaihtoehtoa, jos et tiedä.");
+    return null;
+  }
+  return {accountType:type,broker,accountLabel:$(labelId).value.trim().slice(0,80),accountDetailsConfirmed:true};
+}
+function derivedAccountName(fields){
+  return [fields.broker,accountTypeLabel(fields.accountType),fields.accountLabel].filter(Boolean).join(" / ");
+}
 function migrateState(s){
   const targetDefaults={"AMD":10,"FORTUM":10,"NDA-FI":8,"VERK":4,"FRAMERY":2,"IQMX":3,"METSO":5};
   for(const h of (s.holdings||[])){
-    if(h.account==="Nordea") h.account="OST";
-    if(h.account==="Nordnet") h.account="AOT";
-    if(h.assetType==="fund" && /Nordea Pohjoismaat/i.test(h.name||"")) h.account="Rahastot";
+    migrateAccountDetails(h);
     const identity=ensureInstrumentIdentity(h,"migration");
     if(identity?.dataKey) h.nordnetSymbol=identity.dataKey;
     const key=instrumentDataKey(h);
@@ -652,8 +718,8 @@ function render(){
   let ost=0,aot=0,funds=0,todayEur=0;
   rows.forEach(r=>{
     const h=r.h;
-    if(h.account==="OST")ost+=r.val;
-    if(h.account==="AOT")aot+=r.val;
+    if(h.accountDetailsConfirmed===true && h.accountType==="OST")ost+=r.val;
+    if(h.accountDetailsConfirmed===true && h.accountType==="AOT")aot+=r.val;
     if(h.assetType==="fund")funds+=r.val;
     const dp=hasCurrentTradingDayQuote(h)?n(h.dayChangePct):0;
     if(r.p&&r.fx&&dp&&dp>-99){
@@ -662,6 +728,9 @@ function render(){
     }
   });
 
+  const toReview=unconfirmedAccountHoldings().length;
+  $("accountReviewBanner").classList.toggle("hidden",toReview===0);
+  $("accountReviewBannerText").textContent=toReview+" omistuksen tilityyppi tai pankki on vahvistamatta. Vanha sovellus saattoi arvata tilin väärin. Tarkista tiedot – määriä tai hintoja ei muuteta.";
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);
   $("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   $("detailsToggle").textContent=state.showDetails?"Piilota tarkemmat luvut":"Näytä tarkemmat luvut";
@@ -688,13 +757,13 @@ function render(){
     b.className="item";
     const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
 
   const fundPct=tv?funds/tv*100:0;
-  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST · vahvistettu</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT · vahvistettu</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   const moves=rows
     .filter(r=>r.h.assetType!=="fund" && r.p)
     .map(r=>({h:r.h,p:r.p,pct:n(r.h.dayChangePct),current:hasCurrentTradingDayQuote(r.h)}))
@@ -1214,8 +1283,43 @@ function renderInsights(){
   });
 }
 function openDlg(id=null){
-  $("form").reset();$("id").value="";$("trailing").value=12;$("riskClass").value="medium";$("currency").value=state.baseCurrency;$("deleteBtn").classList.add("hidden");$("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
-  if(id){const h=state.holdings.find(x=>x.id===id);$("id").value=h.id;$("symbol").value=h.symbol||"";$("name").value=h.name||"";$("providerSymbol").value=h.providerSymbol||"";$("qty").value=h.quantity||"";$("buy").value=h.buyPrice||"";$("currency").value=h.currency||"EUR";$("account").value=h.account||"";$("manualPrice").value=h.manualPrice||h.currentPrice||"";$("manualStop").value=h.manualStop||"";$("trailing").value=h.trailingPct??12;$("riskClass").value=h.riskClass||"medium";$("targetWeight").value=h.targetWeight??"";$("deleteBtn").classList.remove("hidden")} $("dlg").showModal()
+  $("form").reset();
+  $("id").value="";
+  $("trailing").value=12;
+  $("riskClass").value="medium";
+  $("currency").value=state.baseCurrency;
+  $("accountType").value="";
+  setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox","");
+  $("accountLabel").value="";
+  $("accountFormHint").classList.add("hidden");
+  $("deleteBtn").classList.add("hidden");
+  $("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
+  if(id){
+    const h=state.holdings.find(x=>x.id===id);
+    if(!h)return;
+    $("id").value=h.id;
+    $("symbol").value=h.symbol||"";
+    $("name").value=h.name||"";
+    $("providerSymbol").value=h.providerSymbol||"";
+    $("qty").value=h.quantity||"";
+    $("buy").value=h.buyPrice||"";
+    $("currency").value=h.currency||"EUR";
+    $("accountType").value=VALID_ACCOUNT_TYPES.includes(h.accountType)?h.accountType:"";
+    setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox",h.broker);
+    $("accountLabel").value=h.accountLabel||"";
+    $("manualPrice").value=h.manualPrice||h.currentPrice||"";
+    $("manualStop").value=h.manualStop||"";
+    $("trailing").value=h.trailingPct??12;
+    $("riskClass").value=h.riskClass||"medium";
+    $("targetWeight").value=h.targetWeight??"";
+    $("deleteBtn").classList.remove("hidden");
+    if(h.accountDetailsConfirmed!==true){
+      $("accountFormHint").classList.remove("hidden");
+      $("accountFormHint").textContent="Vanhan tilin merkintä: "+(h.legacyAccount||h.account||"puuttuu")+
+        ". Vanha sovellus saattoi arvata tilityypin väärin. Voit tallentaa muut kentät ilman tilivahvistusta. Vahvista tilitiedot erikseen toiminnolla Tarkista tilit.";
+    }
+  }
+  $("dlg").showModal();
 }
 function saveHolding(){
   const rawSymbol=$("symbol").value.trim().toUpperCase(),rawProvider=$("providerSymbol").value.trim().toUpperCase();
@@ -1224,7 +1328,41 @@ function saveHolding(){
   if(rawProvider && !valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
   const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{};
   const symbolChanged=!!old.symbol && normalizedIdText(old.symbol)!==rawSymbol;
-  const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account:$("account").value.trim(),manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),trailingPct:n($("trailing").value),riskClass:$("riskClass").value,targetWeight:opt($("targetWeight").value)};
+  const type=$("accountType").value,provider=$("brokerSelect").value;
+  const complete=VALID_ACCOUNT_TYPES.includes(type)&&!!provider;
+  if(!old.id&&!complete){
+    alert("Valitse tilityyppi ja palveluntarjoaja. Jos et tiedä, käytä Muu.");
+    return;
+  }
+  if(old.accountDetailsConfirmed===true&&!complete){
+    alert("Vahvistetulla omistuksella tulee säilyttää tilityyppi ja palveluntarjoaja.");
+    return;
+  }
+  const fields=complete?accountFormFields("accountType","brokerSelect","brokerOther","accountLabel"):null;
+  if(old.assetType==="fund"&&fields?.accountType==="OST"){
+    alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
+    return;
+  }
+  // An edit is not implicit approval of suggested legacy metadata.
+  // Only explicit review confirms a previously unconfirmed account.
+  const confirmedAfterSave=!!fields&&(!old.id||old.accountDetailsConfirmed===true);
+  const shouldDeriveAccount=confirmedAfterSave&&
+    (!old.id||old.accountOriginDerived===true||!String(old.account||"").trim());
+  const account=shouldDeriveAccount
+    ? derivedAccountName(fields||{
+        broker:old.broker||"Muu",accountType:old.accountType||"OTHER",accountLabel:old.accountLabel||""
+      })
+    : String(old.account||"");
+  const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,
+    quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account,
+    accountType:fields?.accountType||type||old.accountType||"",
+    broker:fields?.broker||(provider?formBrokerValue("brokerSelect","brokerOther"):old.broker||""),
+    accountLabel:fields?.accountLabel||$("accountLabel").value.trim().slice(0,80),
+    accountDetailsConfirmed:confirmedAfterSave,
+    accountOriginDerived:shouldDeriveAccount,
+    manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),
+    trailingPct:n($("trailing").value),riskClass:$("riskClass").value,
+    targetWeight:opt($("targetWeight").value)};
   if(symbolChanged){
     h.instrument={
       schemaVersion:INSTRUMENT_SCHEMA_VERSION,
@@ -1248,6 +1386,45 @@ function saveHolding(){
     ident.dataKey=legacyDataKey(rawSymbol);
   }
   if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
+}
+
+function openAccountReview(){
+  showNextAccountReview();
+}
+function showNextAccountReview(){
+  const remaining=unconfirmedAccountHoldings();
+  const dlg=$("accountReviewDlg");
+  if(!remaining.length){accountReviewCurrentId=null;dlg.close();return;}
+  const h=remaining[0];
+  accountReviewCurrentId=h.id;
+  $("accountReviewProgress").textContent="Tarkistamatta "+remaining.length+" / "+state.holdings.length+" omistusta";
+  $("accountReviewName").textContent=h.name||h.symbol||"Omistus";
+  $("accountReviewOld").textContent="Vanha tilimerkintä: "+(h.legacyAccount||h.account||"puuttuu")+
+    ". Ehdotettu tilityyppi ei ole vahvistettu tieto.";
+  $("reviewAccountType").value=VALID_ACCOUNT_TYPES.includes(h.accountType)?h.accountType:"";
+  setBrokerSelect("reviewBroker","reviewBrokerOther","reviewBrokerOtherBox",h.broker);
+  $("reviewAccountLabel").value=h.accountLabel||"";
+  if(!dlg.open)dlg.showModal();
+}
+function confirmAccountReview(){
+  const h=state.holdings.find(x=>x.id===accountReviewCurrentId);
+  if(!h)return;
+  const fields=accountFormFields("reviewAccountType","reviewBroker","reviewBrokerOther","reviewAccountLabel");
+  if(!fields)return;
+  if(h.assetType==="fund"&&fields.accountType==="OST"){
+    alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
+    return;
+  }
+  Object.assign(h,fields);
+  // Legacy account is kept verbatim as the established matching key. A typed
+  // category must not silently rewrite account identity or alter holdings.
+  // A blank legacy identity is unpartitioned: only after explicit confirmation
+  // may we create a distinct broker+type key. Nonblank legacy keys never change.
+  if(h.accountOriginDerived===true || !String(h.account||"").trim()){
+    h.account=derivedAccountName(fields);
+    h.accountOriginDerived=true;
+  }
+  save();render();showNextAccountReview();
 }
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
 async function loadWorkerData(force=false,retries=2){
@@ -1736,13 +1913,23 @@ function simpleListingKey(h){
   const currency=normalizedIdText(i.currency||h.currency);
   return listing?[listing,currency||"noccy"].join("|"):"";
 }
+function confirmedAccountMetadataConflict(a,b){
+  return a.accountDetailsConfirmed===true&&b.accountDetailsConfirmed===true&&
+    (a.accountType!==b.accountType||
+    String(a.broker||"").trim().toLowerCase()!==String(b.broker||"").trim().toLowerCase());
+}
 function findExistingHoldingMatch(h){
   const exact=holdingIdentityKey(h);
   const fallback=holdingFallbackKey(h);
   let idx=exact?state.holdings.findIndex(x=>holdingIdentityKey(x)===exact):-1;
-  if(idx>=0)return {index:idx,type:"exact"};
+  if(idx>=0){
+    if(confirmedAccountMetadataConflict(h,state.holdings[idx]))return {index:-1,type:"account-conflict"};
+    return {index:idx,type:"exact"};
+  }
   if(fallback){
     const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>holdingFallbackKey(x)===fallback);
+    // R7-01: a conflicting confirmed legacy account may not disappear into ADD.
+    if(matches.some(({x})=>legacyAccountMetadataConflict(h,x)))return {index:-1,type:"account-conflict"};
     if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))return {index:matches[0].i,type:"fallback"};
   }
   if(!String(h.account||"").trim()){
@@ -1765,11 +1952,21 @@ function importActionForRow(row){
       detail:"Lähde-ISIN on ristiriidassa aiemman tuonnin kanssa. Korjaa lähde ennen tallennusta."};
   }
   const match=findExistingHoldingMatch(row.holding);
+  if(match.type==="account-conflict"){
+    return {kind:"review",label:"TARKISTA TILITYYPPI",
+      detail:"Saman tilimerkinnän vahvistettu tilityyppi tai palveluntarjoaja on ristiriidassa tuonnin kanssa. Anna eri tilille oma tunniste."};
+  }
   if(match.type==="multiple-accounts"){
     return {kind:"review",label:"TARKISTA TILI",detail:"Sama instrumentti löytyy useasta tilistä. Sovellus ei arvaa, mitä positiota pitäisi päivittää."};
   }
   if(match.index>=0){
     const old=state.holdings[match.index];
+    if(old.accountDetailsConfirmed===true &&
+      ((incoming.accountType && old.accountType!==incoming.accountType) ||
+       (incoming.broker && old.broker.trim().toLowerCase()!==incoming.broker.trim().toLowerCase()))){
+      return {kind:"review",label:"TARKISTA TILITYYPPI",
+        detail:"Tuodun rivin tilityyppi tai palveluntarjoaja poikkeaa vahvistetusta tilistä. Tietoja ei yhdistetä."};
+    }
     const oq=n(old.quantity),nq=n(row.holding.quantity);
     const detail="Määrä "+oq+" → "+nq+" kpl"+(old.account?" · tili "+old.account:"");
     return {kind:"update",label:"PÄIVITETÄÄN",matchIndex:match.index,detail};
@@ -1870,6 +2067,7 @@ function sourceIsinConflict(a,b){
   return false;
 }
 function strongIdentityConflict(a,b){
+  if(confirmedAccountMetadataConflict(a,b))return true;
   const ai=a.instrument||{},bi=b.instrument||{};
   const aIsin=normalizedIdText(ai.isin),bIsin=normalizedIdText(bi.isin);
   if(aIsin&&bIsin&&aIsin!==bIsin)return true;
@@ -1887,6 +2085,7 @@ function batchImportConflicts(rows){
     const a=rows[x].holding,b=rows[y].holding;
     const same=holdingIdentityKey(a)===holdingIdentityKey(b) || (holdingFallbackKey(a)&&holdingFallbackKey(a)===holdingFallbackKey(b)) || (simpleListingKey(a)&&simpleListingKey(a)===simpleListingKey(b) && (!a.account||!b.account));
     if(same&&distinctKnownMic(a,b))continue;
+    if(same&&confirmedAccountMetadataConflict(a,b))return true;
     if(same&&sourceIsinConflict(a,b))return true;
     if(same&&strongIdentityConflict(a,b))continue;
     if(same && Number(a.quantity)!==Number(b.quantity))return true;
@@ -1899,6 +2098,12 @@ function holdingFallbackKey(h){
   const listing=normalizedIdText(i.listingTicker||h.symbol);
   const currency=normalizedIdText(i.currency||h.currency);
   return listing?[account,listing,currency||"noccy"].join("|"):"";
+}
+function legacyAccountMetadataConflict(incoming,existing){
+  const key=holdingFallbackKey(incoming);
+  return !!(key && key===holdingFallbackKey(existing) &&
+    !distinctKnownMic(incoming,existing) &&
+    confirmedAccountMetadataConflict(incoming,existing));
 }
 function mergeImportedHoldings(existing,incoming){
   const out=(existing||[]).map(h=>({...h}));
@@ -1915,6 +2120,9 @@ function mergeImportedHoldings(existing,incoming){
     let idx=key?byKey.get(key):undefined;
     if(idx==null&&fk){
       const matches=fallback.get(fk)||[];
+      // R7-01: final save guard even if preview is bypassed.
+      if(matches.some(i=>legacyAccountMetadataConflict(h,out[i])))
+        return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       if(matches.length===1 && !strongIdentityConflict(h,out[matches[0]]))idx=matches[0];
     }
     if(idx==null&&!String(h.account||"").trim()){
@@ -1925,6 +2133,35 @@ function mergeImportedHoldings(existing,incoming){
     if(idx!=null){
       if(sourceIsinConflict(h,out[idx]))return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
+      // Imports may omit account metadata. Never erase previously confirmed
+      // account type/broker, and never silently overwrite them with a conflict.
+      if(old.accountDetailsConfirmed===true&&
+        ((h.accountType&&old.accountType!==h.accountType)||
+         (h.broker&&old.broker.trim().toLowerCase()!==h.broker.trim().toLowerCase()))){
+        return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
+      }
+      if(old.accountDetailsConfirmed===true&&h.accountDetailsConfirmed!==true){
+        merged.accountType=old.accountType;
+        merged.broker=old.broker;
+        merged.accountLabel=old.accountLabel||"";
+        merged.accountDetailsConfirmed=true;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }else if(h.accountDetailsConfirmed===true){
+        merged.accountType=h.accountType;
+        merged.broker=h.broker;
+        merged.accountLabel=old.accountLabel||h.accountLabel||"";
+        merged.accountDetailsConfirmed=true;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }else{
+        merged.accountType=old.accountType||h.accountType||"";
+        merged.broker=old.broker||h.broker||"";
+        merged.accountLabel=old.accountLabel||h.accountLabel||"";
+        merged.accountDetailsConfirmed=false;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }
       // Omitted source fields mean "not observed in this import", never "erase earlier evidence".
       // The conflict guard above rejects nonempty opposing identifiers before this merge.
       const oldIdentifiers=old.importMeta?.sourceIdentifiers||{};
@@ -1969,7 +2206,63 @@ function commitPendingImport(){
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
-async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
+function validateBackupForRestore(parsed){
+  if(!parsed || typeof parsed!=="object" || Array.isArray(parsed) || !Array.isArray(parsed.holdings))
+    throw new Error("Varmuuskopiosta puuttuu kelvollinen omistuslista.");
+  if(parsed.baseCurrency!==undefined && !["EUR","USD","SEK"].includes(parsed.baseCurrency))
+    throw new Error("Varmuuskopion perusvaluutta ei ole tuettu.");
+  if(parsed.news!==undefined && !Array.isArray(parsed.news))
+    throw new Error("Varmuuskopion uutislista on virheellinen.");
+  if(parsed.ostPlan!==undefined && !Array.isArray(parsed.ostPlan))
+    throw new Error("Varmuuskopion suunnitelma on virheellinen.");
+  const nonNegativeNumber=(value,optional=false)=>{
+    if(value===undefined||value===null||value==="")return optional;
+    if(typeof value!=="number"&&typeof value!=="string")return false;
+    if(typeof value==="string"&&!/^[+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value.trim()))return false;
+    const number=Number(String(value).trim().replace(",","."));
+    return Number.isFinite(number)&&number>=0;
+  };
+  if(parsed.riskBudgetPct!==undefined && (!nonNegativeNumber(parsed.riskBudgetPct)||Number(parsed.riskBudgetPct)<=0))
+    throw new Error("Riskibudjetti on virheellinen.");
+  const ids=new Set();
+  for(const [index,h] of parsed.holdings.entries()){
+    const prefix="Omistus "+(index+1)+": ";
+    if(!h||typeof h!=="object"||Array.isArray(h))
+      throw new Error(prefix+"virheellinen tietue.");
+    if(["symbol","name","currency","account"].some(k=>h[k]!=null&&typeof h[k]!=="string"))
+      throw new Error(prefix+"instrumentin tunniste tai tili on virheellinen.");
+    if(!String(h.symbol||h.name||h.instrument?.listingTicker||"").trim())
+      throw new Error(prefix+"instrumentin tunniste puuttuu.");
+    if(!nonNegativeNumber(h.quantity))
+      throw new Error(prefix+"määrän pitää olla ei-negatiivinen numero.");
+    for(const field of ["buyPrice","manualPrice","currentPrice","manualStop","highWatermark","fxRate","atr","high20","low20","targetWeight","trailingPct"]){
+      if(!nonNegativeNumber(h[field],true))throw new Error(prefix+field+" on virheellinen.");
+    }
+    if(h.id!=null){
+      if((typeof h.id!=="string"&&typeof h.id!=="number")||!String(h.id).trim()||ids.has(String(h.id)))
+        throw new Error(prefix+"omistuksen tunniste on virheellinen tai toistuu.");
+      ids.add(String(h.id));
+    }
+  }
+}
+async function importBackup(e){
+  const f=e.target.files?.[0];if(!f)return;
+  try{
+    const parsed=JSON.parse(await f.text());
+    validateBackupForRestore(parsed); // Check all holdings before touching the user's portfolio.
+    const candidate={...state,...parsed,apiKey:state.apiKey||""};
+    migrateState(candidate);
+    // Save once, and only adopt the candidate in memory AFTER successful storage.
+    localStorage.setItem(KEY,JSON.stringify(candidate));
+    state=candidate;
+    $("baseCurrency").value=state.baseCurrency;
+    $("riskBudgetPct").value=state.riskBudgetPct??1.25;
+    $("apiKey").value=state.apiKey||"";
+    render();
+  }catch(err){
+    alert("Varmuuskopiota ei palautettu: "+(err?.message||"Virheellinen JSON"));
+  }finally{e.target.value=""}
+}
 const IMPORT_HEADER_ALIASES={
   symbol:["symbol","ticker","tikkeri","tunnus","stock symbol","osaketunnus"],
   listing_ticker:["listing ticker","listing symbol","listaus ticker","listaustunnus"],
@@ -1978,6 +2271,8 @@ const IMPORT_HEADER_ALIASES={
   buy_price:["buy price","avg price","average price","average cost","cost basis","keskihinta","hankintahinta","ostohinta"],
   currency:["currency","ccy","valuutta"],
   account:["account","tili","portfolio","salkku"],
+  account_type:["account type","account_type","tilityyppi","tilin tyyppi"],
+  broker:["broker","bank","pankki","palveluntarjoaja","välittäjä","valittaja"],
   isin:["isin"],
   mic:["mic","market identifier code"],
   exchange:["exchange","market","porssi","pörssi","markkinapaikka"],
@@ -2024,10 +2319,8 @@ function parseImportTable(text){
   return {rows,delimiter,headers:rawHeaders,fields};
 }
 function normalizedAccount(v){
-  const raw=String(v||"").trim();
-  if(raw==="Nordea")return "OST";
-  if(raw==="Nordnet")return "AOT";
-  return raw;
+  // Old account labels are identity evidence, never the tax account category.
+  return String(v||"").trim();
 }
 function parseImportBuyPrice(raw){
   const t=String(raw??"").trim();
@@ -2058,6 +2351,10 @@ function holdingFromImportRow(r,source){
   if(mic&&!/^[A-Z0-9]{4}$/.test(mic))throw new Error("Rivi "+(r._rowNumber||"?")+": virheellinen MIC.");
   const riskRaw=String(r.risk_class||"").trim().toLowerCase();
   const sourceType=String(r.asset_type||"").trim().toLowerCase();
+  const typedAccount=normalizedIdText(r.account_type);
+  if(typedAccount&&!VALID_ACCOUNT_TYPES.includes(typedAccount))throw new Error("Rivi "+(r._rowNumber||"?")+": tuntematon tilityyppi. Käytä AOT/OST/FUND/OTHER.");
+  const suppliedBroker=String(r.broker||"").trim().slice(0,80);
+  const accountDetailsConfirmed=!!(typedAccount&&suppliedBroker);
   const provided={
     trailingPct:String(r.trailing_pct??"").trim()!=="",
     riskClass:!!riskRaw,
@@ -2070,7 +2367,9 @@ function holdingFromImportRow(r,source){
   return {
     id:uid(),symbol:listingTicker,name,quantity,
     buyPrice:provided.buyPrice?parsedBuyPrice:0,
-    currency,account:normalizedAccount(r.account),providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
+    currency,account:normalizedAccount(r.account)||(accountDetailsConfirmed?derivedAccountName({broker:suppliedBroker,accountType:typedAccount,accountLabel:""}):""),accountType:typedAccount||"",broker:suppliedBroker,
+    accountLabel:"",accountDetailsConfirmed,accountOriginDerived:false,
+    providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
     manualStop:opt(r.manual_stop),
     trailingPct:provided.trailingPct?n(r.trailing_pct):12,
     riskClass:["low","medium","high"].includes(riskRaw)?riskRaw:"medium",
@@ -2295,7 +2594,9 @@ function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
   return {
     id:uid(),symbol:listingTicker,name:String(x.name||"").trim(),quantity:n(x.quantity),buyPrice:n(x.buyPrice),
-    currency:normalizedIdText(x.currency),account:"",providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
+    currency:normalizedIdText(x.currency),account:"",accountType:"",broker:"",
+    accountLabel:"",accountDetailsConfirmed:false,accountOriginDerived:false,
+    providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
     importMeta:{source,rowNumber:x.sourceLine||null,sourceRows:x.sourceRows||[],validationErrors:x.validationErrors||[],
       sourceIdentifiers:{isin:normalizedIdText(x.isin),mic:normalizedIdText(x.mic),exchange:String(x.exchange||""),verification:"unverified"},
       importedAt:new Date().toISOString(),provided:{buyPrice:x.buyPrice!=null&&Number.isFinite(Number(x.buyPrice)),trailingPct:false,riskClass:false,targetWeight:false}},
