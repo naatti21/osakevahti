@@ -323,10 +323,10 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </div>
   <div class="grid2">
     <div><label class="txt">Valuutta</label><select id="currency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
-    <div><label class="txt" for="accountType">Tilityyppi</label><select id="accountType" required><option value="">Valitse tilityyppi</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select></div>
+    <div><label class="txt" for="accountType">Tilityyppi</label><select id="accountType"><option value="">Valitse tilityyppi</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select></div>
   </div>
   <details class="accountHelp"><summary aria-label="Tilityyppien selitteet">ⓘ Mitä tilityypit tarkoittavat?</summary><p><strong>AOT</strong> = arvo-osuustili, yleinen osakkeiden ja ETF:ien säilytys. <strong>OST</strong> = osakesäästötili; rahasto-osuuksia ja ETF:iä ei voi pitää OST:llä. <strong>Rahastotili</strong> = sovelluksen yleisnimitys rahasto-omistusten säilytykselle, ei pankin virallinen tilinimi. <strong>Muu</strong> = muu järjestely tai epävarma tilityyppi.</p></details>
-  <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect" required><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
+  <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect"><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
   <label class="txt" for="accountLabel">Tilin tai salkun oma nimi (valinnainen)</label><input id="accountLabel" maxlength="80" placeholder="Esim. pitkäaikainen salkku"><p class="muted small">Erottaa useita saman palvelun tilejä. Älä kirjoita tilinumeroa tai henkilötietoja.</p>
   <div id="accountFormHint" class="statusBox muted hidden"></div>
   <label class="txt">Nykykurssi käsin</label><input id="manualPrice" type="number" step="any" min="0">
@@ -1314,7 +1314,7 @@ function openDlg(id=null){
     if(h.accountDetailsConfirmed!==true){
       $("accountFormHint").classList.remove("hidden");
       $("accountFormHint").textContent="Vanhan tilin merkintä: "+(h.legacyAccount||h.account||"puuttuu")+
-        ". Vanha sovellus saattoi arvata tilityypin väärin. Tarkista valinnat; voit myös tallentaa muut kentät ja vahvistaa tilin myöhemmin.";
+        ". Vanha sovellus saattoi arvata tilityypin väärin. Voit tallentaa muut kentät ilman tilivahvistusta. Vahvista tilitiedot erikseen toiminnolla Tarkista tilit.";
     }
   }
   $("dlg").showModal();
@@ -1341,8 +1341,11 @@ function saveHolding(){
     alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
     return;
   }
-  const shouldDeriveAccount=!old.id || old.accountOriginDerived===true ||
-    (complete&&!String(old.account||"").trim());
+  // An edit is not implicit approval of suggested legacy metadata.
+  // Only explicit review confirms a previously unconfirmed account.
+  const confirmedAfterSave=!!fields&&(!old.id||old.accountDetailsConfirmed===true);
+  const shouldDeriveAccount=confirmedAfterSave&&
+    (!old.id||old.accountOriginDerived===true||!String(old.account||"").trim());
   const account=shouldDeriveAccount
     ? derivedAccountName(fields||{
         broker:old.broker||"Muu",accountType:old.accountType||"OTHER",accountLabel:old.accountLabel||""
@@ -1353,7 +1356,7 @@ function saveHolding(){
     accountType:fields?.accountType||type||old.accountType||"",
     broker:fields?.broker||(provider?formBrokerValue("brokerSelect","brokerOther"):old.broker||""),
     accountLabel:fields?.accountLabel||$("accountLabel").value.trim().slice(0,80),
-    accountDetailsConfirmed:!!fields||old.accountDetailsConfirmed===true,
+    accountDetailsConfirmed:confirmedAfterSave,
     accountOriginDerived:shouldDeriveAccount,
     manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),
     trailingPct:n($("trailing").value),riskClass:$("riskClass").value,
