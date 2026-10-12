@@ -2085,6 +2085,34 @@ function mergeImportedHoldings(existing,incoming){
     if(idx!=null){
       if(sourceIsinConflict(h,out[idx]))return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
+      // Imports may omit account metadata. Never erase previously confirmed
+      // account type/broker, and never silently overwrite them with a conflict.
+      if(old.accountDetailsConfirmed===true&&h.accountDetailsConfirmed===true&&
+        (old.accountType!==h.accountType||old.broker.trim().toLowerCase()!==h.broker.trim().toLowerCase())){
+        return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
+      }
+      if(old.accountDetailsConfirmed===true&&h.accountDetailsConfirmed!==true){
+        merged.accountType=old.accountType;
+        merged.broker=old.broker;
+        merged.accountLabel=old.accountLabel||"";
+        merged.accountDetailsConfirmed=true;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }else if(h.accountDetailsConfirmed===true){
+        merged.accountType=h.accountType;
+        merged.broker=h.broker;
+        merged.accountLabel=old.accountLabel||h.accountLabel||"";
+        merged.accountDetailsConfirmed=true;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }else{
+        merged.accountType=old.accountType||h.accountType||"";
+        merged.broker=old.broker||h.broker||"";
+        merged.accountLabel=old.accountLabel||h.accountLabel||"";
+        merged.accountDetailsConfirmed=false;
+        merged.accountOriginDerived=old.accountOriginDerived===true;
+        merged.legacyAccount=old.legacyAccount||old.account;
+      }
       // Omitted source fields mean "not observed in this import", never "erase earlier evidence".
       // The conflict guard above rejects nonempty opposing identifiers before this merge.
       const oldIdentifiers=old.importMeta?.sourceIdentifiers||{};
@@ -2138,6 +2166,8 @@ const IMPORT_HEADER_ALIASES={
   buy_price:["buy price","avg price","average price","average cost","cost basis","keskihinta","hankintahinta","ostohinta"],
   currency:["currency","ccy","valuutta"],
   account:["account","tili","portfolio","salkku"],
+  account_type:["account type","account_type","tilityyppi","tilin tyyppi"],
+  broker:["broker","bank","pankki","palveluntarjoaja","välittäjä","valittaja"],
   isin:["isin"],
   mic:["mic","market identifier code"],
   exchange:["exchange","market","porssi","pörssi","markkinapaikka"],
@@ -2216,6 +2246,10 @@ function holdingFromImportRow(r,source){
   if(mic&&!/^[A-Z0-9]{4}$/.test(mic))throw new Error("Rivi "+(r._rowNumber||"?")+": virheellinen MIC.");
   const riskRaw=String(r.risk_class||"").trim().toLowerCase();
   const sourceType=String(r.asset_type||"").trim().toLowerCase();
+  const typedAccount=normalizedIdText(r.account_type);
+  if(typedAccount&&!VALID_ACCOUNT_TYPES.includes(typedAccount))throw new Error("Rivi "+(r._rowNumber||"?")+": tuntematon tilityyppi. Käytä AOT/OST/FUND/OTHER.");
+  const suppliedBroker=String(r.broker||"").trim().slice(0,80);
+  const accountDetailsConfirmed=!!(typedAccount&&suppliedBroker);
   const provided={
     trailingPct:String(r.trailing_pct??"").trim()!=="",
     riskClass:!!riskRaw,
@@ -2228,7 +2262,9 @@ function holdingFromImportRow(r,source){
   return {
     id:uid(),symbol:listingTicker,name,quantity,
     buyPrice:provided.buyPrice?parsedBuyPrice:0,
-    currency,account:normalizedAccount(r.account),providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
+    currency,account:normalizedAccount(r.account),accountType:typedAccount||"",broker:suppliedBroker,
+    accountLabel:"",accountDetailsConfirmed,accountOriginDerived:false,
+    providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
     manualStop:opt(r.manual_stop),
     trailingPct:provided.trailingPct?n(r.trailing_pct):12,
     riskClass:["low","medium","high"].includes(riskRaw)?riskRaw:"medium",
@@ -2453,7 +2489,9 @@ function holdingFromOcrCandidate(x,source){
   const listingTicker=normalizedIdText(x.symbol);
   return {
     id:uid(),symbol:listingTicker,name:String(x.name||"").trim(),quantity:n(x.quantity),buyPrice:n(x.buyPrice),
-    currency:normalizedIdText(x.currency),account:"",providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
+    currency:normalizedIdText(x.currency),account:"",accountType:"",broker:"",
+    accountLabel:"",accountDetailsConfirmed:false,accountOriginDerived:false,
+    providerSymbol:"",assetType:x.assetType||undefined,manualStop:null,trailingPct:12,riskClass:"medium",targetWeight:null,
     importMeta:{source,rowNumber:x.sourceLine||null,sourceRows:x.sourceRows||[],validationErrors:x.validationErrors||[],
       sourceIdentifiers:{isin:normalizedIdText(x.isin),mic:normalizedIdText(x.mic),exchange:String(x.exchange||""),verification:"unverified"},
       importedAt:new Date().toISOString(),provided:{buyPrice:x.buyPrice!=null&&Number.isFinite(Number(x.buyPrice)),trailingPct:false,riskClass:false,targetWeight:false}},
