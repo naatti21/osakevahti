@@ -1666,6 +1666,18 @@ async function fetchInstrumentCandidates(h){
     return {provider:"",candidates:[],error:String(err?.message||err||"Tunnistus epäonnistui")};
   }finally{clearTimeout(timer)}
 }
+function observedSourceIsin(h){
+  return normalizedIdText(h.importMeta?.sourceIdentifiers?.isin||h.instrument?.isin);
+}
+function sourceIsinCandidateConflict(h,c){
+  const src=observedSourceIsin(h),dst=normalizedIdText(c?.isin);
+  return !!(src&&dst&&src!==dst);
+}
+function suspiciousOcrName(value){
+  // Tesseract can mistake an initial uppercase I for the digit 1 (IQM -> 1QM).
+  // Preserve the raw observation for manual review; never silently change 1 to I.
+  return /^[1-9][A-Z]{2,6}\s+[A-Za-zÅÄÖåäö]{3,}/.test(cleanOcrName(value));
+}
 async function resolveImportedHolding(h){
   const i=h.instrument||{};
   if(h.importMeta?.validationErrors?.length){
@@ -1680,7 +1692,10 @@ async function resolveImportedHolding(h){
     h.importMeta.sourceIdentifiers={...(h.importMeta.sourceIdentifiers||{}),isin:normalizedIdText(i.isin),verification:"unverified"};
   }
   const found=await fetchInstrumentCandidates(h);
-  const ranked=(found.candidates||[]).map(c=>{
+  // A candidate whose verified ISIN contradicts the source must not be picked,
+  // even manually. A missing candidate ISIN is NOT verification of the source.
+  const conflictingSourceIsin=(found.candidates||[]).some(c=>sourceIsinCandidateConflict(h,c));
+  const ranked=(found.candidates||[]).filter(c=>!sourceIsinCandidateConflict(h,c)).map(c=>{
     const s=scoreInstrumentCandidate(h,c);
     return {...c,_score:s.score,_reasons:s.reasons};
   }).sort((a,b)=>b._score-a._score).slice(0,5);
@@ -1691,7 +1706,10 @@ async function resolveImportedHolding(h){
   const marketEvidence=!sourceMarket || (!!candidateMarket && canonicalImportMarket(sourceMarket)===canonicalImportMarket(candidateMarket));
   const currencyEvidence=!(i.currency||h.currency) || !!normalizedIdText(top?.currency);
   const sourceMicKnown=!i.mic || /^(XHEL|XNAS|XETR)$/.test(normalizedIdText(i.mic));
-  if(top && top._score>=85 && margin>=15 && marketEvidence && currencyEvidence && sourceMicKnown && !instrumentIdentityConflict(h,top)){
+  const sourceIsin=observedSourceIsin(h);
+  const isSourceIsinVerified=!sourceIsin || !!(top?.isin&&normalizedIdText(top.isin)===sourceIsin);
+  const suspiciousName=suspiciousOcrName(h.name||i.companyName);
+  if(top && isSourceIsinVerified && !suspiciousName && top._score>=85 && margin>=15 && marketEvidence && currencyEvidence && sourceMicKnown && !instrumentIdentityConflict(h,top)){
     h.instrument=instrumentFromCandidate(h,top,"resolved");
     h.providerSymbol=h.instrument.providerSymbol;
     h.symbol=h.instrument.listingTicker;
@@ -1701,7 +1719,12 @@ async function resolveImportedHolding(h){
   return {
     status:found.error?"error":ranked.length?"review":"none",
     holding:h,ready:false,provider:found.provider,candidates:ranked,selected:-1,
-    reason:found.error||(!ranked.length?"Instrumentille ei löytynyt luotettavaa ehdokasta.":"Useampi mahdollinen listaus tai tunnistus ei ole riittävän vahva.")
+    reason:found.error||(
+      suspiciousName?"Nimen alussa on mahdollinen OCR-numero/kirjainvirhe. Vahvista listaus käsin.":
+      sourceIsin&&!isSourceIsinVerified?"Lähteen ISIN ei vahvistunut tunnistuspalvelusta. Vahvista listaus käsin tai jätä tunnistamatta.":
+      conflictingSourceIsin&&!ranked.length?"Lähde-ISIN on ristiriidassa tarjottujen listausten kanssa. Korjaa lähde tai jätä tunnistamatta.":
+      !ranked.length?"Instrumentille ei löytynyt luotettavaa ehdokasta.":
+      "Useampi mahdollinen listaus tai tunnistus ei ole riittävän vahva.")
   };
 }
 function formatCandidate(c){
@@ -1785,7 +1808,7 @@ function renderImportReview(){
       row.reason="Käyttäjä jätti instrumentin tarkoituksella tunnistamatta.";
     }else{
       const ci=n(btn.dataset.candidate),cand=row.candidates[ci];
-      if(!cand)return;
+      if(!cand||sourceIsinCandidateConflict(row.holding,cand))return;
       row.ready=true;row.status="manual";row.selected=ci;
       row.holding.instrument=instrumentFromCandidate(row.holding,cand,"user-confirmed");
       row.holding.providerSymbol=row.holding.instrument.providerSymbol;
@@ -1925,6 +1948,12 @@ function mergeImportedHoldings(existing,incoming){
   return {holdings:out,added,updated};
 }
 function commitPendingImport(){
+  // Final invariant: never save a resolved ISIN that contradicts the source
+  // identifier, even if preview state was changed by a later interaction.
+  if(pendingImport?.rows?.some(row=>{
+    const src=observedSourceIsin(row.holding),verified=normalizedIdText(row.holding?.instrument?.isin);
+    return !!(src&&verified&&src!==verified);
+  }))return;
   if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>x.holding?.importMeta?.validationErrors?.length||importActionForRow(x).kind==="review"))return;
   // A previous observation cannot be overwritten by a different unverified ISIN.
   if(pendingImport.rows.some(r=>state.holdings.some(old=>simpleListingKey(old) && simpleListingKey(old)===simpleListingKey(r.holding) && !distinctKnownMic(old,r.holding) && sourceIsinConflict(old,r.holding))))return;
@@ -2140,7 +2169,7 @@ function cleanOcrName(text){
 function plausibleOcrName(text){
   const s=cleanOcrName(text);
   const letters=(s.match(/[A-Za-zÅÄÖåäö]/g)||[]).length;
-  if(s.length<3 || letters<4 || /^[-+]?\d/.test(s))return false;
+  if(s.length<3 || letters<4 || (/^[-+]?\d/.test(s)&&!suspiciousOcrName(s)))return false;
   if(/^(?:ticker|symbol|tikkeri|tunnus)\b/i.test(s))return false;
   if(/^(?:arvo|value|tuotto|return|kurssi|price|määrä|maara|quantity|qty|kpl|shares?|gav|keskihinta|hankintahinta|ostohinta|avg(?:erage)? price|valuutta|currency|salkku|portfolio|yhteensä|total|osta|myy|buy|sell|osakkeet)\b/i.test(s))return false;
   if((s.match(/\d/g)||[]).length>Math.max(3,Math.floor(s.length/3)))return false;
