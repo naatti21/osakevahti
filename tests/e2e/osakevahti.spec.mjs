@@ -370,8 +370,11 @@ test('same ticker in OST and AOT stays as two separate holdings', async ({ page 
   });
 
   await expect(page.locator('#holdings .item')).toHaveCount(2);
-  await expect(page.locator('#holdings')).toContainText('10 kpl · OST');
-  await expect(page.locator('#holdings')).toContainText('5 kpl · AOT');
+  // Legacy account labels remain separate identity keys, but must NOT be
+  // presented as verified tax account types before user confirmation.
+  await expect(page.locator('#holdings')).toContainText('10 kpl · Tili tarkistamatta · OST');
+  await expect(page.locator('#holdings')).toContainText('5 kpl · Tili tarkistamatta · AOT');
+  await expect(page.locator('#accountReviewBanner')).toContainText('2 omistuksen');
   const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
   expect(stored.holdings.map(h => h.account).sort()).toEqual(['AOT', 'OST']);
 });
