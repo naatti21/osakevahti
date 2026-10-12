@@ -66,3 +66,13 @@ Sarakkeet:
 ## Tietoturva
 
 Älä koskaan commitoi API-avaimia tai henkilökohtaisia omistuksia julkiseen repoon.
+
+## QA ja kehitystyö
+
+GitHub-keskitetyn riippumattoman QA:n työohje: [docs/QA-HANDOFF.md](docs/QA-HANDOFF.md).
+
+- `npm test`: perus-Playwright; ei sisällä OCR-stressiä.
+- `npm run test:qa-import`: QA8:n 15 lähdeidentiteetin regressiota (tuotantofunktiot, stubbattu resolveri/tallennus).
+- `npm run test:ocr`: synteettisten kuvien oikea Tesseract-OCR ja kirjaston latausdiagnostiikka.
+
+**Huom:** päällä oleva OCR/QA-työnkulun vihreä status ei yksin todista kaikkien testien läpäisyä: PR:n advisory-ajoissa katso testivaiheen `outcome`, JSON-raportti ja varoitukset. Riippumaton QA:n GO ja käyttäjän lupa tarvitaan ennen mergeä/deployta.
