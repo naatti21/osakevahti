@@ -453,12 +453,60 @@ function instrumentDataKey(h){
   const i=ensureInstrumentIdentity(h);
   return normalizedIdText(i?.dataKey||h?.symbol);
 }
+const VALID_ACCOUNT_TYPES=["AOT","OST","FUND","OTHER"];
+function accountTypeLabel(v){return ({AOT:"AOT",OST:"OST",FUND:"Rahastotili",OTHER:"Muu"})[v]||"Tilityyppi tuntematon"}
+function suggestedLegacyAccountType(h){
+  const a=String(h.account||"").trim().toUpperCase();
+  // Only suggestions: old versions erroneously mapped some bank names to OST/AOT.
+  if(a==="AOT"||a==="OST")return a;
+  if(a==="RAHASTOT" || a==="RAHASTOTILI")return "FUND";
+  return h.assetType==="fund"?"FUND":"";
+}
+function migrateAccountDetails(h){
+  // Never rewrite the legacy account key; it is part of import identity/matching.
+  // In particular, Nordea is NOT evidence of OST, nor Nordnet of AOT.
+  if(typeof h.account!=="string")h.account=String(h.account??"");
+  if(!Object.hasOwn(h,"legacyAccount"))h.legacyAccount=h.account;
+  if(!VALID_ACCOUNT_TYPES.includes(h.accountType))h.accountType=suggestedLegacyAccountType(h);
+  if(!h.broker){
+    const a=h.account.trim().toLowerCase();
+    h.broker=a==="nordea"?"Nordea":a==="nordnet"?"Nordnet":"";
+  }
+  h.broker=String(h.broker||"").slice(0,80);
+  h.accountLabel=String(h.accountLabel||"").slice(0,80);
+  // Existing legacy data did not record whether account metadata was verified.
+  if(h.accountDetailsConfirmed!==true || !VALID_ACCOUNT_TYPES.includes(h.accountType) || !h.broker.trim())h.accountDetailsConfirmed=false;
+}
+function unconfirmedAccountHoldings(){return state.holdings.filter(h=>h.accountDetailsConfirmed!==true)}
+function displayAccount(h){
+  if(h.accountDetailsConfirmed!==true)return "Tili tarkistamatta"+(h.account?" · "+h.account:"");
+  return [h.broker,accountTypeLabel(h.accountType),h.accountLabel].filter(Boolean).join(" · ");
+}
+function formBrokerValue(selectId,otherId){
+  const selected=$(selectId).value;
+  return selected==="OTHER"?($(otherId).value.trim().slice(0,80)||"Muu"):selected;
+}
+function setBrokerSelect(selectId,otherId,containerId,value){
+  const v=String(value||"").trim();
+  $(selectId).value=!v?"":(v==="Nordea"||v==="Nordnet"?v:"OTHER");
+  $(otherId).value=v&&v!=="Nordea"&&v!=="Nordnet"&&v!=="Muu"?v:"";
+  $(containerId).classList.toggle("hidden",$(selectId).value!=="OTHER");
+}
+function accountFormFields(typeId,brokerId,otherId,labelId){
+  const type=$(typeId).value,broker=formBrokerValue(brokerId,otherId);
+  if(!VALID_ACCOUNT_TYPES.includes(type)||!broker){
+    alert("Valitse tilityyppi ja palveluntarjoaja. Käytä Muu-vaihtoehtoa, jos et tiedä.");
+    return null;
+  }
+  return {accountType:type,broker,accountLabel:$(labelId).value.trim().slice(0,80),accountDetailsConfirmed:true};
+}
+function derivedAccountName(fields){
+  return [fields.broker,accountTypeLabel(fields.accountType),fields.accountLabel].filter(Boolean).join(" / ");
+}
 function migrateState(s){
   const targetDefaults={"AMD":10,"FORTUM":10,"NDA-FI":8,"VERK":4,"FRAMERY":2,"IQMX":3,"METSO":5};
   for(const h of (s.holdings||[])){
-    if(h.account==="Nordea") h.account="OST";
-    if(h.account==="Nordnet") h.account="AOT";
-    if(h.assetType==="fund" && /Nordea Pohjoismaat/i.test(h.name||"")) h.account="Rahastot";
+    migrateAccountDetails(h);
     const identity=ensureInstrumentIdentity(h,"migration");
     if(identity?.dataKey) h.nordnetSymbol=identity.dataKey;
     const key=instrumentDataKey(h);
@@ -660,8 +708,8 @@ function render(){
   let ost=0,aot=0,funds=0,todayEur=0;
   rows.forEach(r=>{
     const h=r.h;
-    if(h.account==="OST")ost+=r.val;
-    if(h.account==="AOT")aot+=r.val;
+    if(h.accountDetailsConfirmed===true && h.accountType==="OST")ost+=r.val;
+    if(h.accountDetailsConfirmed===true && h.accountType==="AOT")aot+=r.val;
     if(h.assetType==="fund")funds+=r.val;
     const dp=hasCurrentTradingDayQuote(h)?n(h.dayChangePct):0;
     if(r.p&&r.fx&&dp&&dp>-99){
@@ -670,6 +718,9 @@ function render(){
     }
   });
 
+  const toReview=unconfirmedAccountHoldings().length;
+  $("accountReviewBanner").classList.toggle("hidden",toReview===0);
+  $("accountReviewBannerText").textContent=toReview+" omistuksen tilityyppi tai pankki on vahvistamatta. Vanha sovellus saattoi arvata tilin väärin. Tarkista tiedot – määriä tai hintoja ei muuteta.";
   $("holdingsEmpty").classList.toggle("hidden",state.holdings.length>0);
   $("riskEmpty").classList.toggle("hidden",state.holdings.some(h=>h.assetType!=="fund"));
   $("detailsToggle").textContent=state.showDetails?"Piilota tarkemmat luvut":"Näytä tarkemmat luvut";
@@ -696,13 +747,13 @@ function render(){
     b.className="item";
     const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(h.account||"Ei tiliä")}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
 
   const fundPct=tv?funds/tv*100:0;
-  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
+  $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST · vahvistettu</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT · vahvistettu</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   const moves=rows
     .filter(r=>r.h.assetType!=="fund" && r.p)
     .map(r=>({h:r.h,p:r.p,pct:n(r.h.dayChangePct),current:hasCurrentTradingDayQuote(r.h)}))
@@ -2032,10 +2083,8 @@ function parseImportTable(text){
   return {rows,delimiter,headers:rawHeaders,fields};
 }
 function normalizedAccount(v){
-  const raw=String(v||"").trim();
-  if(raw==="Nordea")return "OST";
-  if(raw==="Nordnet")return "AOT";
-  return raw;
+  // Old account labels are identity evidence, never the tax account category.
+  return String(v||"").trim();
 }
 function parseImportBuyPrice(raw){
   const t=String(raw??"").trim();
