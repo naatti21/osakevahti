@@ -1,6 +1,16 @@
 name: OCR stress
 
 on:
+  # Test OCR changes on PRs before merge. This job is advisory on pull requests
+  # while known OCR stress limitations remain open; see step summary/artifacts.
+  pull_request:
+    paths:
+      - "image-reader.js"
+      - "index.html"
+      - "tests/e2e/**"
+      - "tests/import-qa/**"
+      - "package.json"
+      - ".github/workflows/ocr-stress.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
@@ -10,6 +20,7 @@ on:
       - "image-reader.js"
       - "index.html"
       - "tests/e2e/ocr-stress.spec.mjs"
+      - "tests/import-qa/**"
       - "package.json"
       - ".github/workflows/ocr-stress.yml"
 
@@ -21,6 +32,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  qa8-source-guards:
+    name: QA8 source identity (required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run 15 production-code QA8 regression guards
+        run: npm run test:qa-import
+
+      - name: Publish individual QA8 outcomes
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f test-results/qa8-guards.json ]]; then
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const r=JSON.parse(fs.readFileSync("test-results/qa8-guards.json","utf8"));
+              const lines=[
+                "### QA8 source-identity regression checks",
+                "Actual checked-out source SHA256: " + (r.testedSourceSha256||"unknown"),
+                "PASS: **" + (r.pass??0) + "**, FAIL: **" + (r.fail??0) + "**",
+                "| Scenario | Result |","|---|---|",
+                ...(r.scenarios||[]).map(s=>"| "+s.name+" | "+s.status+" |")
+              ];
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,lines.join("\n")+"\n");
+            '
+          else
+            echo 'QA8 source guard report missing — setup or test failure' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload machine-readable QA8 source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa8-source-evidence
+          path: test-results/qa8-guards.json
+          if-no-files-found: warn
+          retention-days: 7
+
   real-ocr:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,7 +100,33 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run real OCR stress tests
+        id: ocr
+        # Real OCR remains diagnostic for PRs until source stress cases pass.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: npm run test:ocr
+
+      - name: Summarize OCR result
+        if: always()
+        shell: bash
+        env:
+          OCR_OUTCOME: ${{ steps.ocr.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          {
+            echo '### Import QA diagnostics — see each step outcome'
+            echo 'QA8 source-evidence guards run separately as a blocking job.'
+            echo '### OCR stress — real Tesseract diagnostics'
+            echo "Result: **${OCR_OUTCOME}**"
+            if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
+              echo 'PR mode: **advisory**. Failures do not pass OCR QA and do not block the separate Quality gate.'
+            else
+              echo 'Main/scheduled/manual mode: test failures are **blocking** for this workflow.'
+            fi
+            echo 'See the test step and the uploaded report for failed assertions and OCR images.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$OCR_OUTCOME" != 'success' ]]; then
+            echo "::warning::OCR stress ${OCR_OUTCOME}; inspect report and fix failures before requiring this check."
+          fi
 
       - name: Upload OCR stress report
         if: always()
