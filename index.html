@@ -1341,18 +1341,20 @@ function saveHolding(){
     alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
     return;
   }
-  const account=old.id&&old.accountOriginDerived!==true
-    ? String(old.account||"")
-    : derivedAccountName(fields||{
+  const shouldDeriveAccount=!old.id || old.accountOriginDerived===true ||
+    (complete&&!String(old.account||"").trim());
+  const account=shouldDeriveAccount
+    ? derivedAccountName(fields||{
         broker:old.broker||"Muu",accountType:old.accountType||"OTHER",accountLabel:old.accountLabel||""
-      });
+      })
+    : String(old.account||"");
   const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,
     quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account,
     accountType:fields?.accountType||type||old.accountType||"",
     broker:fields?.broker||(provider?formBrokerValue("brokerSelect","brokerOther"):old.broker||""),
     accountLabel:fields?.accountLabel||$("accountLabel").value.trim().slice(0,80),
     accountDetailsConfirmed:!!fields||old.accountDetailsConfirmed===true,
-    accountOriginDerived:old.id?old.accountOriginDerived===true:true,
+    accountOriginDerived:shouldDeriveAccount,
     manualPrice:opt($("manualPrice").value),manualStop:opt($("manualStop").value),
     trailingPct:n($("trailing").value),riskClass:$("riskClass").value,
     targetWeight:opt($("targetWeight").value)};
@@ -1411,7 +1413,12 @@ function confirmAccountReview(){
   Object.assign(h,fields);
   // Legacy account is kept verbatim as the established matching key. A typed
   // category must not silently rewrite account identity or alter holdings.
-  if(h.accountOriginDerived===true)h.account=derivedAccountName(fields);
+  // A blank legacy identity is unpartitioned: only after explicit confirmation
+  // may we create a distinct broker+type key. Nonblank legacy keys never change.
+  if(h.accountOriginDerived===true || !String(h.account||"").trim()){
+    h.account=derivedAccountName(fields);
+    h.accountOriginDerived=true;
+  }
   save();render();showNextAccountReview();
 }
 function deleteHolding(){const id=$("id").value;if(id&&confirm("Poistetaanko omistus?")){state.holdings=state.holdings.filter(x=>x.id!==id);save();render();$("dlg").close()}}
