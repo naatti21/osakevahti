@@ -13,11 +13,12 @@ Käyttäjän ei tarvitse siirtää ZIP-paketteja ja pitkiä prompteja kehittäj�
 - **Kehittäjä:** tekee korjaukset testattavaan haaraan, antaa SHA:n, testilinkit ja riskirajaukset PR-kommentissa.
 - **GitHub Actions:** ajaa selaintestit, OCR-stressin ja 15 QA8:n lähde-evidenssin vastatestiä. `test-results/qa8-guards.json` sisältää yksilöidyt tarkistukset. OCR:n screenshotit ja Playwright-jäljet ovat `ocr-stress-report`-artefaktissa.
 - **Riippumaton Work-QA:** lukee PR:n, lukitsee SHA:n, tarkistaa CI:n raakalogit ja varmistaa rajatut riskit myös oikeassa selaimessa. Kirjoittaa raportin samaan PR-keskusteluun **jos sillä on GitHubin kommentointioikeus**; muuten palauttaa tekstin keskusteluun.
+- **Korjauskierroksen ensisijainen QA-kohde on PR #4**, koska PR #1:n korjaukset, PR #3:n release-fixit ja PR #2:n testit ovat siinä yhdessä. Aiempien PR:ien vihreitä checkejä ei käytetä korvaamaan uuden SHA:n riippumatonta QA:ta.
 - **Käyttäjä:** antaa erillisen nimenomaisen luvan vasta riippumattoman GO:n jälkeen. Kukaan ei yhdistä PR:ää, päivitä `main`ia tai julkaise sitä ilman tätä lupaa.
 
 ## Yksi Work-käynnistysviesti
 
-> Tarkasta riippumattomasti repo `naatti21/osakevahti`, PR #1. Lue PR:n uusin QA-handoff, lukitse testattava SHA ja käy läpi GitHub Actionsin tulokset sekä avoimet release-esteet. Tee ensin P1-vastatestit, sitten selainpysyvyys ja vasta lopuksi lisä-OCR. Kirjaa PASS/FAIL/PARTIAL/NOT RUN, toisto-ohjeet ja GO/NO-GO PR-keskusteluun, jos oikeus sallii. Älä muuta koodia, testiodotuksia, haaroja tai julkaise mitään.
+> Tarkasta riippumattomasti repo `naatti21/osakevahti`, **PR #4**. Varmista PR:n senhetkinen **täysi head-SHA** ennen testausta. Lue PR #4:n handoff ja CI-tulokset (QA8-required, Playwright, OCR-diagnostics). Testaa ensin todelliset riskit (ISIN-todentaminen, puuttuvat/ristiriitaiset tunnisteet, IQM), sitten selainpysyvyys ja oikea kuva→Tesseract→esikatselu→tallennus. Arvioi erikseen **normaali julkinen CDN**, ei vain mockattuja tai paikallisia reittejä. Kirjaa PASS/FAIL/PARTIAL/NOT RUN, toisto-ohjeet sekä GO/NO-GO **PR #4:n keskusteluun**, jos GitHub-kirjoitusoikeus on; muussa tapauksessa palauta raportti tähän keskusteluun. Älä muuta koodia, testiodotuksia, haaroja tai julkaise mitään.
 
 **Käyttösuositus:** Workin saatavilla oleva riittävän kevyt malli, Medium-päättely aluksi. Astra/Pro tai korkein päättely vain todelliseen vaikeaan esteeseen. Koneellisesti jo läpäistyjä stressiajoja ei ajeta Workissa uudelleen ilman perustetta. Tallenna väliraportti ensin, keskeytä P1-regressioon.
 
@@ -26,7 +27,8 @@ Käyttäjän ei tarvitse siirtää ZIP-paketteja ja pitkiä prompteja kehittäj�
 - `npm test`: tavalliset Playwright-selaintestit; **ei** OCR-stressiä.
 - `npm run test:qa-import`: QA8:n 15 lähde-identiteetin tuotantofunktiotestiä; synteettinen resolveri ja tallennusstub; **ei** oikeaa OCR:ää tai selainpysyvyyttä.
 - `npm run test:ocr`: oikea Tesseract Node-prosessissa synteettisille kuville sekä selaimen OCR-kirjaston lataustesti; **ei** täysi käyttäjän alkuperäisten 46 kuvan selainketju.
-- `OCR stress` -työnkulku PR:ssä on aluksi **advisory**: vaikka workflow olisi vihreä, katso jokaisen testivaiheen **outcome**, julkaistu yhteenveto ja raakaraportti. `main`-ajossa testivirheet estävät tämän työnkulun onnistumisen.
+- `OCR stress` -työnkulun **QA8 source identity (required)** -jobi on aidosti estävä; kaikki 15 tarkistusta pitää läpäistä. Sen JSON-artefakti on `qa8-source-evidence`.
+- Saman työnkulun **real-ocr**-jobi on PR:ssä vielä **advisory**: tarkista testivaiheen `outcome`, raportti ja varoitukset. Vihreä jobi ei tee epäonnistuneesta OCR-testistä PASSia. `main`- ja manuaaliajossa OCR-virheet ovat estäviä.
 
 Nämä automaattiset testit kattavat vain osan historiallisesta korpuksesta. Älä väitä niitä QA8:n 408 testin tai 46 kuvafikstuuran täydeksi uudelleensuoritukseksi.
 
