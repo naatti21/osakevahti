@@ -310,3 +310,54 @@ test('two typed accounts cannot silently share identical bank-only legacy label'
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect(await holdingsInStorage(page)).toHaveLength(0);
 });
+
+
+test('editing bank-only legacy holding without type does not require account confirmation',async({page})=>{
+  const original=holding('old-bank','MSFT','Nordea',{quantity:5,buyPrice:10});
+  await openApp(page,[original]);
+  await expect(page.locator('#accountReviewBanner')).toBeVisible();
+  await page.locator('#holdings .item').first().click();
+  await expect(page.locator('#accountType')).toHaveValue('');
+  await expect(page.locator('#brokerSelect')).toHaveValue('Nordea');
+  await page.locator('#qty').fill('8');
+  await page.locator('#form button[type="submit"]').click();
+  await expect(page.locator('#dlg')).not.toBeVisible();
+  let h=(await holdingsInStorage(page))[0];
+  expect(h.quantity).toBe(8);
+  expect(h.buyPrice).toBe(10);
+  expect(h.account).toBe('Nordea');
+  expect(h.accountDetailsConfirmed).toBe(false);
+  await expect(page.locator('#accountReviewBanner')).toBeVisible();
+  await page.reload();
+  h=(await holdingsInStorage(page))[0];
+  expect(h.quantity).toBe(8);
+  expect(h.account).toBe('Nordea');
+  expect(h.accountDetailsConfirmed).toBe(false);
+});
+
+test('editing prefilled but unconfirmed type and provider never implies approval or changes blank identity',async({page})=>{
+  await openApp(page,[
+    holding('old-empty','FORTUM','',{
+      quantity:9,accountType:'OST',broker:'Nordea',accountDetailsConfirmed:false
+    })
+  ]);
+  await page.locator('#holdings .item').first().click();
+  await expect(page.locator('#accountType')).toHaveValue('OST');
+  await expect(page.locator('#brokerSelect')).toHaveValue('Nordea');
+  await page.locator('#qty').fill('11');
+  await page.locator('#form button[type="submit"]').click();
+  let h=(await holdingsInStorage(page))[0];
+  expect(h.quantity).toBe(11);
+  expect(h.account).toBe('');
+  expect(h.accountDetailsConfirmed).toBe(false);
+  expect(h.accountOriginDerived).toBe(false);
+  await page.reload();
+  h=(await holdingsInStorage(page))[0];
+  expect(h.account).toBe('');
+  expect(h.accountDetailsConfirmed).toBe(false);
+  await page.locator('#openAccountReviewBtn').click();
+  await confirmAccount(page,'OST','Nordea');
+  h=(await holdingsInStorage(page))[0];
+  expect(h.account).toContain('Nordea / OST');
+  expect(h.accountDetailsConfirmed).toBe(true);
+});
