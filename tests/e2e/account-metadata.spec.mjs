@@ -249,3 +249,28 @@ test('CSV import with bank-only label preserves verified metadata on update',asy
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect((await holdingsInStorage(page))[0].quantity).toBe(3);
 });
+
+
+test('blank legacy account receives user-confirmed identity, never a guessed broker',async({page})=>{
+  await openApp(page,[
+    holding('blank','FORTUM','',{quantity:9}),
+    holding('old','AMD','AOT',{quantity:4})
+  ]);
+  let rows=await holdingsInStorage(page);
+  expect(rows[0].account).toBe('');
+  expect(rows[0].accountDetailsConfirmed).toBe(false);
+  await page.locator('#openAccountReviewBtn').click();
+  await expect(page.locator('#reviewBroker')).toHaveValue('');
+  await confirmAccount(page,'OST','Nordea');
+  rows=await holdingsInStorage(page);
+  expect(rows[0].account).toContain('Nordea / OST');
+  expect(rows[0].accountOriginDerived).toBe(true);
+  expect(rows[0].legacyAccount).toBe('');
+  expect(rows[0].quantity).toBe(9);
+  expect(rows[1].account).toBe('AOT');
+  await page.locator('#laterAccountReview').click();
+  await page.reload();
+  rows=await holdingsInStorage(page);
+  expect(rows[0].account).toContain('Nordea / OST');
+  expect(rows[1].account).toBe('AOT');
+});
