@@ -1935,8 +1935,9 @@ function importActionForRow(row){
   }
   if(match.index>=0){
     const old=state.holdings[match.index];
-    if(old.accountDetailsConfirmed===true && incoming.accountDetailsConfirmed===true &&
-      (old.accountType!==incoming.accountType || old.broker.trim().toLowerCase()!==incoming.broker.trim().toLowerCase())){
+    if(old.accountDetailsConfirmed===true &&
+      ((incoming.accountType && old.accountType!==incoming.accountType) ||
+       (incoming.broker && old.broker.trim().toLowerCase()!==incoming.broker.trim().toLowerCase()))){
       return {kind:"review",label:"TARKISTA TILITYYPPI",
         detail:"Tuodun rivin tilityyppi tai palveluntarjoaja poikkeaa vahvistetusta tilistä. Tietoja ei yhdistetä."};
     }
@@ -2097,8 +2098,9 @@ function mergeImportedHoldings(existing,incoming){
       const old=out[idx],merged={...old,...h,id:old.id,account:h.account||old.account};
       // Imports may omit account metadata. Never erase previously confirmed
       // account type/broker, and never silently overwrite them with a conflict.
-      if(old.accountDetailsConfirmed===true&&h.accountDetailsConfirmed===true&&
-        (old.accountType!==h.accountType||old.broker.trim().toLowerCase()!==h.broker.trim().toLowerCase())){
+      if(old.accountDetailsConfirmed===true&&
+        ((h.accountType&&old.accountType!==h.accountType)||
+         (h.broker&&old.broker.trim().toLowerCase()!==h.broker.trim().toLowerCase()))){
         return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       }
       if(old.accountDetailsConfirmed===true&&h.accountDetailsConfirmed!==true){
