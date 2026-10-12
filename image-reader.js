@@ -3,7 +3,8 @@
 const TESSERACT_VERSION = "5.1.0";
 const TESSERACT_CDN_URLS = [
   `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
-  `https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`
+  `https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`,
+  `https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/${TESSERACT_VERSION}/tesseract.min.js`
 ];
 
 let tesseractPromise;
@@ -22,9 +23,15 @@ function loadTesseractScript(url) {
     script.onload = () => {
       const api = existingTesseract();
       if (api) resolve(api);
-      else reject(new Error("OCR-kirjasto latautui, mutta createWorker puuttuu."));
+      else {
+        script.remove();
+        reject(new Error("OCR-kirjasto latautui, mutta createWorker puuttuu."));
+      }
     };
-    script.onerror = () => reject(new Error("OCR-kirjaston lataus epäonnistui."));
+    script.onerror = () => {
+      script.remove();
+      reject(new Error("OCR-kirjaston lataus epäonnistui."));
+    };
     document.head.appendChild(script);
   });
 }
@@ -102,6 +109,38 @@ export function tsvToLines(tsv, fallbackText = "") {
   }).sort((a, b) => a.top - b.top || a.left - b.left);
 }
 
+async function createOcrWorker(api, onProgress) {
+  // Tesseract 5 normally loads its worker from jsDelivr, separately from the
+  // main script. A blocked worker CDN is not repaired by a main-script fallback.
+  const logger = message => {
+    if(typeof onProgress === "function")onProgress({
+      status:String(message?.status || ""),
+      progress:Number.isFinite(message?.progress)?message.progress:null
+    });
+  };
+  const alternatives = [
+    { label:"default", options:{ logger } },
+    { label:"alternate CDN", options:{logger,
+      workerPath:`https://unpkg.com/tesseract.js@${TESSERACT_VERSION}/dist/worker.min.js`,
+      corePath:"https://unpkg.com/tesseract.js-core@v5.0.0",
+      langPath:"https://tessdata.projectnaptha.com/4.0.0"
+    }}
+  ];
+  let lastError;
+  for(let attempt=0;attempt<alternatives.length;attempt++){
+    const route=alternatives[attempt];
+    try{return await api.createWorker(["fin","eng"],1,route.options)}
+    catch(error){
+      lastError=error;
+      const detail=String(error?.message||error||"");
+      // Do not waste another OCR startup on non-network application errors.
+      if(!/network|importScripts|failed to (?:load|fetch)|fetch|worker|language|traineddata|wasm/i.test(detail))break;
+    }
+  }
+  throw new Error("OCR-moottorin lataus epäonnistui (worker/core/kielidata). Tarkista verkkoyhteys. "+
+    String(lastError?.message||lastError||"Tuntematon virhe"));
+}
+
 export async function extractImageText(file, { onProgress } = {}) {
   if (!(file instanceof Blob)) throw new Error("Kuvatiedosto puuttuu.");
 
@@ -112,16 +151,7 @@ export async function extractImageText(file, { onProgress } = {}) {
 
   let worker;
   try {
-    worker = await api.createWorker(["fin", "eng"], 1, {
-      logger: message => {
-        if (typeof onProgress === "function") {
-          onProgress({
-            status: String(message?.status || ""),
-            progress: Number.isFinite(message?.progress) ? message.progress : null
-          });
-        }
-      }
-    });
+    worker = await createOcrWorker(api, onProgress);
 
     const result = await worker.recognize(file, {}, { text: true, tsv: true });
     const text = String(result?.data?.text || "").trim();
