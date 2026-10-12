@@ -132,6 +132,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
 .accountNotice{display:flex;align-items:center;justify-content:space-between;gap:12px;border-color:#ae8a4d;margin:0 0 12px}.accountNotice #accountReviewBannerText{font-size:13px;line-height:1.45}.accountNotice button{flex-shrink:0}.accountHelp{margin:6px 0 12px}.accountHelp summary{font-size:12px;cursor:pointer;color:var(--muted)}.accountHelp p{font-size:12px;line-height:1.5;margin:8px 0}.accountReviewWarning{font-weight:700;color:#ffcd82}@media(max-width:480px){.accountNotice{flex-direction:column;align-items:stretch}.accountNotice button{width:100%}}
+.accountNotice.hidden{display:none}
 </style>
 </head>
 <body>
@@ -2262,7 +2263,7 @@ function holdingFromImportRow(r,source){
   return {
     id:uid(),symbol:listingTicker,name,quantity,
     buyPrice:provided.buyPrice?parsedBuyPrice:0,
-    currency,account:normalizedAccount(r.account),accountType:typedAccount||"",broker:suppliedBroker,
+    currency,account:normalizedAccount(r.account)||(accountDetailsConfirmed?derivedAccountName({broker:suppliedBroker,accountType:typedAccount,accountLabel:""}):""),accountType:typedAccount||"",broker:suppliedBroker,
     accountLabel:"",accountDetailsConfirmed,accountOriginDerived:false,
     providerSymbol,assetType:sourceType==="fund"?"fund":sourceType==="etf"?"etf":sourceType==="stock"?"stock":undefined,
     manualStop:opt(r.manual_stop),
