@@ -367,6 +367,7 @@ const LEGACY_DATA_KEYS={
   "IQMX":"IQMX","IQMX.HE":"IQMX",
   "AMD":"AMD"
 };
+const VALID_ACCOUNT_TYPES=["AOT","OST","FUND","OTHER"];
 let state=load();save();
 let insights=null;
 let portfolioNews=null;
@@ -459,7 +460,7 @@ function instrumentDataKey(h){
   const i=ensureInstrumentIdentity(h);
   return normalizedIdText(i?.dataKey||h?.symbol);
 }
-const VALID_ACCOUNT_TYPES=["AOT","OST","FUND","OTHER"];
+
 function accountTypeLabel(v){return ({AOT:"AOT",OST:"OST",FUND:"Rahastotili",OTHER:"Muu"})[v]||"Tilityyppi tuntematon"}
 function suggestedLegacyAccountType(h){
   const a=String(h.account||"").trim().toUpperCase();
