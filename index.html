@@ -131,6 +131,7 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 .importSource{font-size:9px;color:var(--muted);margin-top:7px;line-height:1.35}
 details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
+.accountNotice{display:flex;align-items:center;justify-content:space-between;gap:12px;border-color:#ae8a4d;margin:0 0 12px}.accountNotice #accountReviewBannerText{font-size:13px;line-height:1.45}.accountNotice button{flex-shrink:0}.accountHelp{margin:6px 0 12px}.accountHelp summary{font-size:12px;cursor:pointer;color:var(--muted)}.accountHelp p{font-size:12px;line-height:1.5;margin:8px 0}.accountReviewWarning{font-weight:700;color:#ffcd82}@media(max-width:480px){.accountNotice{flex-direction:column;align-items:stretch}.accountNotice button{width:100%}}
 </style>
 </head>
 <body>
@@ -147,6 +148,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="accountSummary" class="summaryGrid"></div>
+  <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
   <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
   <details id="targetMapBox">
@@ -320,8 +322,12 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </div>
   <div class="grid2">
     <div><label class="txt">Valuutta</label><select id="currency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
-    <div><label class="txt">Tili</label><input id="account" placeholder="Nordnet / Nordea"></div>
+    <div><label class="txt" for="accountType">Tilityyppi</label><select id="accountType" required><option value="">Valitse tilityyppi</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select></div>
   </div>
+  <details class="accountHelp"><summary aria-label="Tilityyppien selitteet">ⓘ Mitä tilityypit tarkoittavat?</summary><p><strong>AOT</strong> = arvo-osuustili, yleinen osakkeiden ja ETF:ien säilytys. <strong>OST</strong> = osakesäästötili; rahasto-osuuksia ja ETF:iä ei voi pitää OST:llä. <strong>Rahastotili</strong> = sovelluksen yleisnimitys rahasto-omistusten säilytykselle, ei pankin virallinen tilinimi. <strong>Muu</strong> = muu järjestely tai epävarma tilityyppi.</p></details>
+  <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect" required><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
+  <label class="txt" for="accountLabel">Tilin tai salkun oma nimi (valinnainen)</label><input id="accountLabel" maxlength="80" placeholder="Esim. pitkäaikainen salkku"><p class="muted small">Erottaa useita saman palvelun tilejä. Älä kirjoita tilinumeroa tai henkilötietoja.</p>
+  <div id="accountFormHint" class="statusBox muted hidden"></div>
   <label class="txt">Nykykurssi käsin</label><input id="manualPrice" type="number" step="any" min="0">
   <div class="grid2">
     <div><label class="txt">Oma stop</label><input id="manualStop" type="number" step="any" min="0"></div>
@@ -332,6 +338,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div class="actions"><button type="button" id="deleteBtn" class="danger hidden">Poista</button><span class="spacer"></span><button type="button" id="cancelDlg">Peruuta</button><button type="submit" class="primary">Tallenna</button></div>
 </form>
 </dialog>
+
+<dialog id="accountReviewDlg"><div class="row"><h2>Tarkista vanhan salkun tilit</h2><button type="button" id="closeAccountReview">×</button></div><p class="muted small">Vanha versio saattoi muuntaa Nordea-tilin OST:ksi tai Nordnet-tilin AOT:ksi ilman varmistusta. Valitse oikeat tiedot. Omistuksia ja hintoja ei muuteta.</p><div id="accountReviewProgress" class="muted small"></div><h3 id="accountReviewName"></h3><div id="accountReviewOld" class="statusBox muted"></div><label class="txt" for="reviewAccountType">Tilityyppi</label><select id="reviewAccountType"><option value="">Valitse</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select><label class="txt" for="reviewBroker">Palveluntarjoaja</label><select id="reviewBroker"><option value="">Valitse</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select><div id="reviewBrokerOtherBox" class="hidden"><label class="txt" for="reviewBrokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="reviewBrokerOther" maxlength="80"></div><label class="txt" for="reviewAccountLabel">Tilin oma nimi (valinnainen)</label><input id="reviewAccountLabel" maxlength="80" placeholder="Älä kirjoita tilinumeroa"><div class="actions"><button type="button" id="laterAccountReview">Myöhemmin</button><button type="button" id="confirmAccountReview" class="primary">Vahvista ja jatka</button></div></dialog>
 
 <dialog id="quickInfoDlg">
   <div class="row"><div><div class="eyebrow">PIKANÄKYMÄN SELITYS</div><h2 id="quickInfoTitle" style="margin:3px 0 0">Osake</h2></div><button type="button" id="closeQuickInfo">×</button></div>
