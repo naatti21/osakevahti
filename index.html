@@ -475,7 +475,9 @@ function migrateAccountDetails(h){
   // In particular, Nordea is NOT evidence of OST, nor Nordnet of AOT.
   if(typeof h.account!=="string")h.account=String(h.account??"");
   if(!Object.hasOwn(h,"legacyAccount"))h.legacyAccount=h.account;
-  if(!VALID_ACCOUNT_TYPES.includes(h.accountType))h.accountType=suggestedLegacyAccountType(h);
+  // R7-03: validate original data before replacing an invalid type with a suggestion.
+  const originalTypeValid=VALID_ACCOUNT_TYPES.includes(h.accountType);
+  if(!originalTypeValid)h.accountType=suggestedLegacyAccountType(h);
   if(!h.broker){
     const a=h.account.trim().toLowerCase();
     h.broker=a==="nordea"?"Nordea":a==="nordnet"?"Nordnet":"";
@@ -483,7 +485,7 @@ function migrateAccountDetails(h){
   h.broker=String(h.broker||"").slice(0,80);
   h.accountLabel=String(h.accountLabel||"").slice(0,80);
   // Existing legacy data did not record whether account metadata was verified.
-  if(h.accountDetailsConfirmed!==true || !VALID_ACCOUNT_TYPES.includes(h.accountType) || !h.broker.trim())h.accountDetailsConfirmed=false;
+  if(h.accountDetailsConfirmed!==true || !originalTypeValid || !h.broker.trim())h.accountDetailsConfirmed=false;
 }
 function unconfirmedAccountHoldings(){return state.holdings.filter(h=>h.accountDetailsConfirmed!==true)}
 function displayAccount(h){
@@ -1926,6 +1928,8 @@ function findExistingHoldingMatch(h){
   }
   if(fallback){
     const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>holdingFallbackKey(x)===fallback);
+    // R7-01: a conflicting confirmed legacy account may not disappear into ADD.
+    if(matches.some(({x})=>legacyAccountMetadataConflict(h,x)))return {index:-1,type:"account-conflict"};
     if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))return {index:matches[0].i,type:"fallback"};
   }
   if(!String(h.account||"").trim()){
@@ -2095,6 +2099,12 @@ function holdingFallbackKey(h){
   const currency=normalizedIdText(i.currency||h.currency);
   return listing?[account,listing,currency||"noccy"].join("|"):"";
 }
+function legacyAccountMetadataConflict(incoming,existing){
+  const key=holdingFallbackKey(incoming);
+  return !!(key && key===holdingFallbackKey(existing) &&
+    !distinctKnownMic(incoming,existing) &&
+    confirmedAccountMetadataConflict(incoming,existing));
+}
 function mergeImportedHoldings(existing,incoming){
   const out=(existing||[]).map(h=>({...h}));
   const byKey=new Map(),fallback=new Map();
@@ -2110,6 +2120,9 @@ function mergeImportedHoldings(existing,incoming){
     let idx=key?byKey.get(key):undefined;
     if(idx==null&&fk){
       const matches=fallback.get(fk)||[];
+      // R7-01: final save guard even if preview is bypassed.
+      if(matches.some(i=>legacyAccountMetadataConflict(h,out[i])))
+        return {holdings:(existing||[]).map(x=>({...x})),added:0,updated:0,conflict:true};
       if(matches.length===1 && !strongIdentityConflict(h,out[matches[0]]))idx=matches[0];
     }
     if(idx==null&&!String(h.account||"").trim()){
@@ -2193,7 +2206,63 @@ function commitPendingImport(){
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
-async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{state=Object.assign(load(),JSON.parse(await f.text()));migrateState(state);save();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value=state.apiKey||"";render()}catch{alert("Virheellinen JSON")}e.target.value=""}
+function validateBackupForRestore(parsed){
+  if(!parsed || typeof parsed!=="object" || Array.isArray(parsed) || !Array.isArray(parsed.holdings))
+    throw new Error("Varmuuskopiosta puuttuu kelvollinen omistuslista.");
+  if(parsed.baseCurrency!==undefined && !["EUR","USD","SEK"].includes(parsed.baseCurrency))
+    throw new Error("Varmuuskopion perusvaluutta ei ole tuettu.");
+  if(parsed.news!==undefined && !Array.isArray(parsed.news))
+    throw new Error("Varmuuskopion uutislista on virheellinen.");
+  if(parsed.ostPlan!==undefined && !Array.isArray(parsed.ostPlan))
+    throw new Error("Varmuuskopion suunnitelma on virheellinen.");
+  const nonNegativeNumber=(value,optional=false)=>{
+    if(value===undefined||value===null||value==="")return optional;
+    if(typeof value!=="number"&&typeof value!=="string")return false;
+    if(typeof value==="string"&&!/^[+]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/.test(value.trim()))return false;
+    const number=Number(String(value).trim().replace(",","."));
+    return Number.isFinite(number)&&number>=0;
+  };
+  if(parsed.riskBudgetPct!==undefined && (!nonNegativeNumber(parsed.riskBudgetPct)||Number(parsed.riskBudgetPct)<=0))
+    throw new Error("Riskibudjetti on virheellinen.");
+  const ids=new Set();
+  for(const [index,h] of parsed.holdings.entries()){
+    const prefix="Omistus "+(index+1)+": ";
+    if(!h||typeof h!=="object"||Array.isArray(h))
+      throw new Error(prefix+"virheellinen tietue.");
+    if(["symbol","name","currency","account"].some(k=>h[k]!=null&&typeof h[k]!=="string"))
+      throw new Error(prefix+"instrumentin tunniste tai tili on virheellinen.");
+    if(!String(h.symbol||h.name||h.instrument?.listingTicker||"").trim())
+      throw new Error(prefix+"instrumentin tunniste puuttuu.");
+    if(!nonNegativeNumber(h.quantity))
+      throw new Error(prefix+"määrän pitää olla ei-negatiivinen numero.");
+    for(const field of ["buyPrice","manualPrice","currentPrice","manualStop","highWatermark","fxRate","atr","high20","low20","targetWeight","trailingPct"]){
+      if(!nonNegativeNumber(h[field],true))throw new Error(prefix+field+" on virheellinen.");
+    }
+    if(h.id!=null){
+      if((typeof h.id!=="string"&&typeof h.id!=="number")||!String(h.id).trim()||ids.has(String(h.id)))
+        throw new Error(prefix+"omistuksen tunniste on virheellinen tai toistuu.");
+      ids.add(String(h.id));
+    }
+  }
+}
+async function importBackup(e){
+  const f=e.target.files?.[0];if(!f)return;
+  try{
+    const parsed=JSON.parse(await f.text());
+    validateBackupForRestore(parsed); // Check all holdings before touching the user's portfolio.
+    const candidate={...state,...parsed,apiKey:state.apiKey||""};
+    migrateState(candidate);
+    // Save once, and only adopt the candidate in memory AFTER successful storage.
+    localStorage.setItem(KEY,JSON.stringify(candidate));
+    state=candidate;
+    $("baseCurrency").value=state.baseCurrency;
+    $("riskBudgetPct").value=state.riskBudgetPct??1.25;
+    $("apiKey").value=state.apiKey||"";
+    render();
+  }catch(err){
+    alert("Varmuuskopiota ei palautettu: "+(err?.message||"Virheellinen JSON"));
+  }finally{e.target.value=""}
+}
 const IMPORT_HEADER_ALIASES={
   symbol:["symbol","ticker","tikkeri","tunnus","stock symbol","osaketunnus"],
   listing_ticker:["listing ticker","listing symbol","listaus ticker","listaustunnus"],
