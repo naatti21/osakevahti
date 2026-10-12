@@ -132,7 +132,13 @@ test('@ocr-stress @ocr-online real CDN image → browser OCR → import → relo
       const data = JSON.parse(localStorage.getItem(key) || '{}');
       return data.holdings || [];
     }, KEY);
-    expect(observations.afterReload).toEqual(observations.beforeReload);
+    // load() runs migrateState(), which intentionally materializes only the
+    // derived nordnetSymbol field. Compare all source data and identities
+    // unchanged; explicitly whitelist and verify that single migration.
+    expect(observations.afterReload).toHaveLength(1);
+    const { nordnetSymbol, ...persisted } = observations.afterReload[0];
+    expect(persisted).toEqual(observations.beforeReload[0]);
+    expect(nordnetSymbol).toBe(observations.afterReload[0].instrument.dataKey);
     expect(observations.externalResponses.length,
       'No external CDN response observed for real OCR').toBeGreaterThan(0);
   } finally {
