@@ -190,3 +190,51 @@ test('two accounts holding same symbol remain independent after migration and re
   expect(positions.map(h=>h.quantity)).toEqual([10,5]);
   expect(positions.map(h=>h.accountType)).toEqual(['OST','AOT']);
 });
+
+
+test('CSV import with bank-only label preserves verified metadata on update',async({page})=>{
+  await openApp(page,[]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  const first=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,Tili,ISIN',
+    'MSFT,Microsoft Corporation,2,400,USD,Nordea,US5949181045'].join('\n');
+  await page.locator('#importText').fill(first);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toBeVisible();
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  let saved=await holdingsInStorage(page);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].account).toBe('Nordea');
+  expect(saved[0].accountDetailsConfirmed).toBe(false);
+  await page.locator('[data-view="portfolioView"]').click();
+  await page.locator('#openAccountReviewBtn').click();
+  await confirmAccount(page,'AOT','Nordea');
+  saved=await holdingsInStorage(page);
+  expect(saved[0].accountDetailsConfirmed).toBe(true);
+  expect(saved[0].accountType).toBe('AOT');
+  await page.locator('[data-view="settingsView"]').click();
+  const update=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,Tili,ISIN',
+    'MSFT,Microsoft Corporation,3,410,USD,Nordea,US5949181045'].join('\n');
+  await page.locator('#importText').fill(update);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toContainText('PÄIVITETÄÄN');
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  saved=await holdingsInStorage(page);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].quantity).toBe(3);
+  expect(saved[0].account).toBe('Nordea');
+  expect(saved[0].accountType).toBe('AOT');
+  expect(saved[0].broker).toBe('Nordea');
+  expect(saved[0].accountDetailsConfirmed).toBe(true);
+
+  const conflicting=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,Tili,ISIN,Tilityyppi,Pankki',
+    'MSFT,Microsoft Corporation,4,410,USD,Nordea,US5949181045,OST,Nordea'].join('\n');
+  await page.locator('#importText').fill(conflicting);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toContainText('TARKISTA TILITYYPPI');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect((await holdingsInStorage(page))[0].quantity).toBe(3);
+});
