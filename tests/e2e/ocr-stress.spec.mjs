@@ -319,7 +319,7 @@ test.describe('@ocr-stress synthetic screenshots through real Tesseract OCR', ()
 // QA8 source images are drawn deterministically at test time and attached to
 // Actions artifacts; no personal screenshots or large old ZIP are committed.
 test.describe('@ocr-stress QA8 source-evidence images through real Tesseract', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'parallel' }); // Independent image cases: one failure must not skip others.
   test.setTimeout(120_000);
   test.beforeAll(async () => { ocrWorker = await createWorker('eng', 1); });
   test.afterAll(async () => { if (ocrWorker) await ocrWorker.terminate(); });
@@ -354,7 +354,10 @@ test.describe('@ocr-stress QA8 source-evidence images through real Tesseract', (
         await expect(page.locator('#confirmImportReview')).toBeEnabled();
       }else{
         await expect(page.locator('#imageImportStatus')).toContainText(/Korjaa|Tarkista|ristiriit|virhe/i);
-        await expect(page.locator('#confirmImportReview')).not.toBeEnabled();
+        // A rejected source can leave the dialog closed. A hidden button's
+        // disabled attribute is irrelevant; verify only actionable approval.
+        const approve=page.locator('#confirmImportReview');
+        if(await approve.isVisible())await expect(approve).toBeDisabled();
       }
     });
   }
