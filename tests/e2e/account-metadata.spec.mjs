@@ -274,3 +274,39 @@ test('blank legacy account receives user-confirmed identity, never a guessed bro
   expect(rows[0].account).toContain('Nordea / OST');
   expect(rows[1].account).toBe('AOT');
 });
+
+
+test('two typed accounts at same bank remain distinct if account column is absent',async({page})=>{
+  await openApp(page,[]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  const csv=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,ISIN,Tilityyppi,Pankki',
+    'MSFT,Microsoft Corporation,2,400,USD,US5949181045,AOT,Nordnet',
+    'MSFT,Microsoft Corporation,3,400,USD,US5949181045,OST,Nordnet'].join('\n');
+  await page.locator('#importText').fill(csv);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toContainText('2 riviä');
+  await expect(page.locator('#confirmImportReview')).toBeEnabled();
+  page.once('dialog',d=>d.accept());
+  await page.locator('#confirmImportReview').click();
+  const h=await holdingsInStorage(page);
+  expect(h).toHaveLength(2);
+  expect(h.map(x=>x.quantity).sort()).toEqual([2,3]);
+  expect(h.map(x=>x.accountType).sort()).toEqual(['AOT','OST']);
+  expect(h.map(x=>x.account)).toEqual(['Nordnet / AOT','Nordnet / OST']);
+  expect(h.every(x=>x.broker==='Nordnet'&&x.accountDetailsConfirmed===true)).toBe(true);
+});
+
+test('two typed accounts cannot silently share identical bank-only legacy label',async({page})=>{
+  await openApp(page,[]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  const csv=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,Tili,ISIN,Tilityyppi,Pankki',
+    'MSFT,Microsoft Corporation,2,400,USD,Nordnet,US5949181045,AOT,Nordnet',
+    'MSFT,Microsoft Corporation,3,400,USD,Nordnet,US5949181045,OST,Nordnet'].join('\n');
+  await page.locator('#importText').fill(csv);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toBeVisible();
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await holdingsInStorage(page)).toHaveLength(0);
+});
