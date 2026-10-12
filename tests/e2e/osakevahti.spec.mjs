@@ -1614,7 +1614,8 @@ test('QA8: omitted ISIN keeps earlier source evidence and later conflict blocks 
     instrumentResolver:Object.fromEntries(
       ['Aster Devices Corporation','US5949181045','FI4000297767'].map(query=>[query,[{
         symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
-        quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS'
+        quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS',
+        isin:query==='FI4000297767'?'FI4000297767':'US5949181045'
       }]])
     )
   }});
@@ -1657,8 +1658,8 @@ test('QA8: two different MIC and source ISIN listings import as separate holding
   await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
     instrumentResolver:Object.fromEntries(
       ['Aster Devices Corporation','US5949181045','FI4000297767'].map(query=>[query,[
-        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XNAS',exchange:'XNAS',full_exchange_name:'NasdaqGS'},
-        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XHEL',exchange:'XHEL',full_exchange_name:'Helsinki'}
+        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XNAS',exchange:'XNAS',full_exchange_name:'NasdaqGS',isin:'US5949181045'},
+        {symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',quote_type:'EQUITY',mic:'XHEL',exchange:'XHEL',full_exchange_name:'Helsinki',isin:'FI4000297767'}
       ]])
     )
   }});
@@ -1683,4 +1684,53 @@ test('QA8: compatible XNAS and NASDAQ OCR venues are not contradictory', async (
   await expect(page.locator('#importReviewDlg')).toBeVisible();
   await expect(page.locator('#importReviewDlg')).not.toContainText('MIC ja markkinapaikka ovat ristiriidassa');
   await expect(page.locator('#confirmImportReview')).toBeEnabled();
+});
+
+
+test('DEV04: unverified source ISIN requires review rather than automatic approval', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
+    instrumentResolver:{'Aster Devices Corporation':[{
+      symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
+      quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS'
+    }]}
+  }});
+  await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nISIN FI0009007132');
+  const dlg=page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(dlg).toContainText('ISIN ei vahvistunut');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
+
+test('DEV04: conflicting verified ISIN cannot be selected', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
+    instrumentResolver:{'Aster Devices Corporation':[{
+      symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
+      quote_type:'EQUITY',exchange:'NMS',mic:'XNAS',full_exchange_name:'NasdaqGS',isin:'US5949181045'
+    }]}
+  }});
+  await importOcrText(page,'Aster Devices Corporation\nTicker ASTR\n12 kpl\nGAV 35 USD\nISIN FI0009007132');
+  const dlg=page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  await expect(dlg.locator('[data-candidate]')).toHaveCount(0);
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
+
+test('IQM: digit-initial OCR 1QM stays in manual review with source text unchanged', async ({page}) => {
+  await openApp(page,{time:'2026-10-10T08:00:00+03:00',state:appState([]),network:{
+    instrumentResolver:{'1QM Quantum Computers':[
+      {symbol:'IQM',longname:'IQM Quantum Computers',currency:'USD',quote_type:'EQUITY',exchange:'NMS',full_exchange_name:'NasdaqGS'},
+      {symbol:'IQMX.HE',longname:'IQM Quantum Computers',currency:'EUR',quote_type:'EQUITY',exchange:'HEL',full_exchange_name:'Helsinki'}
+    ]}
+  }});
+  await importOcrText(page,'Portfolio\n1QM Quantum Computers\n55 kpl\nGAV 9.84 EUR');
+  const dlg=page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(dlg).toContainText('1QM Quantum Computers');
+  await expect(dlg).toContainText('OCR-numero/kirjainvirhe');
+  await expect(dlg).toContainText('IQM');
+  await expect(dlg).toContainText('IQMX.HE');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
 });
