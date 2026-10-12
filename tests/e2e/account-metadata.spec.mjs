@@ -361,3 +361,79 @@ test('editing prefilled but unconfirmed type and provider never implies approval
   expect(h.account).toContain('Nordea / OST');
   expect(h.accountDetailsConfirmed).toBe(true);
 });
+
+ 
+// Independent Work QA regressions R7-01 / R7-02 / R7-03.
+// These must be RED against PR #7 head 4792d09 before production fixes.
+test('R7-01 legacy fallback: contradictory confirmed account type cannot be silently added',async({page})=>{
+  const legacy=holding('legacy-real','MSFT','Nordea',{
+    name:'Microsoft Corporation',currency:'USD',quantity:5.25,buyPrice:13.75,
+    accountType:'AOT',broker:'Nordea',accountDetailsConfirmed:true
+    // Intentionally NO verified ISIN/MIC: this exercises the legacy fallback.
+  });
+  await openApp(page,[legacy]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  const csv=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;Tili;ISIN;Tilityyppi;Pankki',
+    'MSFT;Microsoft Corporation;99;21.5;USD;Nordea;US5949181045;OST;Nordea'].join('\\n');
+  await page.locator('#importText').fill(csv);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toBeVisible();
+  await expect(page.locator('#importReviewDlg')).toContainText('TARKISTA TILITYYPPI');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  await page.reload();
+  const after=await holdingsInStorage(page);
+  expect(after).toHaveLength(1);
+  expect(after[0].id).toBe('legacy-real');
+  expect(after[0].quantity).toBe(5.25);
+  expect(after[0].buyPrice).toBe(13.75);
+  expect(after[0].accountType).toBe('AOT');
+});
+
+test('R7-02 invalid financial JSON backup is rejected atomically and old holdings survive reload',async({page})=>{
+  const original=holding('KEEP','MSFT','Nordnet',{
+    name:'Microsoft Corporation',currency:'USD',quantity:5.25,buyPrice:13.75
+  });
+  await openApp(page,[original]);
+  await page.locator('[data-view="settingsView"]').click();
+  const invalid=JSON.stringify({baseCurrency:'EUR',holdings:[{
+    id:'invalid',symbol:'MSFT',name:'Microsoft Corporation',currency:'USD',
+    account:'Nordea',quantity:-7,buyPrice:-35,assetType:'stock'
+  }]});
+  const messages=[];
+  page.on('dialog',async dialog=>{messages.push(dialog.message());await dialog.accept()});
+  await page.locator('#importBackup').setInputFiles({
+    name:'invalid-financial-backup.json',mimeType:'application/json',buffer:Buffer.from(invalid)
+  });
+  await expect.poll(async()=>holdingsInStorage(page)).toEqual(expect.arrayContaining([
+    expect.objectContaining({id:'KEEP',quantity:5.25,buyPrice:13.75})
+  ]));
+  await page.reload();
+  const saved=await holdingsInStorage(page);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].id).toBe('KEEP');
+  expect(saved[0].quantity).toBe(5.25);
+  expect(saved[0].buyPrice).toBe(13.75);
+  expect(messages.some(x=>/varmuuskopi|virheell|hylätt|kelvot/i.test(x))).toBe(true);
+});
+
+test('R7-03 corrupt backup type cannot inherit verified flag from legacy suggestion',async({page})=>{
+  await openApp(page,[]);
+  await page.locator('[data-view="settingsView"]').click();
+  const invalidType=JSON.stringify({baseCurrency:'EUR',holdings:[{
+    id:'corrupt-type',symbol:'MSFT',name:'Microsoft Corporation',
+    currency:'USD',account:'OST',quantity:5.25,buyPrice:13.75,
+    accountType:'INVALID',broker:'Nordea',accountDetailsConfirmed:true
+  }]});
+  await page.locator('#importBackup').setInputFiles({
+    name:'invalid-type.json',mimeType:'application/json',buffer:Buffer.from(invalidType)
+  });
+  await page.reload();
+  const saved=await holdingsInStorage(page);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].quantity).toBe(5.25);
+  expect(saved[0].account).toBe('OST');
+  expect(saved[0].accountType).toBe('OST'); // Non-authoritative legacy suggestion.
+  expect(saved[0].accountDetailsConfirmed).toBe(false); // Must ask user again.
+});
+
