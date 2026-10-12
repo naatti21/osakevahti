@@ -1908,11 +1908,19 @@ function simpleListingKey(h){
   const currency=normalizedIdText(i.currency||h.currency);
   return listing?[listing,currency||"noccy"].join("|"):"";
 }
+function confirmedAccountMetadataConflict(a,b){
+  return a.accountDetailsConfirmed===true&&b.accountDetailsConfirmed===true&&
+    (a.accountType!==b.accountType||
+    String(a.broker||"").trim().toLowerCase()!==String(b.broker||"").trim().toLowerCase());
+}
 function findExistingHoldingMatch(h){
   const exact=holdingIdentityKey(h);
   const fallback=holdingFallbackKey(h);
   let idx=exact?state.holdings.findIndex(x=>holdingIdentityKey(x)===exact):-1;
-  if(idx>=0)return {index:idx,type:"exact"};
+  if(idx>=0){
+    if(confirmedAccountMetadataConflict(h,state.holdings[idx]))return {index:-1,type:"account-conflict"};
+    return {index:idx,type:"exact"};
+  }
   if(fallback){
     const matches=state.holdings.map((x,i)=>({x,i})).filter(({x})=>holdingFallbackKey(x)===fallback);
     if(matches.length===1 && !strongIdentityConflict(h,matches[0].x))return {index:matches[0].i,type:"fallback"};
@@ -1937,6 +1945,10 @@ function importActionForRow(row){
       detail:"Lähde-ISIN on ristiriidassa aiemman tuonnin kanssa. Korjaa lähde ennen tallennusta."};
   }
   const match=findExistingHoldingMatch(row.holding);
+  if(match.type==="account-conflict"){
+    return {kind:"review",label:"TARKISTA TILITYYPPI",
+      detail:"Saman tilimerkinnän vahvistettu tilityyppi tai palveluntarjoaja on ristiriidassa tuonnin kanssa. Anna eri tilille oma tunniste."};
+  }
   if(match.type==="multiple-accounts"){
     return {kind:"review",label:"TARKISTA TILI",detail:"Sama instrumentti löytyy useasta tilistä. Sovellus ei arvaa, mitä positiota pitäisi päivittää."};
   }
@@ -2048,6 +2060,7 @@ function sourceIsinConflict(a,b){
   return false;
 }
 function strongIdentityConflict(a,b){
+  if(confirmedAccountMetadataConflict(a,b))return true;
   const ai=a.instrument||{},bi=b.instrument||{};
   const aIsin=normalizedIdText(ai.isin),bIsin=normalizedIdText(bi.isin);
   if(aIsin&&bIsin&&aIsin!==bIsin)return true;
@@ -2065,6 +2078,7 @@ function batchImportConflicts(rows){
     const a=rows[x].holding,b=rows[y].holding;
     const same=holdingIdentityKey(a)===holdingIdentityKey(b) || (holdingFallbackKey(a)&&holdingFallbackKey(a)===holdingFallbackKey(b)) || (simpleListingKey(a)&&simpleListingKey(a)===simpleListingKey(b) && (!a.account||!b.account));
     if(same&&distinctKnownMic(a,b))continue;
+    if(same&&confirmedAccountMetadataConflict(a,b))return true;
     if(same&&sourceIsinConflict(a,b))return true;
     if(same&&strongIdentityConflict(a,b))continue;
     if(same && Number(a.quantity)!==Number(b.quantity))return true;
