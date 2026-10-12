@@ -375,7 +375,7 @@ test('R7-01 legacy fallback: contradictory confirmed account type cannot be sile
   await page.locator('[data-view="settingsView"]').click();
   await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
   const csv=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;Tili;ISIN;Tilityyppi;Pankki',
-    'MSFT;Microsoft Corporation;99;21.5;USD;Nordea;US5949181045;OST;Nordea'].join('\\n');
+    'MSFT;Microsoft Corporation;99;21.5;USD;Nordea;US5949181045;OST;Nordea'].join('\n');
   await page.locator('#importText').fill(csv);
   await page.locator('#importTextBtn').click();
   await expect(page.locator('#importReviewDlg')).toBeVisible();
