@@ -237,4 +237,15 @@ test('CSV import with bank-only label preserves verified metadata on update',asy
   await expect(page.locator('#importReviewDlg')).toContainText('TARKISTA TILITYYPPI');
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect((await holdingsInStorage(page))[0].quantity).toBe(3);
+  await page.locator('#closeImportReview').click();
+
+  // Even only ONE explicit contradictory field is authoritative enough to
+  // demand review, though incomplete metadata does not by itself confirm it.
+  const partial=['Ticker,Nimi,Kpl,Keskihinta,Valuutta,Tili,ISIN,Tilityyppi',
+    'MSFT,Microsoft Corporation,5,410,USD,Nordea,US5949181045,OST'].join('\n');
+  await page.locator('#importText').fill(partial);
+  await page.locator('#importTextBtn').click();
+  await expect(page.locator('#importReviewDlg')).toContainText('TARKISTA TILITYYPPI');
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect((await holdingsInStorage(page))[0].quantity).toBe(3);
 });
