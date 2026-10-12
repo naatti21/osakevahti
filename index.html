@@ -1332,6 +1332,10 @@ function saveHolding(){
     alert("Valitse tilityyppi ja palveluntarjoaja. Jos et tiedä, käytä Muu.");
     return;
   }
+  if(old.accountDetailsConfirmed===true&&!complete){
+    alert("Vahvistetulla omistuksella tulee säilyttää tilityyppi ja palveluntarjoaja.");
+    return;
+  }
   const fields=complete?accountFormFields("accountType","brokerSelect","brokerOther","accountLabel"):null;
   if(old.assetType==="fund"&&fields?.accountType==="OST"){
     alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
@@ -1931,6 +1935,11 @@ function importActionForRow(row){
   }
   if(match.index>=0){
     const old=state.holdings[match.index];
+    if(old.accountDetailsConfirmed===true && incoming.accountDetailsConfirmed===true &&
+      (old.accountType!==incoming.accountType || old.broker.trim().toLowerCase()!==incoming.broker.trim().toLowerCase())){
+      return {kind:"review",label:"TARKISTA TILITYYPPI",
+        detail:"Tuodun rivin tilityyppi tai palveluntarjoaja poikkeaa vahvistetusta tilistä. Tietoja ei yhdistetä."};
+    }
     const oq=n(old.quantity),nq=n(row.holding.quantity);
     const detail="Määrä "+oq+" → "+nq+" kpl"+(old.account?" · tili "+old.account:"");
     return {kind:"update",label:"PÄIVITETÄÄN",matchIndex:match.index,detail};
