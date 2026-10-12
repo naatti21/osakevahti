@@ -115,6 +115,8 @@ test('R7-02 inverse: valid backup repeat, reload, export, no imported API secret
   expect(h.every(x=>x.accountDetailsConfirmed===false)).toBe(true);
   expect((await state(page)).apiKey).toBe('LOCAL_SYNTHETIC_KEY');
   await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  await expect(page.locator('#exportBtn')).toBeVisible();
   const wait=page.waitForEvent('download');
   await page.locator('#exportBtn').click();
   const download=await wait;
