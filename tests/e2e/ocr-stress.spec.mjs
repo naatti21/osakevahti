@@ -119,6 +119,7 @@ async function syntheticPortfolioImage(context, testInfo, {
       ${row.ticker ? `<div class="ticker">Ticker ${row.ticker}</div>` : ''}
       <div class="meta">${row.quantity} kpl</div>
       ${row.gav ? `<div class="meta">GAV ${row.gav} ${row.currency || ''}</div>` : ''}
+      ${(row.extraLines || []).map(line => `<div class="meta">${line}</div>`).join('')}
     </section>
   `).join('');
 
@@ -312,4 +313,52 @@ test.describe('@ocr-stress synthetic screenshots through real Tesseract OCR', ()
     await expect(dialog).toContainText('AMD');
     await expect(page.locator('#imageImportStatus')).toContainText('omistusehdokasta');
   });
+});
+
+
+// QA8 source images are drawn deterministically at test time and attached to
+// Actions artifacts; no personal screenshots or large old ZIP are committed.
+test.describe('@ocr-stress QA8 source-evidence images through real Tesseract', () => {
+  test.describe.configure({ mode: 'parallel' }); // Independent image cases: one failure must not skip others.
+  test.setTimeout(120_000);
+  test.beforeAll(async () => { ocrWorker = await createWorker('eng', 1); });
+  test.afterAll(async () => { if (ocrWorker) await ocrWorker.terminate(); });
+  const cases = [
+    { name:'Q8-02 two source ISINs', lines:['ISIN US5949181045 FI4000297767'], must:['US5949181045','FI4000297767'], accept:false },
+    { name:'Q8-02 two source MICs', lines:['MIC XNAS XHEL'], must:['XNAS','XHEL'], accept:false },
+    { name:'Q8-04 compatible XNAS and NASDAQ', lines:['MIC XNAS','Exchange NASDAQ'], must:['XNAS','NASDAQ'], accept:true },
+    { name:'QA8 single valid source ISIN and MIC', lines:['ISIN US5949181045','MIC XNAS'], must:['US5949181045','XNAS'], accept:true }
+  ];
+  for(const spec of cases){
+    test(spec.name, async ({page,context}, testInfo)=>{
+      await openApp(page, {'aster devices':[{
+        symbol:'ASTR',longname:'Aster Devices Corporation',currency:'USD',
+        exchange:'NMS',full_exchange_name:'NasdaqGS',mic:'XNAS',quote_type:'EQUITY'
+      }]});
+      const png=await syntheticPortfolioImage(context,testInfo,{
+        title:'Portfolio',fontSize:27,width:960,
+        rows:[{name:'Aster Devices Corporation',ticker:'ASTR',quantity:12,
+          gav:'35',currency:'USD',extraLines:spec.lines}]
+      });
+      const ocr=await realOcr(png,testInfo);
+      for(const token of spec.must){
+        // An OCR miss is a real diagnostic failure, not an accepted import.
+        expect(ocr.text.toUpperCase()).toContain(token);
+      }
+      await injectRealOcrResult(page,ocr);
+      await page.locator('#importImage').setInputFiles({
+        name:'qa8-source-evidence.png',mimeType:'image/png',buffer:png
+      });
+      if(spec.accept){
+        await expect(page.locator('#importReviewDlg')).toBeVisible({timeout:30_000});
+        await expect(page.locator('#confirmImportReview')).toBeEnabled();
+      }else{
+        await expect(page.locator('#imageImportStatus')).toContainText(/Korjaa|Tarkista|ristiriit|virhe/i);
+        // A rejected source can leave the dialog closed. A hidden button's
+        // disabled attribute is irrelevant; verify only actionable approval.
+        const approve=page.locator('#confirmImportReview');
+        if(await approve.isVisible())await expect(approve).toBeDisabled();
+      }
+    });
+  }
 });
