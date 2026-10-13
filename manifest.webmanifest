@@ -1,8 +1,8 @@
 {
-  "id": "./",
-  "name": "Osakevahti",
-  "short_name": "Osakevahti",
-  "description": "Henkilökohtainen salkku-, riski-, uutis- ja markkinavahti.",
+  "id": "./?channel=alpha",
+  "name": "Osakevahti Alpha",
+  "short_name": "OV Alpha",
+  "description": "Osakevahdin erillinen Alpha-testiversio.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
