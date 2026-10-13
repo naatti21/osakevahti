@@ -155,7 +155,10 @@ test('PWA update: old installed shell becomes new offline shell without changing
       const keys = await caches.keys();
       const reg = await navigator.serviceWorker.getRegistration();
       return keys.includes(newName) && !keys.includes(oldName)
-        && reg?.active?.state === 'activated' && !!navigator.serviceWorker.controller;
+        && reg?.active?.state === 'activated'
+        // The old worker may still control this tab after a new worker
+        // activates. Reloading too early can recreate the old cache.
+        && navigator.serviceWorker.controller === reg.active;
     }, {newName:CURRENT_CACHE, oldName:LEGACY_CACHE}, {timeout:30_000});
 
     await page.reload();
