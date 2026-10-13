@@ -137,7 +137,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 </head>
 <body>
 <header class="top">
-  <div><div class="eyebrow">ALPHA 2 · PÄIVITYSTESTI</div><h1>Osakevahti Alpha</h1></div>
+  <div><div class="eyebrow">ALPHA 3 · DATASYÖTTEET</div><h1>Osakevahti Alpha</h1></div>
   <button id="refreshBtn" title="Päivitä">↻</button>
 </header>
 
@@ -297,7 +297,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha 2 · v2.16.2 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha 3 · v2.16.2 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -358,6 +358,18 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 <script>
 const KEY="osakevahti.single.v1";
 const MARKET_WORKER_URL="https://osakevahti-market-ed59.teemu-natunen84.workers.dev";
+const PUBLIC_FEED_BASE="https://naatti21.github.io/osakevahti/";
+const PUBLIC_FEED_FILES=new Set(["market-data.json","insights.json","news-data.json",
+  "market-context.json","portfolio-status.json","risk-data.json"]);
+// Alpha's Cloudflare Pages origin carries only PWA files. Its financial datasets
+// are public JSON published and refreshed at the existing Osakevahti Pages origin.
+// Fixed read-only public endpoints, with no cross-origin user data or API keys.
+function publicFeedUrl(file){
+  if(!PUBLIC_FEED_FILES.has(file)) throw new Error("Tuntematon julkinen datasyöte");
+  const url=new URL(file,PUBLIC_FEED_BASE);
+  url.searchParams.set("t",String(Date.now()));
+  return url.toString();
+}
 const INSTRUMENT_SCHEMA_VERSION=1;
 const LEGACY_DATA_KEYS={
   "FORTUM":"FORTUM","FORTUM.HE":"FORTUM",
@@ -1117,7 +1129,7 @@ function evaluateRisk(h,portfolioValue,fxRate){
 }
 async function loadMarketContext(force=false){
   try{
-    const r=await fetch(`./market-context.json?t=${Date.now()}`,{cache:"no-store"});
+    const r=await fetch(publicFeedUrl("market-context.json"),{cache:"no-store"});
     if(!r.ok) throw new Error(`market-context.json HTTP ${r.status}`);
     marketContext=await r.json();
     renderMarketContext();
@@ -1129,7 +1141,7 @@ async function loadMarketContext(force=false){
 }
 async function loadSharedStatus(force=false){
   try{
-    const r=await fetch(`./portfolio-status.json?t=${Date.now()}`,{cache:"no-store"});
+    const r=await fetch(publicFeedUrl("portfolio-status.json"),{cache:"no-store"});
     if(!r.ok) throw new Error(`portfolio-status.json HTTP ${r.status}`);
     sharedStatus=await r.json();
     marketContext=sharedStatus?.market_context||marketContext;
@@ -1184,7 +1196,7 @@ function renderSharedStatusHealth(err=null){
 }
 async function loadRiskData(force=false){
   try{
-    const r=await fetch(`./risk-data.json?t=${Date.now()}`,{cache:"no-store"});
+    const r=await fetch(publicFeedUrl("risk-data.json"),{cache:"no-store"});
     if(!r.ok) throw new Error(`risk-data.json HTTP ${r.status}`);
     riskMetrics=await r.json();
     for(const h of state.holdings||[]){
@@ -1218,7 +1230,7 @@ function renderNews(){
 }
 async function loadPortfolioNews(force=false){
   try{
-    const r=await fetch(`./news-data.json?t=${Date.now()}`,{cache:"no-store"});
+    const r=await fetch(publicFeedUrl("news-data.json"),{cache:"no-store"});
     if(!r.ok) throw new Error(`news-data.json HTTP ${r.status}`);
     portfolioNews=await r.json();
     renderNews();
@@ -1230,7 +1242,7 @@ async function loadPortfolioNews(force=false){
 }
 async function loadInsights(force=false){
   try{
-    const r=await fetch(`./insights.json?t=${Date.now()}`,{cache:"no-store"});
+    const r=await fetch(publicFeedUrl("insights.json"),{cache:"no-store"});
     if(!r.ok) throw new Error(`insights.json HTTP ${r.status}`);
     insights=await r.json();
     renderInsights();
@@ -1614,7 +1626,7 @@ async function quote(s){
 }
 async function loadHelsinkiData(retries=3){
   let lastErr=null;
-  const base=new URL("./market-data.json",window.location.href);
+  const base=new URL(publicFeedUrl("market-data.json"));
   for(let attempt=1;attempt<=retries;attempt++){
     try{
       base.searchParams.set("t",String(Date.now()));
