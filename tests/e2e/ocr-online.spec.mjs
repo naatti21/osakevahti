@@ -133,12 +133,13 @@ test('@ocr-stress @ocr-online PR7 real CDN image → browser OCR → import → 
       const data = JSON.parse(localStorage.getItem(key) || '{}');
       return data.holdings || [];
     }, KEY);
-    // load() runs migrateState(), which intentionally materializes only the
-    // derived nordnetSymbol field. Compare all source data and identities
-    // unchanged; explicitly whitelist and verify that single migration.
+    // PR #7 migrates the persisted account schema on reload by materializing
+    // legacyAccount and nordnetSymbol. Whitelist only those two derived fields:
+    // do not relax quantity, price, original account, source ISIN/MIC or IDs.
     expect(observations.afterReload).toHaveLength(1);
-    const { nordnetSymbol, ...persisted } = observations.afterReload[0];
+    const { nordnetSymbol, legacyAccount, ...persisted } = observations.afterReload[0];
     expect(persisted).toEqual(observations.beforeReload[0]);
+    expect(legacyAccount).toBe(observations.beforeReload[0].account);
     expect(nordnetSymbol).toBe(observations.afterReload[0].instrument.dataKey);
     expect(observations.externalResponses.length,
       'No external CDN response observed for real OCR').toBeGreaterThan(0);
