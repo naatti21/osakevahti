@@ -56,6 +56,14 @@ jobs:
           verify_rc=$?
           set -e
           echo "Cloudflare token verification HTTP: ${verify_status}" >> "$GITHUB_STEP_SUMMARY"
+          echo "TOKEN_VERIFY_HTTP=${verify_status}"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          try {
+            const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cloudflare-token-verify.json','utf8'));
+            console.log('TOKEN_VERIFY_ERROR_CODES='+JSON.stringify((r.errors||[]).map(e=>String(e.code||'no-code')).slice(0,5)));
+          } catch { console.log('TOKEN_VERIFY_ERROR_CODES=unavailable'); }
+          NODE
           if [[ "$verify_rc" -eq 0 && "$verify_status" == "200" ]]; then
             node --input-type=module <<'NODE'
           import fs from 'node:fs';
