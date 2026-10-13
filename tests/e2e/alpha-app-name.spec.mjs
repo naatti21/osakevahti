@@ -8,7 +8,7 @@ test('Alpha PWA uses separate displayed name and install identity', async ({ pag
   await expect(page).toHaveTitle('Osakevahti Alpha');
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]'))
     .toHaveAttribute('content', 'Osakevahti Alpha');
-  await expect(page.locator('summary')).toContainText(['Asenna Osakevahti Alpha']);
+  await expect(page.locator('summary').filter({ hasText: 'Asenna Osakevahti Alpha' })).toHaveCount(1);
 
   const manifestResponse = await page.request.get('/manifest.webmanifest');
   expect(manifestResponse.ok()).toBe(true);
