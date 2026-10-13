@@ -23,7 +23,7 @@ async function app(page,holdings=[],apiKey=''){
     await page.route('**/'+f+'*',r=>r.fulfill({status:200,contentType:'application/json',
       body:'{"assets":{},"items":[]}'}));
   }
-  await page.route('https://api.frankfurter.app/**',r=>r.fulfill({status:200,
+  await page.route('https://api.frankfurter.dev/v1/latest**',r=>r.fulfill({status:200,
     contentType:'application/json',body:'{"rates":{"EUR":1}}'}));
   await page.goto('/index.html');
   await expect(page.locator('#dailyMoves')).toBeVisible();
