@@ -737,9 +737,14 @@ function render(){
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;
 
   const rows=state.holdings.map(h=>{
-    const p=n(h.currentPrice||h.manualPrice);
+    // A malformed stored value must never render as a real negative quote.
+    const p=validPositive(h.currentPrice)?Number(h.currentPrice):
+      (validPositive(h.manualPrice)?Number(h.manualPrice):0);
+    // Pre-fix foreign FX=1 may be a previously fabricated fallback. It is not
+    // trusted without evidence of a successful rate verification.
+    const unknownParity=Number(h.fxRate)===1&&!validQuoteTime(h.fxRateUpdatedAt);
     const fx=h.currency===state.baseCurrency?1:
-      (validPositive(h.fxRate)&&h.fxRateStatus!=="unavailable"?Number(h.fxRate):0);
+      (validPositive(h.fxRate)&&h.fxRateStatus!=="unavailable"&&!unknownParity?Number(h.fxRate):0);
     const val=p*n(h.quantity)*fx;
     const cost=n(h.buyPrice)*n(h.quantity)*fx;
     const pnl=val-cost;
@@ -1556,8 +1561,10 @@ async function refreshMarket(showErrors=false){
         h.fxRateUpdatedAt=Date.now();
       }catch{
         // Preserve an older *plausible* rate as an explicitly stale estimate.
-        // A legacy foreign FX=1 may itself be a fabricated parity fallback.
-        h.fxRateStatus=validPositive(h.fxRate)&&Number(h.fxRate)!==1?"stale":"unavailable";
+        // A foreign FX=1 is trusted ONLY if a previous valid FX fetch is dated.
+        const verifiedParity=Number(h.fxRate)===1&&validQuoteTime(h.fxRateUpdatedAt);
+        h.fxRateStatus=validPositive(h.fxRate)&&(Number(h.fxRate)!==1||verifiedParity)
+          ?"stale":"unavailable";
       }
     }
 
