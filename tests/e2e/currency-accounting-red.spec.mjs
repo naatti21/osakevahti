@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 // This is intentionally RED against Alpha3, not a release-ready application change.
 
 test('valid USD -> EUR data returns the supplied 0.82 conversion factor', async ({page}) => {
-  await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
     status:200,contentType:'application/json',
     body:JSON.stringify({amount:1,base:'USD',rates:{EUR:0.82}})
   }));
@@ -16,7 +16,7 @@ test('valid USD -> EUR data returns the supplied 0.82 conversion factor', async 
 });
 
 test('RED safety contract: missing USD -> EUR conversion must not impersonate 1:1 parity', async ({page}) => {
-  await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
     status:200,contentType:'application/json',
     body:JSON.stringify({amount:1,base:'USD',rates:{}})
   }));
@@ -67,7 +67,7 @@ for (const scenario of [
   {name:'non-numeric rate',data:{base:'USD',rates:{EUR:'unavailable'}}}
 ]){
   test('RED FX boundary: '+scenario.name+' cannot produce a usable conversion factor',async({page})=>{
-    await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+    await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
       status:200,contentType:'application/json',body:JSON.stringify(scenario.data)
     }));
     await page.goto('/index.html');
@@ -80,7 +80,7 @@ for (const scenario of [
 }
 
 test('RED FX HTTP: a 503 response with plausible data must not be treated as success',async({page})=>{
-  await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
     status:503,contentType:'application/json',
     body:JSON.stringify({base:'USD',rates:{EUR:0.84}})
   }));
@@ -92,7 +92,7 @@ test('RED FX HTTP: a 503 response with plausible data must not be treated as suc
 });
 
 test('control: malformed JSON in FX provider is rejected',async({page})=>{
-  await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
     status:200,contentType:'application/json',body:'{invalid JSON'
   }));
   await page.goto('/index.html');
@@ -100,13 +100,13 @@ test('control: malformed JSON in FX provider is rejected',async({page})=>{
 });
 
 test('control: failed FX network request propagates an error',async({page})=>{
-  await page.route('https://api.frankfurter.app/**',route=>route.abort('failed'));
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.abort('failed'));
   await page.goto('/index.html');
   await expect(page.evaluate(()=>fxRate('USD','EUR'))).rejects.toThrow();
 });
 
 test('RED integration: refresh cannot save invented 1:1 currency rate to persisted holding',async({page})=>{
-  await page.route('https://api.frankfurter.app/**',route=>route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**',route=>route.fulfill({
     status:200,contentType:'application/json',
     body:JSON.stringify({base:'USD',rates:{}})
   }));
