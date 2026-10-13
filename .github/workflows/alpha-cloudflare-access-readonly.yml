@@ -73,6 +73,30 @@ jobs:
           console.log('TOKEN_VERIFY_ACTIVE='+ok);
           NODE
           fi
+          # Cloudflare account-owned API tokens use a distinct verify endpoint.
+          # /user/tokens/verify can reject a *valid account token* with HTTP 401.
+          set +e
+          acct_verify_status="$(curl --silent --show-error --connect-timeout 10 --max-time 20 \
+            --output "$RUNNER_TEMP/cloudflare-account-token-verify.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/tokens/verify")"
+          acct_verify_rc=$?
+          set -e
+          echo "ACCOUNT_TOKEN_VERIFY_HTTP=${acct_verify_status}"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          try {
+            const p=process.env.RUNNER_TEMP+'/cloudflare-account-token-verify.json';
+            const r=JSON.parse(fs.readFileSync(p,'utf8'));
+            const good=r.success===true&&r.result?.status==='active';
+            const codes=(r.errors||[]).map(e=>String(e.code||'no-code')).slice(0,5);
+            console.log('ACCOUNT_TOKEN_VERIFY_ACTIVE='+good);
+            console.log('ACCOUNT_TOKEN_VERIFY_ERROR_CODES='+JSON.stringify(codes));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              'Account-owned token verify: **'+(good?'PASS':'FAIL')+'**; Cloudflare codes: '+codes.join(',')+'\\n');
+          } catch { console.log('ACCOUNT_TOKEN_VERIFY_ERROR_CODES=unavailable'); }
+          NODE
           set +e
           status="$(curl --silent --show-error --connect-timeout 10 --max-time 20             --output "$RUNNER_TEMP/cloudflare-alpha-response.json"             --write-out '%{http_code}'             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             --header "Accept: application/json"             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/osakevahti-alpha-naatti21")"
           curl_rc=$?
