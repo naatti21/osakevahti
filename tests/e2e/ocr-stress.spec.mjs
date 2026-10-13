@@ -84,7 +84,7 @@ async function mockNetwork(page, instrumentResolver = {}) {
     }));
   }
 
-  await page.route('https://api.frankfurter.app/**', route => route.fulfill({
+  await page.route('https://api.frankfurter.dev/v1/latest**', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ rates: { EUR: 1, USD: 0.86, SEK: 0.091 } })
