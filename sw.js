@@ -44,8 +44,12 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(req)
         .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(cache => cache.put("./index.html", copy));
+          // HTTP 404/503 still resolve fetch(). Never let a server error
+          // overwrite the last known-good offline app shell.
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(cache => cache.put("./index.html", copy)).catch(() => {});
+          }
           return res;
         })
         .catch(() => caches.match("./index.html"))
