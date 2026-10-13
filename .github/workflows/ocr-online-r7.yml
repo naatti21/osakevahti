@@ -7,6 +7,7 @@ on:
     paths:
       - "index.html"
       - "image-reader.js"
+      - "sw.js"
       - "tests/e2e/ocr-online.spec.mjs"
       - "package.json"
       - ".github/workflows/ocr-online-r7.yml"
