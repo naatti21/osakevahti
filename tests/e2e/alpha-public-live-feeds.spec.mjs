@@ -38,8 +38,8 @@ test('Alpha3 browser gets all six live financial JSON feeds and renders actual i
   const market=results.find(x=>x.file==='market-data.json');
   expect(market.validMarket).toBe(true);
   const insights=results.find(x=>x.file==='insights.json');
-  expect(insights.countDividends).not.toBeNull();
-  expect(insights.countRockets).not.toBeNull();
+  expect(insights.countDividends).toBeGreaterThan(0);
+  expect(insights.countRockets).toBeGreaterThan(0);
 
   // Initial page asynchronously fetches the public feed and renders its content.
   await expect.poll(()=>page.locator('#dividendList .card').count(),{timeout:20_000})
