@@ -1107,13 +1107,15 @@ async function loadSharedStatus(force=false){
       const key=(h.symbol||"").toUpperCase();
       const a=assets[key];
       if(!a) continue;
-      const sharedTs=n(a.quote_timestamp)||(sharedStatus?.generated_at?Date.parse(sharedStatus.generated_at):0);
+      const sharedTs=quoteTime(a.quote_timestamp,sharedStatus?.generated_at);
       const localTs=n(h.quoteTimestamp);
-      // portfolio-status täydentää analytiikkaa, mutta ei saa ylikirjoittaa tuoreempaa Worker-kurssia.
-      if(n(a.price)>0 && (!n(h.currentPrice) || (sharedTs>0 && sharedTs>localTs))){
-        h.currentPrice=n(a.price);
+      // A secondary feed must pass the same guards as Worker and market-data.
+      // A malformed/future or wrong-currency update must preserve last-known-good data.
+      if(validPositive(a.price)&&quotedCurrencyMatches(a,h)&&sharedTs &&
+         (!validPositive(h.currentPrice)||sharedTs>localTs)){
+        h.currentPrice=Number(a.price);
         h.dayChangePct=n(a.day_change_pct);
-        h.quoteTimestamp=sharedTs||h.quoteTimestamp;
+        h.quoteTimestamp=sharedTs;
         h.quoteSource="PORTFOLIO_STATUS";
         h.quoteProvider=a.source||"portfolio-status";
       }
@@ -1481,7 +1483,7 @@ async function quote(s){
   let j={};try{j=await r.json()}catch{}
   if(!r.ok) throw new Error(`HTTP ${r.status}${j.error?": "+j.error:""}`);
   if(j.error) throw new Error(j.error);
-  if(!n(j.c)) throw new Error(`Finnhub ei palauttanut kurssia symbolille ${s}`);
+  if(!validPositive(j.c)) throw new Error(`Finnhub ei palauttanut kelvollista kurssia symbolille ${s}`);
   return j
 }
 async function loadHelsinkiData(retries=3){
@@ -1568,8 +1570,8 @@ async function testNordnet(){
     const j=await loadWorkerData(true,2);
     const fortum=j.assets?.FORTUM;
     const amd=j.assets?.AMD;
-    if(!fortum || !n(fortum.price)) throw new Error("FORTUM puuttuu Worker-vastauksesta");
-    if(!amd || !n(amd.price)) throw new Error("AMD puuttuu Worker-vastauksesta");
+    if(!fortum || !validPositive(fortum.price)) throw new Error("FORTUM puuttuu Worker-vastauksesta");
+    if(!amd || !validPositive(amd.price)) throw new Error("AMD puuttuu Worker-vastauksesta");
     const stamp=j.generated_at?new Date(j.generated_at).toLocaleString("fi-FI"):"—";
     box.className="statusBox statusOk";
     box.textContent=`Worker toimii 7/7. FORTUM ${n(fortum.price).toFixed(2)} EUR · AMD ${n(amd.price).toFixed(2)} USD · generoitu ${stamp}.`;
