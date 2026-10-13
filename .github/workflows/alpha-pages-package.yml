@@ -1,0 +1,60 @@
+name: Alpha Pages static package verification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build-alpha-pages.mjs"
+      - "tests/alpha-pages-package.test.mjs"
+      - "index.html"
+      - "sw.js"
+      - "image-reader.js"
+      - "manifest.webmanifest"
+      - "icon-192.png"
+      - "icon-512.png"
+      - ".github/workflows/alpha-pages-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alpha-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-test:
+    name: Build and verify isolated Alpha static files (NO DEPLOY)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build static-only Alpha directory
+        run: node scripts/build-alpha-pages.mjs
+
+      - name: Verify exact file allowlist and test identity
+        run: node --test tests/alpha-pages-package.test.mjs
+
+      - name: Retain reviewed Alpha package for manual evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: osakevahti-alpha-static-package
+          path: dist-alpha/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Explain release boundary
+        shell: bash
+        run: |
+          {
+            echo "### Alpha static package QA"
+            echo "This workflow only builds and tests isolated PWA files."
+            echo "No Cloudflare authorization, production merge or deploy was performed."
+            echo "Host only on a separate origin, not a subpath of naatti21.github.io."
+          } >> "$GITHUB_STEP_SUMMARY"
