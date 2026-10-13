@@ -149,6 +149,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="valuationWarning" class="statusBox statusBad hidden" role="status"></div>
+  <div id="refreshFeedback" class="statusBox hidden" role="status" aria-live="polite"></div>
   <div id="accountSummary" class="summaryGrid"></div>
   <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
   <div id="dailyMoves" class="card dailyMoves"></div>
@@ -413,7 +414,12 @@ $("closeImportReview").onclick=$("cancelImportReview").onclick=()=>{pendingImpor
 $("confirmImportReview").onclick=commitPendingImport;
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
 $("deleteBtn").onclick=deleteHolding;
-$("refreshBtn").onclick=()=>refreshMarket(true);
+$("refreshBtn").onclick=()=>refreshMarket(true).catch(err=>{
+  const feedback=$("refreshFeedback");
+  feedback.className="statusBox statusBad";
+  feedback.textContent="Päivitys epäonnistui: "+(err?.message||err);
+  $("refreshBtn").disabled=false;$("refreshBtn").textContent="↻";
+});
 $("newsBtn").onclick=()=>loadPortfolioNews(true);
 $("insightsBtn").onclick=()=>loadInsights(true);
 document.querySelectorAll(".insightTab").forEach(b=>b.onclick=()=>{
@@ -1531,8 +1537,14 @@ async function loadWorkerData(force=false,retries=2){
 
 async function refreshMarket(showErrors=false){
   $("refreshBtn").disabled=true;
+  $("refreshBtn").textContent="…";
+  if(showErrors){
+    $("refreshFeedback").className="statusBox";
+    $("refreshFeedback").textContent="Päivitetään kursseja, rahastoja ja valuuttoja…";
+  }
   let stockOk=0, stockFail=0, fundOk=0, fundFail=0, firstError="";
   const fx={};
+  const fxSuccess=new Set(),fxFailures=new Map();
   const stocks=state.holdings.filter(h=>h.assetType!=="fund");
   const funds=state.holdings.filter(h=>h.assetType==="fund");
 
@@ -1554,14 +1566,17 @@ async function refreshMarket(showErrors=false){
     if(h.currency===state.baseCurrency){
       h.fxRate=1;h.fxRateStatus="fresh";h.fxRateUpdatedAt=Date.now();
     }else{
+      const pair=String(h.currency||"(puuttuu)")+"/"+state.baseCurrency;
       try{
         fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);
         h.fxRate=fx[h.currency];
         h.fxRateStatus="fresh";
         h.fxRateUpdatedAt=Date.now();
-      }catch{
-        // Preserve an older *plausible* rate as an explicitly stale estimate.
-        // A foreign FX=1 is trusted ONLY if a previous valid FX fetch is dated.
+        fxSuccess.add(pair);
+      }catch(err){
+        // Preserve plausible prior FX as a labeled stale estimate, but
+        // report WHY manual refresh could not remove the warning.
+        fxFailures.set(pair,String(err?.message||err));
         const verifiedParity=Number(h.fxRate)===1&&validQuoteTime(h.fxRateUpdatedAt);
         h.fxRateStatus=validPositive(h.fxRate)&&(Number(h.fxRate)!==1||verifiedParity)
           ?"stale":"unavailable";
@@ -1803,7 +1818,7 @@ async function fxRate(from,to){
   const dst=String(to||"").trim().toUpperCase();
   if(!/^[A-Z]{3}$/.test(src)||!/^[A-Z]{3}$/.test(dst))throw new Error("Valuutan tunniste puuttuu tai on virheellinen");
   if(src===dst)return 1;
-  const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(src)}&to=${encodeURIComponent(dst)}`,{cache:"no-store"});
+  const r=await fetch(`https://api.frankfurter.dev/v1/latest?base=${encodeURIComponent(src)}&symbols=${encodeURIComponent(dst)}`,{cache:"no-store"});
   if(!r.ok)throw new Error(`Valuuttapalvelu HTTP ${r.status}`);
   const j=await r.json();
   if(j.base&&String(j.base).toUpperCase()!==src)throw new Error("Valuuttapalvelun lähtövaluutta on väärä");
