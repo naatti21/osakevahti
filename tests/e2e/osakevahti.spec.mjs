@@ -97,10 +97,10 @@ async function mockNetwork(page, {
     status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] })
   }));
 
-  await page.route('https://api.frankfurter.app/**', route => {
+  await page.route('https://api.frankfurter.dev/v1/latest**', route => {
     const url = new URL(route.request().url());
-    const from = url.searchParams.get('from');
-    const to = url.searchParams.get('to');
+    const from = url.searchParams.get('base');
+    const to = url.searchParams.get('symbols');
     const rate = from === to ? 1 : (fx[from] ?? fx[to] ?? 1);
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rates: { [to]: rate } }) });
   });
