@@ -1,5 +1,28 @@
 # Osakevahti Alpha — eristetty Cloudflare Pages / Android -testi
 
+## Alpha 2 → Alpha 3: palautetaan kuusi toimivaa markkinasyötettä
+
+**Sama Cloudflare Pages -projekti ja nykyinen OV Alpha -asennus säilyvät.** Alpha 2:n offline, backup, tilitietojen käsittely ja PWA-päivitys testattiin käyttäjän Androidilla onnistuneesti, mutta kurssipäivityksen fallback ja Osinkokoneiden/Rocket Radarin data olivat rikki Alpha 2:ssa.
+
+**Todistettu juurisyy [testi-PR #22](https://github.com/naatti21/osakevahti/pull/22):** alkuperäinen Alpha-paketti sisälsi vain PWA:n kuusi staattista tiedostoa ja antoi Cloudflaren palauttaa SPA:n HTML-etusivun kuuden odotetun JSON-syötteen polussa (HTTP 200 mutta väärä sisältö). Julkisen GitHub Pages -tuotannon **kaikki kuusi** vastaavat validina JSON:na CORS `*` -otsakkeilla; markkina-Worker vastasi HTTP 200, validina JSON:na, CORS `*`.
+
+**Alpha 3 -korjaus:** julkaistava sovelluskoodi lukee kuusi **julkista ja alkuperäisessä Osakevahdissa käytettyä** datasyötettä read-only-osoitteista `https://naatti21.github.io/osakevahti/{file}.json`. Käytössä `cache: no-store` ja erillinen aikaleimakysely; uusia asiakkaan tietoja, tokeneita, kirjautumisia tai paikallisia salkkutietoja ei lähetetä GitHub Pagesiin. Varsinainen kurssi-Worker säilyy ennallaan, fallback saa nyt datansa oikeasta olemassa olevasta osoitteesta. Alpha 3 sisältää näkyvän **ALPHA 3 · DATASYÖTTEET** -merkin ja uuden SW-cache-version `osakevahti-shell-v2.16-alpha3-feeds`.
+
+**Miksi ei vain lisätä JSONia ZIP:iin?** Datan pitäisi päivittyä julkaisuista riippumatta. Staattinen hetkellinen kopiopaketti vanhenisi. Syötteet pysyvät alkuperäisen julkisen rajapinnan ja automaattisen datapäivityksen ohjaamina; jos alkuperäinen syöte pysähtyy, myös Alpha näyttää sen vanhentumisen. Testiversio ei saa mitään käyttäjän henkilökohtaisia salkku- tai API-avaintietoja näistä tiedostoista.
+
+### Androidin Alpha 3 -testi
+
+1. Ennen Direct Upload -päivitystä tarkista, että nykyinen OV Alpha 2 näyttää vanhat omistukset. Ota halutessasi paikallinen varmuuskopio.
+2. Cloudflare → **nykyinen** `osakevahti-alpha-naatti21` -Pages-projekti → luo **Production**-ympäristöön uusi **Direct Upload** -julkaisu käyttäen testattua Alpha 3 ZIP:iä. Älä luo toista projektia tai muuta `main`.
+3. Avaa **sama** puhelimen OV Alpha -kuvake, päivitä sivu verkkoyhteydellä ja varmista näkyvä `ALPHA 3 · DATASYÖTTEET`. Omistukset ja tililuokittelu eivät saa muuttua.
+4. Valitse etusivulta **↻** (kurssipäivitys) ja tarkista, että kurssit päivittyvät tai näytetään täsmällinen datalähteen virhe. Tarkista myös rahastojen NAV, mikäli salkussa niitä on.
+5. Avaa **Osinkokoneet** ja **Rocket Radar**. Niiden listojen on täytyttävä julkisen syötteen analyysituloksilla; tarkista päivitettyjen tietojen aikaleima. Tarkista myös muut markkina-/riski-/uutisosiot soveltuvin osin.
+6. Sulje sama asennettu PWA, käynnistä uudelleen ja tarkista omistukset, hinnat, tililuokat ja Alpha 3 -merkki. Varmista sitten offline-avaus lentotilassa: paikallinen salkku ja app-shell näkyvät, mutta uutta julkista markkinadataa ei odoteta.
+
+**Avoin raja:** nykyinen julkaistu Alpha 2 pysyy käytössä siihen saakka, kunnes Alpha 3 -korjaus on täysin QA-hyväksytty ja käyttäjä itse tekee Direct Upload -päivityksen. Tämä ei anna tuotanto-GO:ta.
+
+---
+
 **Tila 13.10.2026:** Tämä on testijulkaisun valmistelu, **ei julkaisu**. `main`, `naatti21.github.io/osakevahti/` ja alkuperäinen QA-lukittu PR #17 pysyvät koskemattomina. Käytä vain synteettisiä tietoja.
 
 > **KÄYTÖSSÄ 13.10.2026: Direct Upload ZIP**, ei Cloudflare Connect to Git. GitHub–Cloudflare-kirjautuminen joutui mobiilissa looppiin, joten Alpha 1 julkaistiin onnistuneesti suoralla ZIP-latauksella. Alla oleva Git-yhdistämisen osio on vaihtoehtoinen, eikä sitä käytetä tässä Alpha 2 -päivityksessä. Älä poista nykyistä OV Alpha -asennusta.
