@@ -46,6 +46,25 @@ jobs:
             echo "Pages API access: **NOT TESTED (missing credentials)**" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          # Token verification is read-only; report only HTTP status and active flag.
+          set +e
+          verify_status="$(curl --silent --show-error --connect-timeout 10 --max-time 20 \
+            --output "$RUNNER_TEMP/cloudflare-token-verify.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify")"
+          verify_rc=$?
+          set -e
+          echo "Cloudflare token verification HTTP: ${verify_status}" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$verify_rc" -eq 0 && "$verify_status" == "200" ]]; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cloudflare-token-verify.json','utf8'));
+          const ok=r.success===true && r.result?.status==='active';
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Cloudflare token active: **'+(ok?'YES':'NOT VERIFIED')+'**\\n');
+          console.log('TOKEN_VERIFY_ACTIVE='+ok);
+          NODE
+          fi
           set +e
           status="$(curl --silent --show-error --connect-timeout 10 --max-time 20             --output "$RUNNER_TEMP/cloudflare-alpha-response.json"             --write-out '%{http_code}'             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             --header "Accept: application/json"             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/osakevahti-alpha-naatti21")"
           curl_rc=$?
@@ -53,6 +72,15 @@ jobs:
           if [[ "$curl_rc" -ne 0 || "$status" != "200" ]]; then
             echo "::warning::Read-only Pages API GET failed (HTTP ${status}, network status ${curl_rc})."
             echo "Pages API access: **FAIL (HTTP ${status})**" >> "$GITHUB_STEP_SUMMARY"
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          try {
+            const r=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/cloudflare-alpha-response.json','utf8'));
+            const codes=(r.errors||[]).map(e=>String(e.code||'no-code')).slice(0,5);
+            console.log('PAGES_API_ERROR_CODES='+JSON.stringify(codes));
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Pages API error codes (no secret values): **'+codes.join(',')+'**\\n');
+          }catch { console.log('PAGES_API_ERROR_CODES=unavailable'); }
+          NODE
             exit 1
           fi
           node --input-type=module <<'NODE'
