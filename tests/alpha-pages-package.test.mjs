@@ -45,3 +45,18 @@ test('Alpha deployment headers discourage indexing and do not copy user data',as
   assert.match(sw,/const CACHE = "osakevahti-shell-v2\.16-alpha2"/);
   assert.ok(!(await readdir(root)).some(f=>/\.(json|zip|env|bak)$/i.test(f)));
 });
+
+
+test('Alpha3 uses live public financial feeds, not nonexistent local static JSON',async()=>{
+  const html=await readFile(join(root,'index.html'),'utf8');
+  assert.match(html,/const PUBLIC_FEED_BASE="https:\/\/naatti21\.github\.io\/osakevahti\/"/);
+  for(const file of ['market-data.json','insights.json','news-data.json',
+                     'market-context.json','portfolio-status.json','risk-data.json']){
+    assert.ok(html.includes('"'+file+'"'),'Public data file is not in allowlist: '+file);
+    assert.ok(!html.includes('fetch(\`./'+file),'Still fetching missing local JSON '+file);
+  }
+  assert.match(html,/function publicFeedUrl\(file\)/);
+  assert.match(html,/ALPHA 3 · DATASYÖTTEET/);
+  const manifest=JSON.parse(await readFile(join(root,'manifest.webmanifest'),'utf8'));
+  assert.equal(manifest.id,'./?channel=alpha');
+});
