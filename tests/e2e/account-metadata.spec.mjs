@@ -28,7 +28,7 @@ async function openApp(page,holdings=[]){
   for(const p of ['market-data.json','portfolio-status.json','risk-data.json','market-context.json','portfolio-news.json','news-data.json','dividend-rocket-insights.json','insights.json']){
     await page.route('**/'+p+'*',r=>r.fulfill({status:200,contentType:'application/json',body:'{"assets":{},"items":[]}'}));
   }
-  await page.route('https://api.frankfurter.app/**',r=>r.fulfill({status:200,contentType:'application/json',body:'{"rates":{"EUR":1}}'}));
+  await page.route('https://api.frankfurter.dev/v1/latest**',r=>r.fulfill({status:200,contentType:'application/json',body:'{"rates":{"EUR":1}}'}));
   await page.goto('/index.html');
   await expect(page.locator('#dailyMoves')).toBeVisible();
 }
