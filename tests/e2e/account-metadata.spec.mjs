@@ -437,3 +437,50 @@ test('R7-03 corrupt backup type cannot inherit verified flag from legacy suggest
   expect(saved[0].accountDetailsConfirmed).toBe(false); // Must ask user again.
 });
 
+test('P3 conflict explanation is immediate for unresolved source ISIN and does not offer dead-end action',async({page})=>{
+  const old=holding('existing','MSFT','Nordea',{
+    name:'Microsoft Corporation',currency:'USD',quantity:12,buyPrice:13.75,
+    importMeta:{source:'file:previous.csv',sourceIdentifiers:{isin:'US5949181045',mic:'XNAS',verification:'verified'}},
+    instrument:{listingTicker:'MSFT',isin:'US5949181045',mic:'XNAS',currency:'USD',
+      identification:'resolved',companyName:'Microsoft Corporation'}
+  });
+  await openApp(page,[old]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  // Resolver returns US5949181045 but this import explicitly observes a different ISIN.
+  const csv=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;Tili;ISIN;MIC',
+    'MSFT;Microsoft Corporation;99;21.5;USD;Nordea;FI4000297767;XNAS'].join('\n');
+  await page.locator('#importText').fill(csv);
+  await page.locator('#importTextBtn').click();
+  const dlg=page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  // IMPORTANT: this must appear before a user clicks "leave unverified".
+  await expect(dlg).toContainText('TARKISTA ISIN');
+  await expect(dlg).toContainText('Lähde-ISIN on ristiriidassa aiemman tuonnin kanssa.');
+  await expect(dlg).not.toContainText('Vahvista listaus käsin tai jätä tunnistamatta.');
+  await expect(dlg.locator('[data-unverified="1"]')).toHaveCount(0);
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  await page.reload();
+  const saved=await holdingsInStorage(page);
+  expect(saved).toHaveLength(1);
+  expect(saved[0].id).toBe('existing');
+  expect(saved[0].quantity).toBe(12);
+  expect(saved[0].buyPrice).toBe(13.75);
+  expect(saved[0].importMeta.sourceIdentifiers.isin).toBe('US5949181045');
+});
+
+test('P3 positive control: uncertainty without a previous ISIN conflict retains the review choice',async({page})=>{
+  await openApp(page,[]);
+  await page.locator('[data-view="settingsView"]').click();
+  await page.locator('summary').filter({hasText:'Salkun tuonti'}).click();
+  const csv=['Ticker;Nimi;Kpl;Keskihinta;Valuutta;Tili;ISIN;MIC',
+    'MSFT;Microsoft Corporation;2;21.5;USD;Nordea;FI4000297767;XNAS'].join('\n');
+  await page.locator('#importText').fill(csv);
+  await page.locator('#importTextBtn').click();
+  const dlg=page.locator('#importReviewDlg');
+  await expect(dlg).toBeVisible();
+  await expect(dlg).not.toContainText('Lähde-ISIN on ristiriidassa aiemman tuonnin kanssa.');
+  await expect(dlg.locator('[data-unverified="1"]')).toHaveCount(1);
+  await expect(page.locator('#confirmImportReview')).toBeDisabled();
+  expect(await holdingsInStorage(page)).toHaveLength(0);
+});
