@@ -8,8 +8,8 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CURRENT_CACHE = 'osakevahti-shell-v2.16-alpha2';
-const LEGACY_CACHE = 'osakevahti-shell-v2.16-ocr-fix';
+const CURRENT_CACHE = 'osakevahti-shell-v2.16-alpha3-feeds';
+const LEGACY_CACHE = 'osakevahti-shell-v2.16-alpha2';
 const FAILED_CACHE = 'osakevahti-shell-qa-broken-v2';
 const OTHER_CACHE = 'visual-academy-qa-shell-v1';
 
@@ -56,8 +56,8 @@ async function controlledServer() {
         (version === 'old' ? 'v1' : version === 'new' ? 'v2' : 'failed-v2') + '">';
       // Test-only HTML marker, NOT an application-code modification.
       const servedHtml=version==='old'
-        ? html.replace('ALPHA 2 · PÄIVITYSTESTI','HENKILÖKOHTAINEN SALKKUVAHTI')
-          .replace('Osakevahti Alpha 2 · v2.16.2','Osakevahti Alpha v2.16.2')
+        ? html.replace('ALPHA 3 · DATASYÖTTEET','ALPHA 2 · PÄIVITYSTESTI')
+          .replace('Osakevahti Alpha 3 · v2.16.2','Osakevahti Alpha 2 · v2.16.2')
         : html;
       send(200, servedHtml.replace('<head>', '<head>' + marker), mimetypes['.html']);
       return;
@@ -166,7 +166,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     const cacheResult = await page.evaluate(async name => {
       const keys = await caches.keys();
       const resp = await caches.match('/visual-academy/launch');
-      const shell = await caches.open('osakevahti-shell-v2.16-alpha2');
+      const shell = await caches.open('osakevahti-shell-v2.16-alpha3-feeds');
       const html = await shell.match('/index.html');
       return {keys, other:resp ? await resp.text() : null, shell:html ? await html.text() : null};
     }, OTHER_CACHE);
@@ -174,7 +174,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     expect(cacheResult.keys).not.toContain(LEGACY_CACHE);
     expect(cacheResult.other).toBe('OTHER_APP_OFFLINE_SAFE');
     expect(cacheResult.shell).toContain('name="qa-installed-build" content="v2"');
-    expect(cacheResult.shell).toContain('ALPHA 2 · PÄIVITYSTESTI');
+    expect(cacheResult.shell).toContain('ALPHA 3 · DATASYÖTTEET');
 
     // Real Chromium offline navigation against updated SW. No reseeding.
     await context.setOffline(true);
