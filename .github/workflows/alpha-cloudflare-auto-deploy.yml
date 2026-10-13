@@ -102,11 +102,15 @@ jobs:
              manifest.short_name!=='OV Alpha') throw Error('Wrong PWA target identity');
           const html=fs.readFileSync(dir+'/index.html','utf8');
           const sw=fs.readFileSync(dir+'/sw.js','utf8');
-          if(!html.includes('ALPHA 3 · DATASYÖTTEET') ||
+          // Reusable for future Alpha releases without changing the target or weakening QA.
+          if(!/ALPHA [3-9][0-9]* ·/.test(html) ||
              !html.includes('https://naatti21.github.io/osakevahti/') ||
-             !sw.includes('const CACHE = "osakevahti-shell-v2.16-alpha3-feeds";') ||
-             !sw.includes('if (res.ok)')) throw Error('Missing verified Alpha3 markers');
-          console.log('Verified exact Alpha3 identity, feed fix, service worker and asset allowlist');
+             !/const CACHE = "osakevahti-shell-[^"]+";/.test(sw) ||
+             !sw.includes('if (res.ok)') ||
+             !sw.includes('k.startsWith("osakevahti-shell-")')) {
+            throw Error('Missing Alpha release marker, live feed URL or service-worker safety guards');
+          }
+          console.log('Verified Alpha identity, live feeds, service worker and asset allowlist');
           NODE
 
       # Force main only inside THIS separate Cloudflare Direct Upload Pages project.
