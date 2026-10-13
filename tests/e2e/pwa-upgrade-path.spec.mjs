@@ -2,14 +2,14 @@ import { test, expect } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 
-// Playbook 1.9.2: test-only PWA UPDATE oracles, application source locked to
-// PR #13 SHA 29073a88425bc83d6329f7d4f874af734720c65a.
+// Playbook 1.9.2: real Alpha 1 → Alpha 2 PWA update on a shared origin.
+// Exact old and new cache names are the shipped Alpha v1 and intended Alpha 2.
 // Real Chromium SW + CacheStorage. Never publishes or edits application files.
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CURRENT_CACHE = 'osakevahti-shell-v2.16-ocr-fix';
-const LEGACY_CACHE = 'osakevahti-shell-qa-legacy-v1';
+const CURRENT_CACHE = 'osakevahti-shell-v2.16-alpha2';
+const LEGACY_CACHE = 'osakevahti-shell-v2.16-ocr-fix';
 const FAILED_CACHE = 'osakevahti-shell-qa-broken-v2';
 const OTHER_CACHE = 'visual-academy-qa-shell-v1';
 
@@ -26,15 +26,12 @@ async function controlledServer() {
   const sw = await readFile('sw.js', 'utf8');
   const html = await readFile('index.html', 'utf8');
   const initial = 'const CACHE = "' + CURRENT_CACHE + '";';
-  const unsafe = '.filter(k => k !== CACHE)';
   const safe = '.filter(k => k.startsWith("osakevahti-shell-") && k !== CACHE)';
   expect(sw).toContain(initial);
   expect(sw).toContain(safe);
 
-  // Simulate an already-installed, older release with the exact historical
-  // broad cache deletion behavior and an older versioned shell-cache name.
-  const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";')
-    .replace(safe, unsafe);
+  // Alpha v1 shipped the same SW logic except for its actual old cache name.
+  const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";');
   const broken = sw.replace(initial, 'const CACHE = "' + FAILED_CACHE + '";')
     .replace('cache.addAll(SHELL)', 'cache.addAll([...SHELL, "./qa-does-not-exist-upgrade.txt"])');
   let version = 'old';
@@ -58,7 +55,11 @@ async function controlledServer() {
       const marker = '<meta name="qa-installed-build" content="' +
         (version === 'old' ? 'v1' : version === 'new' ? 'v2' : 'failed-v2') + '">';
       // Test-only HTML marker, NOT an application-code modification.
-      send(200, html.replace('<head>', '<head>' + marker), mimetypes['.html']);
+      const servedHtml=version==='old'
+        ? html.replace('ALPHA 2 · PÄIVITYSTESTI','HENKILÖKOHTAINEN SALKKUVAHTI')
+          .replace('Osakevahti Alpha 2 · v2.16.2','Osakevahti Alpha v2.16.2')
+        : html;
+      send(200, servedHtml.replace('<head>', '<head>' + marker), mimetypes['.html']);
       return;
     }
     if (pathname === '/qa-does-not-exist-upgrade.txt') {
@@ -165,7 +166,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     const cacheResult = await page.evaluate(async name => {
       const keys = await caches.keys();
       const resp = await caches.match('/visual-academy/launch');
-      const shell = await caches.open('osakevahti-shell-v2.16-ocr-fix');
+      const shell = await caches.open('osakevahti-shell-v2.16-alpha2');
       const html = await shell.match('/index.html');
       return {keys, other:resp ? await resp.text() : null, shell:html ? await html.text() : null};
     }, OTHER_CACHE);
@@ -173,6 +174,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     expect(cacheResult.keys).not.toContain(LEGACY_CACHE);
     expect(cacheResult.other).toBe('OTHER_APP_OFFLINE_SAFE');
     expect(cacheResult.shell).toContain('name="qa-installed-build" content="v2"');
+    expect(cacheResult.shell).toContain('ALPHA 2 · PÄIVITYSTESTI');
 
     // Real Chromium offline navigation against updated SW. No reseeding.
     await context.setOffline(true);
