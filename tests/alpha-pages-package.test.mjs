@@ -28,8 +28,8 @@ test('Alpha PWA identity is distinct from production and visible on screen',asyn
   const html=await readFile(join(root,'index.html'),'utf8');
   assert.match(html,/<title>Osakevahti Alpha<\/title>/);
   assert.match(html,/<h1>Osakevahti Alpha<\/h1>/);
-  assert.match(html,/ALPHA 2 · PÄIVITYSTESTI/);
-  assert.match(html,/Osakevahti Alpha 2 · v2\.16\.2/);
+  assert.match(html,/ALPHA 3 · DATASYÖTTEET/);
+  assert.match(html,/Osakevahti Alpha 3 · v2\.16\.2/);
   assert.match(html,/rel="manifest" href="\.\/manifest.webmanifest"/);
 });
 
