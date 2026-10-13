@@ -2,6 +2,26 @@
 
 **Tila 13.10.2026:** Tämä on testijulkaisun valmistelu, **ei julkaisu**. `main`, `naatti21.github.io/osakevahti/` ja alkuperäinen QA-lukittu PR #17 pysyvät koskemattomina. Käytä vain synteettisiä tietoja.
 
+> **KÄYTÖSSÄ 13.10.2026: Direct Upload ZIP**, ei Cloudflare Connect to Git. GitHub–Cloudflare-kirjautuminen joutui mobiilissa looppiin, joten Alpha 1 julkaistiin onnistuneesti suoralla ZIP-latauksella. Alla oleva Git-yhdistämisen osio on vaihtoehtoinen, eikä sitä käytetä tässä Alpha 2 -päivityksessä. Älä poista nykyistä OV Alpha -asennusta.
+
+## Alpha 1 → Alpha 2: oikean Android-asennuksen päivitystesti (Direct Upload)
+
+**Kohde: nykyinen Cloudflare-projekti `osakevahti-alpha-naatti21`, sama osoite `https://osakevahti-alpha-naatti21.pages.dev/`.** Älä luo uutta projektia, vaihda manifest-ID:tä, käytä GitHub Pagesia tai julkaise GitHubin `main`-haaraan.
+
+1. Ennen Cloudflare-latausta avaa asennettu OV Alpha puhelimessa. Tarkista, että omistukset näkyvät; ota halutessasi nykyisestä Alphasta oma JSON-varmuuskopio talteen puhelimeesi. Älä jaa oikeita salkkutietoja.
+2. Sulje OV Alpha. Avaa GitHubin uuden Alpha 2 -Draft PR:n **Alpha Pages static package verification** -workflow'n hyväksytyn ajon `osakevahti-alpha-static-package` ZIP tai ChatGPT:n toimittama sama tarkistettu ZIP.
+3. Cloudflare Dashboard → Workers & Pages → **olemassa oleva** `osakevahti-alpha-naatti21` → **Create deployment / Upload assets**. Lataa **Alpha 2 ZIP samaan projektiin**, Production-ympäristöön. Älä käytä `Connect Git`-toimintoa.
+4. Avaa sama `https://osakevahti-alpha-naatti21.pages.dev/` Chromen välilehdellä verkkoyhteydellä. Varmista, että yläpalkin pienessä tekstissä lukee **ALPHA 2 · PÄIVITYSTESTI** ja alareunan huolto-osiossa **Osakevahti Alpha 2**.
+5. Sulje asennettu OV Alpha kokonaan ja avaa **sama vanha OV Alpha -kuvake** uudelleen. Jos yläpalkissa lukee vielä vanha teksti, käy kerran Alpha-URL:ssa Chromessa verkon ollessa päällä ja sulje/avaa sovellus uudelleen. Älä poista asennusta, tyhjennä sivuston tietoja tai rekisteröi uutta PWA:ta.
+6. Tarkista, että samat omistukset, määrät, hinnat, tilityypit ja palveluntarjoajat ovat säilyneet. Avaa Alpha vielä uudelleen lentotilassa (Wi-Fi pois) ja varmista, että **Alpha 2 -versionmerkki, dashboard ja samat omistukset** näkyvät offline.
+7. Palauta verkkoyhteys ja kirjaa PASS/FAIL. Jos omistukset katoavat tai näkyy väärä versio, lopeta; älä tyhjennä selaintietoja tai palauta backupia ennen havainnon kirjaamista.
+
+**Pysyvät sovellusidentiteetit:** PWA `name: Osakevahti Alpha`, `short_name: OV Alpha`, `id: ./?channel=alpha`, `start_url: ./`, localStorage-avain `osakevahti.single.v1`, origin `osakevahti-alpha-naatti21.pages.dev`. Päivityksessä vain näkyvä Alpha 2 -merkintä ja service workerin välimuisti `osakevahti-shell-v2.16-alpha2` muuttuvat. Aiempi `osakevahti-shell-v2.16-ocr-fix` on vanhan Alpha 1 -asennuksen välimuisti. Service workerin cache-eristys ei koske muiden PWA:iden välimuisteihin.
+
+**Testin raja:** vain käyttäjän erillisessä Alpha-originiissa; tämä ei ole lupa päivittää oikean Osakevahdin GitHub Pages -tuotantoa.
+
+---
+
 ## Erottelu
 
 - Tuotanto: **Osakevahti**, origin `https://naatti21.github.io`.
