@@ -18,6 +18,8 @@ test('Alpha PWA uses separate displayed name and install identity', async ({ pag
   expect(manifest.short_name).toBe('OV Alpha');
   expect(manifest.id).toBe('./?channel=alpha');
   expect(manifest.id).not.toBe('./');
+  // The version footer lives in the collapsed Huolto accordion.
+  await page.getByText('Huolto',{exact:true}).click();
   await expect(page.getByText('Osakevahti Alpha 2 · v2.16.2',{exact:false})).toBeVisible();
   expect(manifest.start_url).toBe('./');
   expect(manifest.scope).toBe('./');
