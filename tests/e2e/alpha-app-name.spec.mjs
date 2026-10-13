@@ -5,6 +5,7 @@ test('Alpha PWA uses separate displayed name and install identity', async ({ pag
   await page.goto('/index.html');
   await expect(page.locator('#dailyMoves')).toBeVisible();
   await expect(page.locator('header h1')).toHaveText('Osakevahti Alpha');
+  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA 2 · PÄIVITYSTESTI');
   await expect(page).toHaveTitle('Osakevahti Alpha');
   await expect(page.locator('meta[name="apple-mobile-web-app-title"]'))
     .toHaveAttribute('content', 'Osakevahti Alpha');
@@ -17,6 +18,10 @@ test('Alpha PWA uses separate displayed name and install identity', async ({ pag
   expect(manifest.short_name).toBe('OV Alpha');
   expect(manifest.id).toBe('./?channel=alpha');
   expect(manifest.id).not.toBe('./');
+  // Visible header marker was asserted above. Footer belongs to a separate
+  // settings view's collapsed panel: assert its content, not default visibility.
+  await expect(page.getByText('Osakevahti Alpha 2 · v2.16.2',{exact:false}))
+    .toContainText('Osakevahti Alpha 2 · v2.16.2');
   expect(manifest.start_url).toBe('./');
   expect(manifest.scope).toBe('./');
 });
