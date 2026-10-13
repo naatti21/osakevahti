@@ -1654,7 +1654,7 @@ async function refreshMarket(showErrors=false){
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       stockOk++;
     }catch(err){
-      stockFail++;
+      if(h.assetType==="fund")fundFail++;else stockFail++;
       if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
     }
   }
@@ -1672,6 +1672,8 @@ async function refreshMarket(showErrors=false){
     failed:stockFail+fundFail,
     workerOk:!!workerData,
     workerCount:Object.keys(workerData?.assets||{}).length,
+    fxUpdated:fxSuccess.size,
+    fxFailed:fxFailures.size,
     at:Date.now()
   };
 
@@ -1680,9 +1682,19 @@ async function refreshMarket(showErrors=false){
   save();
   render();
   $("refreshBtn").disabled=false;
+  $("refreshBtn").textContent="↻";
 
-  if(showErrors && stockFail>0 && firstError){
-    alert(`Osakepäivityksessä oli ongelma: ${stockOk}/${stocks.length} onnistui.\n\n${firstError}`);
+  if(showErrors){
+    const feedback=$("refreshFeedback");
+    const someFailed=stockFail>0||fundFail>0||fxFailures.size>0;
+    feedback.className=someFailed?"statusBox statusBad":"statusBox statusOk";
+    const summary=`Päivitys valmis: osakkeet ${stockOk}/${stocks.length}, rahastot ${fundOk}/${funds.length}, valuuttaparit ${fxSuccess.size}/${fxSuccess.size+fxFailures.size}.`;
+    const fxDetail=fxFailures.size
+      ? " Valuuttakurssien virheet: "+[...fxFailures].map(([pair,error])=>pair+" ("+error+")").join("; ")+"."
+      : "";
+    const priceDetail=(stockFail||fundFail)&&firstError?" Muu ongelma: "+firstError+".":"";
+    const unchanged=someFailed?"":" Kurssit voivat pysyä samoina markkinoiden ollessa kiinni.";
+    feedback.textContent=summary+fxDetail+priceDetail+unchanged;
   }
 
   loadSharedStatus(false).catch(()=>{});
