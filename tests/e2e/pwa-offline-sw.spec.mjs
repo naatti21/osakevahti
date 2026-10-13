@@ -72,7 +72,14 @@ test('PWA dynamic financial JSON is never served from shell cache when offline',
     try{const r=await fetch(path);return {kind:'response',status:r.status,text:await r.text()};}
     catch(e){return {kind:'offline-network-failure',message:String(e?.message||e)};}
   },url);
-  expect(observed.kind).toBe('offline-network-failure');
+  // Offline browser/service-worker failure can reject fetch OR yield an error
+  // Response. Neither may serve a successful stale financial-JSON payload.
+  if(observed.kind==='response'){
+    expect(observed.status,JSON.stringify(observed)).toBeGreaterThanOrEqual(400);
+    expect(observed.text).not.toContain('synthetic-volatile-financial-data');
+  }else{
+    expect(observed.kind).toBe('offline-network-failure');
+  }
   expect(await page.evaluate(async path=>!!await caches.match(path),url)).toBe(false);
 });
 
