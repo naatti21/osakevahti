@@ -1,0 +1,74 @@
+name: Alpha live data feed diagnostic (test-only RED)
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/alpha-live-data-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remote-feeds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read-only public feed and Worker CORS diagnostic
+        shell: bash
+        run: |
+          node <<'NODE'
+          const base = {
+            alpha:'https://osakevahti-alpha-naatti21.pages.dev',
+            github:'https://naatti21.github.io/osakevahti'
+          };
+          const origin=base.alpha;
+          const feeds=['market-data.json','insights.json','news-data.json',
+                       'market-context.json','portfolio-status.json','risk-data.json'];
+          const targets=[
+            ...feeds.map(file=>({type:'alpha',name:file,url:base.alpha+'/'+file})),
+            ...feeds.map(file=>({type:'github',name:file,url:base.github+'/'+file})),
+            {type:'worker',name:'market-worker',url:'https://osakevahti-market-ed59.teemu-natunen84.workers.dev/?t=diagnostic'}
+          ];
+          const results=await Promise.all(targets.map(async item=>{
+            try {
+              const res=await fetch(item.url,{
+                headers:{'Origin':origin,'Accept':'application/json'},
+                redirect:'follow',signal:AbortSignal.timeout(10000),cache:'no-store'
+              });
+              const cors=res.headers.get('access-control-allow-origin')||'(none)';
+              const ct=res.headers.get('content-type')||'(none)';
+              let valid=false, shape='not parsed';
+              if(res.ok && ct.includes('json')){
+                const json=await res.json();
+                shape=Object.keys(json||{}).slice(0,12).join(',');
+                valid = item.name==='market-data.json'?Boolean(json?.quotes):
+                        item.name==='insights.json'?Array.isArray(json?.dividends)&&Array.isArray(json?.rockets):
+                        item.type==='worker'?Boolean(json?.assets):
+                        Boolean(json && typeof json==='object');
+              }
+              const corsOK=cors==='*'||cors===origin;
+              return {...item,status:res.status,ct,cors,corsOK,valid,shape};
+            }catch(err){return {...item,error:String(err),valid:false,corsOK:false};}
+          }));
+          for(const item of results){
+            console.log([item.type,item.name,
+              'HTTP='+(item.status??'ERR'),'json-shape='+(item.valid?'OK':'FAIL'),
+              'CORS-ALPHA='+(item.corsOK?'OK':'FAIL'),
+              'ACAO='+(item.cors??'n/a'),
+              'keys='+(item.shape??'n/a'),
+              item.error??''].join(' | '));
+          }
+          const alpha=results.filter(r=>r.type==='alpha');
+          const github=results.filter(r=>r.type==='github');
+          const worker=results.find(r=>r.type==='worker');
+          const alphaComplete=alpha.every(r=>r.valid);
+          const prodComplete=github.every(r=>r.valid&&r.corsOK);
+          const workerReady=worker.valid&&worker.corsOK;
+          console.log('READ_ONLY_REPORT',{
+            alphaComplete,prodComplete,workerReady,missingAlpha:alpha.filter(r=>!r.valid).map(r=>r.name),
+            missingProduction:github.filter(r=>!r.valid||!r.corsOK).map(r=>r.name)
+          });
+          // A failing job is intentionally a RED integration gate, no release/deploy.
+          if(!alphaComplete||!workerReady)process.exitCode=1;
+          NODE
