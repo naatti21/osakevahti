@@ -1,0 +1,67 @@
+name: R7 OCR real CDN browser verification
+
+# Browser uses the application's normal public CDN paths for Tesseract script,
+# worker, WASM/core and fin+eng data. No OCR interception or local assets.
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "image-reader.js"
+      - "tests/e2e/ocr-online.spec.mjs"
+      - "package.json"
+      - ".github/workflows/ocr-online-r7.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-online-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-browser-ocr:
+    name: Real browser OCR (unmocked CDN)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout locked pull-request source
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run genuine external-CDN OCR roundtrip
+        run: npx playwright test tests/e2e/ocr-online.spec.mjs --workers=1 --retries=0
+
+      - name: Explain diagnostic outcome
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Real browser OCR — no Tesseract mocks"
+            echo "The normal production CDN/worker/WASM/fin+eng path is used."
+            echo "Market resolver is deterministic and synthetic, independent of OCR."
+            echo "Any network failure or assertion failure must remain a FAIL."
+            echo "Inspect the HTML report, OCR output, anonymous PNG and CDN request log."
+            echo "This cannot certify an Android/PWA installation or end-user network."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload real-network OCR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r7-real-browser-ocr-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
