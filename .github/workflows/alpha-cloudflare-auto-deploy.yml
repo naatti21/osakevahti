@@ -1,0 +1,134 @@
+name: Alpha Cloudflare Pages — verified direct deployment
+
+# This workflow exists ONLY on the dedicated Alpha deploy branch.
+# Never run from main, and never deploy the actual Osakevahti GitHub Pages site.
+on:
+  push:
+    branches:
+      - "deploy/osakevahti-alpha-20261013"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: osakevahti-alpha-cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Full Alpha quality and live-data gate (NO DEPLOY)
+    if: ${{ github.repository == 'naatti21/osakevahti' && github.ref == 'refs/heads/deploy/osakevahti-alpha-20261013' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install test dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Required full browser, PWA update and real market-feed tests
+        run: npm test
+
+      - name: Required QA8 source and portfolio integrity guards
+        run: npm run test:qa-import
+
+      - name: Required real OCR stress tests
+        run: npm run test:ocr
+
+      - name: Required unmocked public-CDN Tesseract OCR
+        run: npx playwright test tests/e2e/ocr-online.spec.mjs --workers=1 --retries=0
+
+      - name: Build only allowlisted Alpha PWA files
+        run: node scripts/build-alpha-pages.mjs
+
+      - name: Verify exact Alpha deployment package
+        run: node --test tests/alpha-pages-package.test.mjs
+
+      - name: Transfer verified Alpha-only assets to deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-osakevahti-alpha-assets
+          path: dist-alpha/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-alpha:
+    name: Deploy only Osakevahti Alpha Pages site
+    needs: verify
+    if: ${{ success() && github.repository == 'naatti21/osakevahti' && github.ref == 'refs/heads/deploy/osakevahti-alpha-20261013' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require dedicated Cloudflare secrets
+        shell: bash
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [[ -z "$CF_TOKEN" || -z "$CF_ACCOUNT" ]]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the osakevahti repository Actions secrets. No deployment was attempted."
+            exit 1
+          fi
+
+      - name: Download verified assets from this same workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-osakevahti-alpha-assets
+          path: dist-alpha/
+
+      - name: Fail closed if candidate is not the isolated Alpha
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const dir='dist-alpha';
+          const allow=['_headers','icon-192.png','icon-512.png','image-reader.js','index.html',
+                       'manifest.webmanifest','robots.txt','sw.js'].sort();
+          const files=fs.readdirSync(dir).sort();
+          if(JSON.stringify(files)!==JSON.stringify(allow)) throw Error('Unexpected Alpha upload files');
+          const manifest=JSON.parse(fs.readFileSync(dir+'/manifest.webmanifest','utf8'));
+          if(manifest.id!=='./?channel=alpha' || manifest.name!=='Osakevahti Alpha' ||
+             manifest.short_name!=='OV Alpha') throw Error('Wrong PWA target identity');
+          const html=fs.readFileSync(dir+'/index.html','utf8');
+          const sw=fs.readFileSync(dir+'/sw.js','utf8');
+          // Reusable for future Alpha releases without changing the target or weakening QA.
+          if(!/ALPHA [3-9][0-9]* ·/.test(html) ||
+             !html.includes('https://naatti21.github.io/osakevahti/') ||
+             !/const CACHE = "osakevahti-shell-[^"]+";/.test(sw) ||
+             !sw.includes('if (res.ok)') ||
+             !sw.includes('k.startsWith("osakevahti-shell-")')) {
+            throw Error('Missing Alpha release marker, live feed URL or service-worker safety guards');
+          }
+          console.log('Verified Alpha identity, live feeds, service worker and asset allowlist');
+          NODE
+
+      # Force main only inside THIS separate Cloudflare Direct Upload Pages project.
+      # Cloudflare project's "main" is NOT GitHub repo's main branch.
+      - name: Publish to existing isolated Alpha site using Wrangler
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist-alpha --project-name=osakevahti-alpha-naatti21 --branch=main --commit-hash=${{ github.sha }}
+
+      - name: Explain what was and was not released
+        shell: bash
+        run: |
+          {
+            echo '### Osakevahti Alpha Direct Upload via Wrangler'
+            echo 'Target only: https://osakevahti-alpha-naatti21.pages.dev/'
+            echo "Released verified GitHub SHA: ${GITHUB_SHA}"
+            echo 'Actual production Osakevahti https://naatti21.github.io/osakevahti/ is not modified.'
+            echo 'Physical Android confirmation is still required after every meaningful update.'
+          } >> "$GITHUB_STEP_SUMMARY"
