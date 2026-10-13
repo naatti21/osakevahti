@@ -148,6 +148,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div id="portfolioValue" class="heroValue">0,00 €</div>
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
+  <div id="valuationWarning" class="statusBox statusBad hidden" role="status"></div>
   <div id="accountSummary" class="summaryGrid"></div>
   <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
   <div id="dailyMoves" class="card dailyMoves"></div>
@@ -573,6 +574,26 @@ function finnhubSymbol(h){
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function uid(){return crypto.randomUUID?.()||Date.now()+"-"+Math.random().toString(16).slice(2)}
 function n(v){const x=Number(String(v??"").replace(",","."));return Number.isFinite(x)?x:0}
+// Quotes and foreign-exchange multipliers must be explicitly finite and positive.
+// The general n() convenience parser is NOT suitable for financial validation.
+function validPositive(v){return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>0}
+function validQuoteTime(ms){
+  const t=Number(ms);
+  return Number.isFinite(t)&&t>=946684800000&&t<=Date.now()+5*60*1000;
+}
+function quoteTime(sourceTime,generatedAt){
+  if(sourceTime!==null&&sourceTime!==undefined&&sourceTime!==""&&sourceTime!==0){
+    return validQuoteTime(sourceTime)?Number(sourceTime):null;
+  }
+  const created=Date.parse(generatedAt||"");
+  return validQuoteTime(created)?created:null;
+}
+function quotedCurrencyMatches(quote,holding){
+  // When the upstream feed explicitly supplies a currency, never silently
+  // reinterpret a USD quote as EUR (or vice versa).
+  if(!quote.currency)return true;
+  return !!holding.currency&&String(quote.currency).trim().toUpperCase()===String(holding.currency).trim().toUpperCase();
+}
 function opt(v){if(v===""||v==null)return null;const x=n(v);return x>0?x:null}
 function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency",currency:c,maximumFractionDigits:2}).format(n(v))}
 function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
@@ -717,7 +738,8 @@ function render(){
 
   const rows=state.holdings.map(h=>{
     const p=n(h.currentPrice||h.manualPrice);
-    const fx=n(h.fxRate)||(h.currency===state.baseCurrency?1:0);
+    const fx=h.currency===state.baseCurrency?1:
+      (validPositive(h.fxRate)&&h.fxRateStatus!=="unavailable"?Number(h.fxRate):0);
     const val=p*n(h.quantity)*fx;
     const cost=n(h.buyPrice)*n(h.quantity)*fx;
     const pnl=val-cost;
@@ -725,6 +747,9 @@ function render(){
     return {h,p,fx,val,cost,pnl,pct};
   });
 
+  const valuationIncomplete=rows.some(r=>n(r.h.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)));
+  const fxEstimate=rows.some(r=>n(r.h.quantity)>0&&r.h.currency!==state.baseCurrency&&
+    validPositive(r.fx)&&r.h.fxRateStatus==="stale");
   const tv=rows.reduce((a,r)=>a+r.val,0);
   const tc=rows.reduce((a,r)=>a+r.cost,0);
   let ost=0,aot=0,funds=0,todayEur=0;
@@ -769,7 +794,7 @@ function render(){
     b.className="item";
     const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):"Ei kurssia"}</div>${detailPrice}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -826,10 +851,16 @@ function render(){
     plan.appendChild(row);
   });
 
-  $("portfolioValue").textContent=money(tv,state.baseCurrency);
+  $("portfolioValue").textContent=valuationIncomplete?"—":(fxEstimate?"≈ ":"")+money(tv,state.baseCurrency);
+  const notice=$("valuationWarning");
+  notice.classList.toggle("hidden",!valuationIncomplete&&!fxEstimate);
+  notice.textContent=valuationIncomplete
+    ?"Salkun arvo on puutteellinen: vähintään yhden omistuksen kurssi tai tarvittava valuuttakurssi puuttuu. Yhteissummaa, tuottoa, salkkupainoja ja riskiarvoja ei voi laskea luotettavasti."
+    :fxEstimate?"Salkun arvossa käytetään ainakin yhden omistuksen aiempaa valuuttakurssia. Arvo ja tuotto ovat arvioita; tarkista verkkoyhteys ja valuuttakurssin päivitys.":"";
   const tp=tv-tc,tpp=tc?tp/tc*100:0;
-  $("portfolioProfit").textContent=state.holdings.length?money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
-  $("portfolioProfit").className=tp>0?"pos":tp<0?"neg":"";
+  $("portfolioProfit").textContent=valuationIncomplete?"Tuotto ei laskettavissa":
+    state.holdings.length?(fxEstimate?"≈ ":"")+money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
+  $("portfolioProfit").className=valuationIncomplete?"muted":tp>0?"pos":tp<0?"neg":"";
 
   if(state.refreshSummary){
     const s=state.refreshSummary;
@@ -838,7 +869,17 @@ function render(){
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
-  renderRiskDashboard(rows,tv);
+  if(valuationIncomplete){
+    // Never claim precise portfolio weights, concentration or risk budgets
+    // while any nonempty position is unvalued.
+    $("accountSummary").innerHTML='<div class="summaryChip"><strong>Tilikohtaiset arvot eivät saatavilla</strong></div>';
+    $("portfolioPulse").innerHTML='<div class="muted">Salkkupainot eivät laskettavissa puuttuvien kurssitietojen vuoksi.</div>';
+    $("targetMap").innerHTML='<div class="muted">Tavoite-erot eivät laskettavissa.</div>';
+    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit eivät laskettavissa: salkun arvosta puuttuu omistuksia.</div>';
+    $("risks").innerHTML="";
+  }else{
+    renderRiskDashboard(rows,tv);
+  }
   renderNews();
   renderInsights();
 }
