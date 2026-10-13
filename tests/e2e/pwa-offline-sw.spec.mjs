@@ -67,12 +67,21 @@ test('PWA dynamic financial JSON is never served from shell cache when offline',
   expect(response.body.kind).toBe('synthetic-volatile-financial-data');
   const hasCachedData=await page.evaluate(async path=>!!await caches.match(path),url);
   expect(hasCachedData).toBe(false);
+  // Playwright context.setOffline can leave a service worker's own network
+  // target connected. Explicitly simulate a failed upstream for this resource
+  // while service workers stay enabled; verify the block was actually used.
+  let blockedRequests=0;
+  await context.route('**/tests/fixtures/pwa-network-only.json',async route=>{
+    blockedRequests++;
+    await route.abort('internetdisconnected');
+  });
   await context.setOffline(true);
   const observed=await page.evaluate(async path=>{
-    try{const r=await fetch(path);return {kind:'response',status:r.status,text:await r.text()};}
+    try{const r=await fetch(path,{cache:'no-store'});return {kind:'response',status:r.status,text:await r.text()};}
     catch(e){return {kind:'offline-network-failure',message:String(e?.message||e)};}
   },url);
-  // Offline browser/service-worker failure can reject fetch OR yield an error
+  expect(blockedRequests,'Service-worker upstream network request must reach the injected outage').toBeGreaterThan(0);
+  // Offline service-worker failure can reject fetch OR yield an error
   // Response. Neither may serve a successful stale financial-JSON payload.
   if(observed.kind==='response'){
     expect(observed.status,JSON.stringify(observed)).toBeGreaterThanOrEqual(400);
