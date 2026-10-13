@@ -878,9 +878,9 @@ function render(){
     // Never claim precise portfolio weights, concentration or risk budgets
     // while any nonempty position is unvalued.
     $("accountSummary").innerHTML='<div class="summaryChip"><strong>Tilikohtaiset arvot eivät saatavilla</strong></div>';
-    $("portfolioPulse").innerHTML='<div class="muted">Salkkupainot eivät laskettavissa puuttuvien kurssitietojen vuoksi.</div>';
-    $("targetMap").innerHTML='<div class="muted">Tavoite-erot eivät laskettavissa.</div>';
-    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit eivät laskettavissa: salkun arvosta puuttuu omistuksia.</div>';
+    $("portfolioPulse").innerHTML='<div class="muted">Salkkupainot: ei laskettavissa puuttuvien kurssitietojen vuoksi.</div>';
+    $("targetMap").innerHTML='<div class="muted">Tavoite-erot: ei laskettavissa.</div>';
+    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit: ei laskettavissa, koska salkun arvosta puuttuu omistuksia.</div>';
     $("risks").innerHTML="";
   }else{
     renderRiskDashboard(rows,tv);
