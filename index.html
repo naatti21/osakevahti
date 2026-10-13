@@ -1546,19 +1546,31 @@ async function refreshMarket(showErrors=false){
   else if(!firstError) firstError=`GitHub-varalähde: ${githubResult.reason?.message||githubResult.reason||"ei vastaa"}`;
 
   for(const h of state.holdings){
-    try{
-      fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);
-      h.fxRate=fx[h.currency];
-    }catch{
-      if(h.currency===state.baseCurrency) h.fxRate=1;
+    if(h.currency===state.baseCurrency){
+      h.fxRate=1;h.fxRateStatus="fresh";h.fxRateUpdatedAt=Date.now();
+    }else{
+      try{
+        fx[h.currency]??=await fxRate(h.currency,state.baseCurrency);
+        h.fxRate=fx[h.currency];
+        h.fxRateStatus="fresh";
+        h.fxRateUpdatedAt=Date.now();
+      }catch{
+        // Preserve an older *plausible* rate as an explicitly stale estimate.
+        // A legacy foreign FX=1 may itself be a fabricated parity fallback.
+        h.fxRateStatus=validPositive(h.fxRate)&&Number(h.fxRate)!==1?"stale":"unavailable";
+      }
     }
 
     try{
       if(h.assetType==="fund"){
         const q=marketData?.fund_quotes?.[h.symbol];
-        if(!q || !n(q.price)) throw new Error(`NAV puuttuu: ${h.name||h.symbol}`);
-        h.currentPrice=n(q.price);
-        h.quoteTimestamp=q.timestamp ? n(q.timestamp) : (marketData?.generated_at ? Date.parse(marketData.generated_at) : Date.now());
+        if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h))
+          throw new Error(`NAV puuttuu tai on virheellinen: ${h.name||h.symbol}`);
+        const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
+        if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
+          throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
+        h.currentPrice=Number(q.price);
+        h.quoteTimestamp=navTimestamp||0;
         h.navDate=q.nav_date||"";
         h.dayChangePct=0;
         h.quoteSource="FUND_NAV";
@@ -1573,10 +1585,11 @@ async function refreshMarket(showErrors=false){
 
       const wq=workerData?.assets?.[key];
       let workerQuote=null;
-      if(wq && n(wq.price)){
+      const wTime=wq?quoteTime(wq.quote_timestamp,workerData?.generated_at):null;
+      if(wq&&validPositive(wq.price)&&quotedCurrencyMatches(wq,h)&&wTime){
         workerQuote={
-          price:n(wq.price),
-          timestamp:wq.quote_timestamp ? n(wq.quote_timestamp) : (workerData?.generated_at ? Date.parse(workerData.generated_at) : 0),
+          price:Number(wq.price),
+          timestamp:wTime,
           changePct:n(wq.day_change_pct),
           provider:wq.source||"Cloudflare Worker",
           realtime:wq.delayed!==true,
@@ -1586,10 +1599,11 @@ async function refreshMarket(showErrors=false){
 
       let fallback=null;
       const gq=marketData?.quotes?.[key];
-      if(gq && n(gq.price)){
+      const gTime=gq?quoteTime(gq.timestamp,marketData?.generated_at):null;
+      if(gq&&validPositive(gq.price)&&quotedCurrencyMatches(gq,h)&&gTime){
         fallback={
-          price:n(gq.price),
-          timestamp:gq.timestamp ? n(gq.timestamp) : (marketData?.generated_at ? Date.parse(marketData.generated_at) : 0),
+          price:Number(gq.price),
+          timestamp:gTime,
           changePct:n(gq.change_pct),
           provider:gq.provider||"GitHub snapshot",
           realtime:gq.realtime===true,
@@ -1610,7 +1624,7 @@ async function refreshMarket(showErrors=false){
       if(!best) throw new Error(`ei kurssia symbolille ${key}`);
 
       h.currentPrice=best.price;
-      h.quoteTimestamp=best.timestamp||Date.now();
+      h.quoteTimestamp=best.timestamp;
       h.dayChangePct=best.changePct;
       h.quoteSource=best.source;
       h.quoteProvider=best.provider;
@@ -1777,7 +1791,19 @@ async function testFinnhub(){
 async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(j.s!=="ok")return[];return j.c.map((c,i)=>({close:n(c),high:n(j.h[i]),low:n(j.l[i])}))}
 function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
 async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
-async function fxRate(from,to){if(from===to)return 1;const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);const j=await r.json();return n(j.rates?.[to])||1}
+async function fxRate(from,to){
+  const src=String(from||"").trim().toUpperCase();
+  const dst=String(to||"").trim().toUpperCase();
+  if(!/^[A-Z]{3}$/.test(src)||!/^[A-Z]{3}$/.test(dst))throw new Error("Valuutan tunniste puuttuu tai on virheellinen");
+  if(src===dst)return 1;
+  const r=await fetch(`https://api.frankfurter.app/latest?from=${encodeURIComponent(src)}&to=${encodeURIComponent(dst)}`,{cache:"no-store"});
+  if(!r.ok)throw new Error(`Valuuttapalvelu HTTP ${r.status}`);
+  const j=await r.json();
+  if(j.base&&String(j.base).toUpperCase()!==src)throw new Error("Valuuttapalvelun lähtövaluutta on väärä");
+  const rate=j.rates?.[dst];
+  if(!validPositive(rate))throw new Error(`Valuuttakurssi puuttuu tai on virheellinen: ${src}/${dst}`);
+  return Number(rate);
+}
 function cleanNameToken(v){
   return String(v||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
     .replace(/[^a-z0-9]+/g," ").trim();
