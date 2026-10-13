@@ -21,10 +21,13 @@ test('RED safety contract: missing USD -> EUR conversion must not impersonate 1:
     body:JSON.stringify({amount:1,base:'USD',rates:{}})
   }));
   await page.goto('/index.html');
-  const result=await page.evaluate(()=>fxRate('USD','EUR'));
-  // A failed conversion should be an explicit error or unavailable value.
-  // A success-looking rate of 1.0 misvalues all affected foreign holdings.
-  expect(result,'Malformed FX JSON MUST NOT synthesize EUR/USD parity').not.toBe(1);
+  let result=null,rejected=false;
+  try{result=await page.evaluate(()=>fxRate('USD','EUR'))}
+  catch{rejected=true}
+  // Strict contract: reject explicitly or return an unavailable value.
+  // A plausible numeric conversion is NOT acceptable when the rate is absent.
+  expect(rejected||result==null||Number.isNaN(result),
+    'Malformed FX JSON must be rejected, not treated as valid rate '+result).toBe(true);
 });
 
 test('audit demonstration: current-FX cost basis omits historical purchase currency movement',async({page})=>{
