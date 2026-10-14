@@ -5,7 +5,7 @@ import {test,expect} from '@playwright/test';
 // Browser context OVERRIDES repository's serviceWorkers:'block' deliberately.
 test.use({serviceWorkers:'allow'});
 const KEY='osakevahti.single.v1';
-const SHELL_CACHE='osakevahti-shell-v2.17.5-alpha';
+const SHELL_CACHE='osakevahti-shell-v2.17.6-alpha';
 const FIRST={id:'OFFLINE-SYNTHETIC-01',symbol:'MSFT',name:'Synthetic Microsoft',
   quantity:7.25,buyPrice:123.45,currency:'USD',account:'Nordea',
   accountType:'AOT',broker:'Nordea',accountDetailsConfirmed:true,
@@ -17,10 +17,10 @@ async function install(page){
   await page.waitForFunction(async()=>{
     if(!navigator.serviceWorker?.controller)return false;
     const keys=await caches.keys();
-    return keys.includes('osakevahti-shell-v2.17.5-alpha');
+    return keys.includes('osakevahti-shell-v2.17.6-alpha');
   },undefined,{timeout:25_000});
   const snapshots=await page.evaluate(async()=>{
-    const cache=await caches.open('osakevahti-shell-v2.17.5-alpha');
+    const cache=await caches.open('osakevahti-shell-v2.17.6-alpha');
     return {controlled:!!navigator.serviceWorker.controller,
       index:!!(await cache.match('./index.html')),
       reader:!!(await cache.match('./image-reader.js')),
