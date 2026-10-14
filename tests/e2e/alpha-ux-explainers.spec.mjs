@@ -3,7 +3,7 @@ import {test,expect} from '@playwright/test';
 // Synthetic-only UX oracles. No real holdings, credentials or deployments.
 test('Alpha uses one semantic version and keeps optional technical settings collapsed',async({page})=>{
   await page.goto('/index.html');
-  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.3');
+  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.4');
   await page.locator('.nav[data-view="settingsView"]').click();
   const advanced=page.locator('#settingsView .techOptions');
   await expect(advanced).not.toHaveAttribute('open', '');
