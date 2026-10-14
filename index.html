@@ -151,6 +151,22 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .insightCardActions{display:flex;justify-content:flex-end;margin-top:7px}
 @media(max-width:480px){#dividendPanel .metricGrid,#rocketPanel .metricGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#dividendPanel .metricBox span,#rocketPanel .metricBox span{font-size:11px;white-space:normal;overflow:visible;text-overflow:unset}#dividendPanel .metricBox strong,#rocketPanel .metricBox strong{font-size:13px}}
 .layoutDiagText{white-space:pre-wrap;overflow-wrap:anywhere;max-height:55vh;overflow:auto;background:#0e1216;padding:10px;border-radius:10px;font-size:11px;line-height:1.45;color:var(--text)}
+
+/* Compact phone cards. Quotation age has its own short row: it must not
+   expand the document horizontally when the source wording is long. */
+@media(max-width:480px){
+  #portfolioView .hero .row{flex-wrap:wrap;row-gap:5px}
+  #portfolioView #quoteAge{max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere}
+  #accountSummary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dailyMovesHead,.pulseTop{flex-wrap:wrap;row-gap:4px}
+  .dailyMovesMeta,.pulseHint{max-width:100%;min-width:0;overflow-wrap:anywhere}
+  .moveList{grid-template-columns:minmax(0,1fr)}
+  .moveRow{grid-template-columns:minmax(0,1fr) auto auto;column-gap:8px;row-gap:3px}
+  .moveSymbol{min-width:0;overflow-wrap:anywhere}
+  .movePrice,.movePct{min-width:0}
+  .moveAge{grid-column:1/-1;min-width:0;max-width:100%;justify-self:end;
+    white-space:normal;overflow-wrap:anywhere;text-align:right}
+}
 </style>
 </head>
 <body>
@@ -465,6 +481,15 @@ if(window.visualViewport){
   window.visualViewport.addEventListener("resize",syncNavigationToVisibleScreen,{passive:true});
   window.visualViewport.addEventListener("scroll",syncNavigationToVisibleScreen,{passive:true});
 }
+// Live quote cards and risk summaries can expand after the initial navigation
+// viewport was calculated. ResizeObserver catches such content changes even
+// when mobile Chrome does not send a window/visualViewport resize event.
+if(typeof ResizeObserver==="function"){
+  const navLayoutObserver=new ResizeObserver(()=>requestAnimationFrame(syncNavigationToVisibleScreen));
+  navLayoutObserver.observe(document.querySelector("main"));
+  navLayoutObserver.observe(document.documentElement);
+}
+requestAnimationFrame(syncNavigationToVisibleScreen);
 function collectLayoutDiagnostic(){
   const vv=window.visualViewport,nav=document.querySelector("nav");
   const r=nav?.getBoundingClientRect();
