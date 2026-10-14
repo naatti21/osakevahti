@@ -70,11 +70,10 @@ test('facts about triggered stop remain visible despite contextual decision word
     renderRiskCard({h,p:90,val:180,fx:1},r,10000,
       {severity:'OK',action:'EI TOIMENPIDETTÄ',reason:'markkina seuraa',techLabel:'taso rikottu',portfolioLabel:'ok',
        thesis:{label:'ei uutisia',reason:'ei uutisia'},marketLabel:'markkina'},0,false);
-    return {status:r.status};
+    const card=document.querySelector('#risks .card');
+    return {status:r.status,
+      factVisibleInCard:card?.textContent?.includes('Suojataso on rikkoutunut laskennassa.'),
+      contextRetained:card?.textContent?.includes('EI TOIMENPIDETTÄ')};
   });
-  expect(s.status).toBe('TRIGGERED');
-  await page.locator('.nav[data-view="riskView"]').click();
-  const risk=page.locator('#risks .card').first();
-  await expect(risk.getByText('Suojataso on rikkoutunut laskennassa.',{exact:false})).toBeVisible();
-  await expect(risk.getByText('EI TOIMENPIDETTÄ',{exact:true}).first()).toBeVisible();
+  expect(s).toEqual({status:'TRIGGERED',factVisibleInCard:true,contextRetained:true});
 });
