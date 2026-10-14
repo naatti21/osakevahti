@@ -59,6 +59,10 @@ test('synthetic portfolio with long labels and large numbers stays within mobile
    await page.setViewportSize({width,height:740});
    for(const view of ['portfolioView','riskView','newsView','settingsView']){
      await page.locator('.nav[data-view="'+view+'"]').click();
+     if(view==='riskView'){
+       await expect(page.locator('#risks .riskHead').first()).toBeVisible();
+       await expect(page.locator('#risks')).toContainText('VERY-LONG-TEST-TICKER');
+     }
      const result=await page.evaluate(()=>{
        const sw=document.documentElement.scrollWidth, vw=document.documentElement.clientWidth;
        const bad=[...document.querySelectorAll('body *')].filter(el=>{
@@ -115,5 +119,25 @@ test('explanation links restore original wrapping, remain tappable and have no d
     await help.click();
     await expect(page.locator('#metricHelpDlg')).toBeVisible();
     await page.locator('#closeMetricHelp').click();
+  }
+});
+
+test('large nonbreaking-space formatted portfolio value does not widen real layout or nav',async({page})=>{
+  await page.goto('/index.html');
+  for(const width of [320,360,375,390,412]){
+    await page.setViewportSize({width,height:740});
+    const data=await page.evaluate(()=>{
+      const amount=document.querySelector('#portfolioValue');
+      amount.textContent='1\u202f523\u202f000\u202f500\u202f350,00\u00a0€';
+      const hero=amount.getBoundingClientRect(),nav=document.querySelector('nav').getBoundingClientRect();
+      return {vw:document.documentElement.clientWidth,
+        sw:document.documentElement.scrollWidth,
+        amountRight:hero.right,navLeft:nav.left,navRight:nav.right,navWidth:nav.width};
+    });
+    expect(data.sw,'Unbreakable currency sum must not expand document at '+width).toBeLessThanOrEqual(data.vw+1);
+    expect(data.amountRight).toBeLessThanOrEqual(data.vw+1);
+    expect(data.navLeft).toBeGreaterThanOrEqual(-1);
+    expect(data.navRight).toBeLessThanOrEqual(data.vw+1);
+    expect(data.navWidth).toBeLessThanOrEqual(data.vw+1);
   }
 });
