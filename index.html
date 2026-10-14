@@ -1328,6 +1328,79 @@ function pct(v,d=1){
 function scoreClass(score){
   return score>=75?"radarHot":score>=60?"radarWatch":"radarNeutral";
 }
+
+const METRIC_GLOSSARY={
+ ttm:["TTM – viimeiset 12 kuukautta","TTM (Trailing Twelve Months) tarkoittaa viimeisten 12 kuukauden toteutuneita osinkoja. Osinkokone laskee 365 päivän osingot suhteessa osakkeen nykyiseen vertailukurssiin. Tulevia osinkoja ei voida luvata."],
+ yield:["Osinkotuotto","Viimeisen 365 päivän osingot jaettuna käytetyllä osakekurssilla. Korkea osinkotuotto voi johtua myös kurssin laskusta."],
+ years:["Osinkovuosia","Monenako viimeisestä viidestä kalenterivuodesta osinkoa on kirjautunut lähdetietoihin. Se ei takaa tulevia maksuja."],
+ ret12:["12 kk kurssimuutos","Osakekurssin muutos noin 252 kaupankäyntipäivän aikana. Osingot eivät sisälly tähän kurssimuutokseen."],
+ drawdown:["Max pudotus","Suurin havaittu kurssilasku aiemmasta huipusta sitä seuranneeseen pohjaan noin 252 kaupankäyntipäivän aikana. Ei tulevien tappioiden yläraja."],
+ dividendScore:["Osinkokoneen pisteet","Sääntöpohjainen 0–100 pisteytys valituista yhtiöistä: osinkotuotto, maksuvuodet, kurssikehitys ja historiallinen pudotus. Ei mittaa kassavirran perusteella osingon kestävyyttä."],
+ radarScore:["Rocket Radarin pisteet","Valittujen yhtiöiden vertailupisteet eivät ole nousun todennäköisyys tai osto-ohje."],
+ momentum:["1/3/6 kk kurssimuutos","Kurssin historiallinen muutos valitulla ajanjaksolla. Menneestä kehityksestä ei voi suoraan ennustaa tulevaa."],
+ volume:["Volyymikerroin","Viiden kaupankäyntipäivän keskimääräinen vaihto suhteessa aiempiin 20 päivään. Esimerkiksi 1,6× tarkoittaa 60 % vilkkaampaa kaupankäyntiä."],
+ volatility:["Volatiliteetti","Päivittäisten prosentuaalisten kurssimuutosten historiallinen hajonta noin 20 kaupankäyntipäivän aikana. Ei tulevan heilunnan ennuste."]
+};
+function metricHelpHtml(k,label){
+ return '<button type="button" class="metricHelp" data-metric-help="'+esc(k)+'" aria-label="Selitä '+esc(label)+'">'+esc(label)+' <b aria-hidden="true">ⓘ</b></button>';
+}
+const WATCH_KEY="osakevahti.alpha.watchlists.v1";
+function tickerCode(x){const t=String(x??"").trim().toUpperCase();return /^[A-Z0-9][A-Z0-9.-]{0,19}$/.test(t)?t:""}
+function loadWatch(){
+ let raw={};try{raw=JSON.parse(localStorage.getItem(WATCH_KEY)||"{}")||{}}catch{}
+ const out={};
+ for(const k of ["dividends","rockets"]){
+  const v=raw[k]||{};
+  out[k]={hidden:Array.isArray(v.hidden)?[...new Set(v.hidden.map(tickerCode).filter(Boolean))].slice(0,100):[],
+    added:Array.isArray(v.added)?[...new Set(v.added.map(tickerCode).filter(Boolean))].slice(0,30):[]};
+ }
+ return out;
+}
+let watchPrefs=loadWatch();
+function watchUniverse(k){return k==="dividends"?(insights?.dividends||[]):(insights?.rockets||[])}
+function renderWatch(k){
+ const el=$(k==="dividends"?"dividendWatchList":"rocketWatchList");if(!el)return;
+ const known=new Set(watchUniverse(k).map(x=>tickerCode(x.ticker)));
+ const add=watchPrefs[k].added.filter(x=>!known.has(x));
+ const hidden=watchPrefs[k].hidden.filter(x=>known.has(x));
+ const button=(ticker,action,title)=>'<button type="button" class="watchAction" data-watch-action="'+action+'" data-watch-kind="'+k+'" data-watch-ticker="'+esc(ticker)+'">'+title+'</button>';
+ let html='<p class="watchNote">Omat seurattavat tallentuvat vain tähän selaimeen. Lisäyksille ei lasketa pisteitä ilman datapalvelun tukea.</p>';
+ if(add.length)html+='<strong>Omat lisäykset – ei vielä analyysiä</strong>'+add.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"remove","Poista")+'</div>').join('');
+ if(hidden.length)html+='<strong>Piilotetut yhtiöt</strong>'+hidden.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"restore","Palauta")+'</div>').join('');
+ if(!add.length&&!hidden.length)html+='<p class="watchNote">Ei omia lisäyksiä tai piilotettuja yhtiöitä.</p>';
+ el.innerHTML=html;
+}
+function editWatch(k,action,x){
+ if(!["dividends","rockets"].includes(k))return false;
+ const t=tickerCode(x);if(!t)return false;
+ const pref=watchPrefs[k],known=watchUniverse(k).some(y=>tickerCode(y.ticker)===t);
+ if(action==="add"){
+  if(known)pref.hidden=pref.hidden.filter(y=>y!==t);
+  else if(!pref.added.includes(t)){if(pref.added.length>=30)return false;pref.added.push(t)}
+ }else if(action==="hide"){
+  if(!known)return false;pref.hidden=[...new Set([...pref.hidden,t])];
+ }else if(action==="restore")pref.hidden=pref.hidden.filter(y=>y!==t);
+ else if(action==="remove")pref.added=pref.added.filter(y=>y!==t);
+ else return false;
+ try{localStorage.setItem(WATCH_KEY,JSON.stringify(watchPrefs))}catch{return false}
+ renderInsights();return true;
+}
+document.addEventListener("click",e=>{
+ const help=e.target.closest("[data-metric-help]");
+ if(help){const data=METRIC_GLOSSARY[help.dataset.metricHelp];if(data){
+  $("metricHelpTitle").textContent=data[0];$("metricHelpBody").textContent=data[1];$("metricHelpDlg").showModal();
+ }return}
+ const add=e.target.closest("[data-watch-add]");
+ if(add){
+  const k=add.dataset.watchAdd,input=$(k==="dividends"?"dividendWatchInput":"rocketWatchInput"),note=$(k==="dividends"?"dividendWatchFeedback":"rocketWatchFeedback"),t=tickerCode(input?.value);
+  if(!t){note.textContent="Anna pörssitunnus, esimerkiksi FSKRS.HE.";return}
+  if(!editWatch(k,"add",t)){note.textContent="Lisäys ei onnistunut tai lista on täynnä.";return}
+  input.value="";note.textContent="Lisätty omaan seurantaan. Uudelle tunnukselle ei vielä ole pisteytystä.";return
+ }
+ const action=e.target.closest("[data-watch-action]");
+ if(action)editWatch(action.dataset.watchKind,action.dataset.watchAction,action.dataset.watchTicker);
+});
+
 function renderInsights(){
   const divList=$("dividendList"),rocketList=$("rocketList");
   if(!divList||!rocketList) return;
