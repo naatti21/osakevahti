@@ -36,10 +36,8 @@ test('screenshot-shaped dashboard never leaves mobile width and nav starts visib
  await page.goto('/index.html');
  for(const width of [320,360,375,393,412]){
    await page.setViewportSize({width,height:720});
-   const state=await page.evaluate(({fillSource,snapshotSource})=>{
-     const f=eval('('+fillSource+')'),snap=eval('('+snapshotSource+')');
-     f();return snap();
-   },{fillSource:fill.toString(),snapshotSource:snapshot.toString()});
+   await page.evaluate(fill);
+   const state=await page.evaluate(snapshot);
    console.log('USER_SCREENSHOT_GEOMETRY',JSON.stringify({width,...state}));
    expect(state.sw,JSON.stringify(state)).toBeLessThanOrEqual(state.vw+1);
    expect(state.navLeft).toBeGreaterThanOrEqual(-1);
