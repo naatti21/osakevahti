@@ -3,7 +3,7 @@ import {test,expect} from '@playwright/test';
 // Synthetic-only UX oracles. No real holdings, credentials or deployments.
 test('Alpha uses one semantic version and keeps optional technical settings collapsed',async({page})=>{
   await page.goto('/index.html');
-  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.0');
+  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.1');
   await page.locator('.nav[data-view="settingsView"]').click();
   const advanced=page.locator('#settingsView .techOptions');
   await expect(advanced).not.toHaveAttribute('open', '');
@@ -46,14 +46,14 @@ test('dividend and momentum vocabulary is available but not cluttering cards',as
   await page.goto('/index.html');
   await page.locator('.nav[data-view="newsView"]').click();
   await page.locator('.insightTab[data-panel="dividendPanel"]').click();
-  const dividend=page.locator('#dividendPanel details.learnHelp');
+  const dividend=page.locator('#dividendPanel details.learnHelp:not(.universeManager)');
   await expect(dividend).not.toHaveAttribute('open','');
   await dividend.locator('summary').click();
   await expect(dividend.locator('.detailsBody')).toContainText('Max pudotus');
   await expect(dividend.locator('.detailsBody')).toContainText('osinkoa');
 
   await page.locator('.insightTab[data-panel="rocketPanel"]').click();
-  const radar=page.locator('#rocketPanel details.learnHelp');
+  const radar=page.locator('#rocketPanel details.learnHelp:not(.universeManager)');
   await expect(radar).not.toHaveAttribute('open','');
   await radar.locator('summary').click();
   await expect(radar.locator('.detailsBody')).toContainText('Volatiliteetti');

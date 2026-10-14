@@ -135,11 +135,26 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .accountNotice.hidden{display:none}
 
 .learnHelp{margin:9px 0;border-color:var(--line);background:#11171d}.learnHelp summary{font-size:12px;color:#d5e2ed;padding:10px 12px;line-height:1.45}.learnHelp .detailsBody{font-size:12px;line-height:1.55;color:#c1cbd3}.learnHelp .detailsBody p{margin:9px 0}.learnHelp .detailsBody strong{color:#f3f6f8}.riskLearn{margin-top:7px}.techOptions{margin-top:14px}.techOptions .detailsBody{padding:12px}.techOptions .detailsBody .txt{display:block;margin-top:9px}.learnHelp summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+
+.metricHelp{border:0;background:transparent;color:inherit;font:inherit;padding:5px 0;min-height:30px;border-bottom:1px dotted #7b91a4;cursor:pointer;text-align:left;white-space:normal}
+.metricHelp:focus-visible,.watchAction:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.metricHelp b{color:var(--accent);font-size:13px}
+.metricBox .metricHelp{font-size:inherit}
+.insightReason .metricHelp{font-size:inherit}
+.watchForm{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.watchForm input{flex:1;min-width:120px;font-size:13px}
+.watchForm button,.watchAction{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:8px 10px;border-radius:10px;font-size:12px}
+.watchList{margin-top:9px;display:grid;gap:5px}
+.watchItem{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--line)}
+.watchItem span{overflow-wrap:anywhere}
+.watchNote{font-size:11px;color:var(--muted);line-height:1.4}
+.insightCardActions{display:flex;justify-content:flex-end;margin-top:7px}
+@media(max-width:480px){#dividendPanel .metricGrid,#rocketPanel .metricGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#dividendPanel .metricBox span,#rocketPanel .metricBox span{font-size:11px;white-space:normal;overflow:visible;text-overflow:unset}#dividendPanel .metricBox strong,#rocketPanel .metricBox strong{font-size:13px}}
 </style>
 </head>
 <body>
 <header class="top">
-  <div><div class="eyebrow">ALPHA · v2.17.0</div><h1>Osakevahti Alpha</h1></div>
+  <div><div class="eyebrow">ALPHA · v2.17.1</div><h1>Osakevahti Alpha</h1></div>
   <button id="refreshBtn" title="Päivitä">↻</button>
 </header>
 
@@ -195,8 +210,14 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
   <div id="dividendPanel" class="insightPanel">
     <div class="section"><div><div class="eyebrow">SUOMI</div><h2>Osinkokoneet</h2></div><button id="insightsBtn">Päivitä</button></div>
-    <p class="muted introCompact">Seulonta painottaa osinkotuottoa, osingon jatkuvuutta, kurssitrendiä ja pudotusriskiä. Ei henkilökohtainen osto- tai myyntisuositus.</p>
-    <details class="learnHelp"><summary>Selitä Osinkokoneiden luvut</summary><div class="detailsBody"><p><strong>Osinkotuotto</strong> vertaa viimeisten 12 kuukauden osinkoja nykykurssiin. Tuleva osinko voi muuttua.</p><p><strong>Osinkovuosia</strong> kertoo, monenako viidestä tarkastellusta kalenterivuodesta osinkoa maksettiin.</p><p><strong>12 kk</strong> kuvaa osakekurssin muutosta, ei osingot sisältävää kokonaistuottoa.</p><p><strong>Max pudotus</strong> kertoo suurimman historiallisen huipusta pohjaan -laskun tarkastelujaksolla. Ei tulevan tappion ylärajaa.</p><p><strong>Pisteet</strong> ovat säännöillä laskettu seulontaluku, eivät nousutodennäköisyys tai arvio osingon kestävyydestä. Lista koskee ennalta valittuja yhtiöitä.</p></div></details>
+    <p class="muted introCompact">Osinkokoneet pisteyttää tällä hetkellä <strong>10 valittua suomalaisyhtiötä</strong>, ei koko pörssiä. Vertailussa painavat osinkotuotto, maksuvuodet, kurssitrendi ja historiallinen pudotus. Ei ostosuositus.</p>
+    <details class="learnHelp universeManager"><summary>Muokkaa seurattavia yhtiöitä</summary><div class="detailsBody">
+      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. <strong>Uusille tunnuksille ei vielä lasketa pisteitä</strong>; niiden analyysi edellyttää erillistä datankeruuta.</p>
+      <div class="watchForm"><input id="dividendWatchInput" aria-label="Osinkoseurantaan lisättävä pörssitunnus" maxlength="20" placeholder="Esim. FSKRS.HE"><button type="button" data-watch-add="dividends">Lisää</button></div>
+      <div id="dividendWatchFeedback" class="watchNote" role="status"></div>
+      <div id="dividendWatchList" class="watchList"></div>
+    </div></details>
+    <details class="learnHelp"><summary>Selitä Osinkokoneiden luvut</summary><div class="detailsBody"><p><strong>TTM</strong> tarkoittaa viimeisiä 12 kuukautta. <strong>Osinkotuotto</strong> vertaa viimeisen 365 päivän aikana maksettuja osinkoja käytettyyn kurssiin. Tuleva osinko voi muuttua.</p><p><strong>Osinkovuosia</strong> kertoo, monenako viidestä tarkastellusta kalenterivuodesta osinkoa maksettiin.</p><p><strong>12 kk</strong> kuvaa osakekurssin muutosta, ei osingot sisältävää kokonaistuottoa.</p><p><strong>Max pudotus</strong> kertoo suurimman historiallisen huipusta pohjaan -laskun tarkastelujaksolla. Ei tulevan tappion ylärajaa.</p><p><strong>Pisteet</strong> ovat säännöillä laskettu seulontaluku, eivät nousutodennäköisyys tai arvio osingon kestävyydestä. Lista koskee ennalta valittuja yhtiöitä.</p></div></details>
     <div id="dividendUpdated" class="insightUpdated"></div>
     <div id="dividendList" class="stack"></div>
     <div id="dividendEmpty" class="empty">Osinkodata ei ole vielä saatavilla.</div>
@@ -204,7 +225,13 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
   <div id="rocketPanel" class="insightPanel">
     <div class="section"><div><div class="eyebrow">GLOBAL MOMENTUM</div><h2>Rocket Radar</h2></div></div>
-    <p class="muted introCompact">Globaali momentum-seula: 1/3/6 kk trendi, volyymikiihdytys, etäisyys 52 viikon huipusta ja volatiliteettiriski. Ei osta-nappia — radar nostaa tutkittavat nimet.</p>
+    <p class="muted introCompact">Rocket Radar pisteyttää tällä hetkellä <strong>30 valittua kansainvälistä yhtiötä</strong>, ei koko markkinaa. Mittareita ovat kurssitrendi, osakevaihto ja heilunta; pisteet eivät ole nousun todennäköisyys.</p>
+    <details class="learnHelp universeManager"><summary>Muokkaa seurattavia yhtiöitä</summary><div class="detailsBody">
+      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. <strong>Uusille tunnuksille ei vielä lasketa pisteitä</strong>; niiden analyysi edellyttää erillistä datankeruuta.</p>
+      <div class="watchForm"><input id="rocketWatchInput" aria-label="Rocket Radariin lisättävä pörssitunnus" maxlength="20" placeholder="Esim. TSLA"><button type="button" data-watch-add="rockets">Lisää</button></div>
+      <div id="rocketWatchFeedback" class="watchNote" role="status"></div>
+      <div id="rocketWatchList" class="watchList"></div>
+    </div></details>
     <details class="learnHelp"><summary>Selitä Rocket Radarin luvut</summary><div class="detailsBody"><p><strong>1/3/6 kk</strong> ovat osakekurssin historiallisia muutoksia eri ajanjaksoilla.</p><p><strong>Volyymi 1,6×</strong> tarkoittaa, että viimeisten viiden kaupankäyntipäivän keskimääräinen vaihto oli 1,6-kertainen edeltäviin 20 päivään nähden.</p><p><strong>Volatiliteetti</strong> mittaa päivittäisten prosenttimuutosten hajontaa noin 20 kaupankäyntipäivältä. Se kuvaa mennyttä heiluntaa, ei ennusta tulevia päiviä.</p><p><strong>52 viikon huippu</strong> on vertailu aiemman noin vuoden korkeimpaan kurssiin.</p><p><strong>Radar-pisteet</strong> järjestävät ennalta valittuja osakkeita kurssitrendin, vaihdon ja heilunnan perusteella. Pisteet eivät ole nousun todennäköisyys.</p></div></details>
     <div id="rocketUpdated" class="insightUpdated"></div>
     <div id="rocketList" class="stack"></div>
@@ -306,7 +333,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.1 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -350,6 +377,11 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 </dialog>
 
 <dialog id="accountReviewDlg"><div class="row"><h2>Tarkista vanhan salkun tilit</h2><button type="button" id="closeAccountReview">×</button></div><p class="muted small">Vanha versio saattoi muuntaa Nordea-tilin OST:ksi tai Nordnet-tilin AOT:ksi ilman varmistusta. Valitse oikeat tiedot. Omistuksia ja hintoja ei muuteta.</p><div id="accountReviewProgress" class="muted small"></div><h3 id="accountReviewName"></h3><div id="accountReviewOld" class="statusBox muted"></div><label class="txt" for="reviewAccountType">Tilityyppi</label><select id="reviewAccountType"><option value="">Valitse</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select><label class="txt" for="reviewBroker">Palveluntarjoaja</label><select id="reviewBroker"><option value="">Valitse</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select><div id="reviewBrokerOtherBox" class="hidden"><label class="txt" for="reviewBrokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="reviewBrokerOther" maxlength="80"></div><label class="txt" for="reviewAccountLabel">Tilin oma nimi (valinnainen)</label><input id="reviewAccountLabel" maxlength="80" placeholder="Älä kirjoita tilinumeroa"><div class="actions"><button type="button" id="laterAccountReview">Myöhemmin</button><button type="button" id="confirmAccountReview" class="primary">Vahvista ja jatka</button></div></dialog>
+
+<dialog id="metricHelpDlg" aria-labelledby="metricHelpTitle">
+  <div class="row"><h2 id="metricHelpTitle">Mittarin selitys</h2><button type="button" id="closeMetricHelp" aria-label="Sulje selitys">×</button></div>
+  <p id="metricHelpBody" class="plainExplain"></p>
+</dialog>
 
 <dialog id="quickInfoDlg">
   <div class="row"><div><div class="eyebrow">PIKANÄKYMÄN SELITYS</div><h2 id="quickInfoTitle" style="margin:3px 0 0">Osake</h2></div><button type="button" id="closeQuickInfo">×</button></div>
@@ -412,6 +444,7 @@ $("importPortfolioBtn").onclick=()=>{
 $("detailsToggle").onclick=()=>{state.showDetails=!state.showDetails;save();render()};
 $("closeDlg").onclick=$("cancelDlg").onclick=()=>$("dlg").close();
 $("closeQuickInfo").onclick=()=>$("quickInfoDlg").close();
+$("closeMetricHelp").onclick=()=>$("metricHelpDlg").close();
 $("brokerSelect").onchange=()=>$("brokerOtherBox").classList.toggle("hidden",$("brokerSelect").value!=="OTHER");
 $("reviewBroker").onchange=()=>$("reviewBrokerOtherBox").classList.toggle("hidden",$("reviewBroker").value!=="OTHER");
 $("openAccountReviewBtn").onclick=openAccountReview;
@@ -1295,12 +1328,86 @@ function pct(v,d=1){
 function scoreClass(score){
   return score>=75?"radarHot":score>=60?"radarWatch":"radarNeutral";
 }
+
+const METRIC_GLOSSARY={
+ ttm:["TTM – viimeiset 12 kuukautta","TTM (Trailing Twelve Months) tarkoittaa viimeisten 12 kuukauden toteutuneita osinkoja. Osinkokone laskee 365 päivän osingot suhteessa osakkeen nykyiseen vertailukurssiin. Tulevia osinkoja ei voida luvata."],
+ yield:["Osinkotuotto","Viimeisen 365 päivän osingot jaettuna käytetyllä osakekurssilla. Korkea osinkotuotto voi johtua myös kurssin laskusta."],
+ years:["Osinkovuosia","Monenako viimeisestä viidestä kalenterivuodesta osinkoa on kirjautunut lähdetietoihin. Se ei takaa tulevia maksuja."],
+ ret12:["12 kk kurssimuutos","Osakekurssin muutos noin 252 kaupankäyntipäivän aikana. Osingot eivät sisälly tähän kurssimuutokseen."],
+ drawdown:["Max pudotus","Suurin havaittu kurssilasku aiemmasta huipusta sitä seuranneeseen pohjaan noin 252 kaupankäyntipäivän aikana. Ei tulevien tappioiden yläraja."],
+ dividendScore:["Osinkokoneen pisteet","Sääntöpohjainen 0–100 pisteytys valituista yhtiöistä: osinkotuotto, maksuvuodet, kurssikehitys ja historiallinen pudotus. Ei mittaa kassavirran perusteella osingon kestävyyttä."],
+ radarScore:["Rocket Radarin pisteet","Valittujen yhtiöiden vertailupisteet eivät ole nousun todennäköisyys tai osto-ohje."],
+ momentum:["1/3/6 kk kurssimuutos","Kurssin historiallinen muutos valitulla ajanjaksolla. Menneestä kehityksestä ei voi suoraan ennustaa tulevaa."],
+ volume:["Volyymikerroin","Viiden kaupankäyntipäivän keskimääräinen vaihto suhteessa aiempiin 20 päivään. Esimerkiksi 1,6× tarkoittaa 60 % vilkkaampaa kaupankäyntiä."],
+ volatility:["Volatiliteetti","Päivittäisten prosentuaalisten kurssimuutosten historiallinen hajonta noin 20 kaupankäyntipäivän aikana. Ei tulevan heilunnan ennuste."]
+};
+function metricHelpHtml(k,label){
+ return '<button type="button" class="metricHelp" data-metric-help="'+esc(k)+'" aria-label="Selitä '+esc(label)+'">'+esc(label)+' <b aria-hidden="true">ⓘ</b></button>';
+}
+const WATCH_KEY="osakevahti.alpha.watchlists.v1";
+function tickerCode(x){const t=String(x??"").trim().toUpperCase();return /^[A-Z0-9][A-Z0-9.-]{0,19}$/.test(t)?t:""}
+function loadWatch(){
+ let raw={};try{raw=JSON.parse(localStorage.getItem(WATCH_KEY)||"{}")||{}}catch{}
+ const out={};
+ for(const k of ["dividends","rockets"]){
+  const v=raw[k]||{};
+  out[k]={hidden:Array.isArray(v.hidden)?[...new Set(v.hidden.map(tickerCode).filter(Boolean))].slice(0,100):[],
+    added:Array.isArray(v.added)?[...new Set(v.added.map(tickerCode).filter(Boolean))].slice(0,30):[]};
+ }
+ return out;
+}
+let watchPrefs=loadWatch();
+function watchUniverse(k){return k==="dividends"?(insights?.dividends||[]):(insights?.rockets||[])}
+function renderWatch(k){
+ const el=$(k==="dividends"?"dividendWatchList":"rocketWatchList");if(!el)return;
+ const known=new Set(watchUniverse(k).map(x=>tickerCode(x.ticker)));
+ const add=watchPrefs[k].added.filter(x=>!known.has(x));
+ const hidden=watchPrefs[k].hidden.filter(x=>known.has(x));
+ const button=(ticker,action,title)=>'<button type="button" class="watchAction" data-watch-action="'+action+'" data-watch-kind="'+k+'" data-watch-ticker="'+esc(ticker)+'">'+title+'</button>';
+ let html='<p class="watchNote">Omat seurattavat tallentuvat vain tähän selaimeen. Lisäyksille ei lasketa pisteitä ilman datapalvelun tukea.</p>';
+ if(add.length)html+='<strong>Omat lisäykset – ei vielä analyysiä</strong>'+add.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"remove","Poista")+'</div>').join('');
+ if(hidden.length)html+='<strong>Piilotetut yhtiöt</strong>'+hidden.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"restore","Palauta")+'</div>').join('');
+ if(!add.length&&!hidden.length)html+='<p class="watchNote">Ei omia lisäyksiä tai piilotettuja yhtiöitä.</p>';
+ el.innerHTML=html;
+}
+function editWatch(k,action,x){
+ if(!["dividends","rockets"].includes(k))return false;
+ const t=tickerCode(x);if(!t)return false;
+ const pref=watchPrefs[k],known=watchUniverse(k).some(y=>tickerCode(y.ticker)===t);
+ if(action==="add"){
+  if(known)pref.hidden=pref.hidden.filter(y=>y!==t);
+  else if(!pref.added.includes(t)){if(pref.added.length>=30)return false;pref.added.push(t)}
+ }else if(action==="hide"){
+  if(!known)return false;pref.hidden=[...new Set([...pref.hidden,t])];
+ }else if(action==="restore")pref.hidden=pref.hidden.filter(y=>y!==t);
+ else if(action==="remove")pref.added=pref.added.filter(y=>y!==t);
+ else return false;
+ try{localStorage.setItem(WATCH_KEY,JSON.stringify(watchPrefs))}catch{return false}
+ renderInsights();return true;
+}
+document.addEventListener("click",e=>{
+ const help=e.target.closest("[data-metric-help]");
+ if(help){const data=METRIC_GLOSSARY[help.dataset.metricHelp];if(data){
+  $("metricHelpTitle").textContent=data[0];$("metricHelpBody").textContent=data[1];$("metricHelpDlg").showModal();
+ }return}
+ const add=e.target.closest("[data-watch-add]");
+ if(add){
+  const k=add.dataset.watchAdd,input=$(k==="dividends"?"dividendWatchInput":"rocketWatchInput"),note=$(k==="dividends"?"dividendWatchFeedback":"rocketWatchFeedback"),t=tickerCode(input?.value);
+  if(!t){note.textContent="Anna pörssitunnus, esimerkiksi FSKRS.HE.";return}
+  if(!editWatch(k,"add",t)){note.textContent="Lisäys ei onnistunut tai lista on täynnä.";return}
+  input.value="";note.textContent="Lisätty omaan seurantaan. Uudelle tunnukselle ei vielä ole pisteytystä.";return
+ }
+ const action=e.target.closest("[data-watch-action]");
+ if(action)editWatch(action.dataset.watchKind,action.dataset.watchAction,action.dataset.watchTicker);
+});
+
 function renderInsights(){
   const divList=$("dividendList"),rocketList=$("rocketList");
   if(!divList||!rocketList) return;
   divList.innerHTML="";rocketList.innerHTML="";
-  const dividends=insights?.dividends||[];
-  const rockets=insights?.rockets||[];
+  const dividends=(insights?.dividends||[]).filter(x=>!watchPrefs.dividends.hidden.includes(tickerCode(x.ticker)));
+  const rockets=(insights?.rockets||[]).filter(x=>!watchPrefs.rockets.hidden.includes(tickerCode(x.ticker)));
+  renderWatch("dividends");renderWatch("rockets");
   $("dividendEmpty").classList.toggle("hidden",dividends.length>0);
   $("rocketEmpty").classList.toggle("hidden",rockets.length>0);
   const updated=insights?.generated_at?ago(Date.parse(insights.generated_at)):"";
@@ -1309,27 +1416,27 @@ function renderInsights(){
 
   dividends.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("dividendScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
-        <div class="metricBox"><span>Osinkotuotto</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
-        <div class="metricBox"><span>Osinkovuosia</span><strong>${n(x.dividend_years)}/5</strong></div>
-        <div class="metricBox"><span>12 kk</span><strong class="${n(x.return_12m)>=0?"pos":"neg"}">${pct(x.return_12m)}</strong></div>
-        <div class="metricBox"><span>Max pudotus</span><strong class="neg">${pct(x.max_drawdown)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("yield","Osinkotuotto")}</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("years","Osinkovuosia")}</span><strong>${n(x.dividend_years)}/5</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("ret12","12 kk")}</span><strong class="${n(x.return_12m)>=0?"pos":"neg"}">${pct(x.return_12m)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("drawdown","Max pudotus")}</span><strong class="neg">${pct(x.max_drawdown)}</strong></div>
       </div>
-      <div class="insightReason">${esc(x.reason||"")}</div>`;
+      <div class="insightReason">${esc(x.reason||"").replace(/^TTM-osinko/,metricHelpHtml("ttm","TTM-osinko"))}</div><div class="insightCardActions"><button type="button" class="watchAction" data-watch-action="hide" data-watch-kind="dividends" data-watch-ticker="${esc(x.ticker)}">Piilota listalta</button></div>`;
     divList.appendChild(d);
   });
 
   rockets.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("radarScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
-        <div class="metricBox"><span>1 kk</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
-        <div class="metricBox"><span>3 kk</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
-        <div class="metricBox"><span>6 kk</span><strong class="${n(x.m6)>=0?"pos":"neg"}">${pct(x.m6)}</strong></div>
-        <div class="metricBox"><span>Volyymi</span><strong>${n(x.volume_ratio).toFixed(1)}×</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","1 kk")}</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","3 kk")}</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","6 kk")}</span><strong class="${n(x.m6)>=0?"pos":"neg"}">${pct(x.m6)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("volume","Volyymi")}</span><strong>${n(x.volume_ratio).toFixed(1)}×</strong></div>
       </div>
-      <div class="insightReason">${esc(x.label||"")} · ${esc(x.reason||"")} · riski ${esc(x.risk||"—")}</div>`;
+      <div class="insightReason">${esc(x.label||"")} · ${esc(x.reason||"")} · riski ${esc(x.risk||"—")}</div><div class="insightCardActions"><button type="button" class="watchAction" data-watch-action="hide" data-watch-kind="rockets" data-watch-ticker="${esc(x.ticker)}">Piilota listalta</button></div>`;
     rocketList.appendChild(d);
   });
 }
