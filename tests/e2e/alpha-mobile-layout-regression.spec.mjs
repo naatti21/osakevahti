@@ -73,20 +73,47 @@ test('synthetic portfolio with long labels and large numbers stays within mobile
    }
  }
 });
-test('nav tracks reduced visual viewport even before user scrolls',async({page})=>{
- await page.goto('/index.html');
- const result=await page.evaluate(()=>{
-   const native=window.visualViewport;
-   const fake={
-     get height(){return window.innerHeight-90},
-     get offsetTop(){return 0},
-     addEventListener:()=>{},removeEventListener:()=>{}
-   };
-   Object.defineProperty(window,'visualViewport',{value:fake,configurable:true});
-   window.dispatchEvent(new Event('resize'));
-   const nav=document.querySelector('nav').getBoundingClientRect();
-   Object.defineProperty(window,'visualViewport',{value:native,configurable:true});
-   return {navBottom:nav.bottom,visibleBottom:window.innerHeight-90,windowHeight:window.innerHeight};
- });
- expect(result.navBottom,'Bottom bar must not be outside the visible mobile viewport').toBeLessThanOrEqual(result.visibleBottom+2);
+test('nav stays visible after real mobile viewport height changes',async({page})=>{
+  await page.goto('/index.html');
+  for(const height of [740,620,550,740]){
+    await page.setViewportSize({width:360,height});
+    const result=await page.evaluate(()=>{
+      const nav=document.querySelector('nav').getBoundingClientRect();
+      return {navBottom:nav.bottom,windowHeight:window.innerHeight,navVisible:nav.top>=0};
+    });
+    expect(result.navBottom,'Fixed bottom nav should fit real viewport height '+height)
+      .toBeLessThanOrEqual(result.windowHeight+1);
+    expect(result.navVisible).toBe(true);
+  }
+});
+test('explanation links restore original wrapping, remain tappable and have no dotted underlines',async({page})=>{
+  await page.route('**/insights.json*',route=>route.fulfill({status:200,contentType:'application/json',
+    body:JSON.stringify({generated_at:'2026-10-14T10:00:00Z',
+      dividends:[{ticker:'LONG.HE',name:'Synthetic dividend name',score:51,
+        yield_pct:6.1,dividend_years:3,return_12m:1,max_drawdown:-18,
+        reason:'TTM-osinko 6,1 %, osinkoa 3/5'}],
+      rockets:[{ticker:'LONG',name:'Synthetic radar name',score:51,m1:4,m3:7,m6:9,
+        volume_ratio:1.6,label:'SEURAA',reason:'volatiliteetti',risk:'keskitaso'}]})}));
+  await page.goto('/index.html');
+  await page.locator('.nav[data-view="newsView"]').click();
+  for(const [tab,list] of [['dividendPanel','dividendList'],['rocketPanel','rocketList']]){
+    await page.locator('.insightTab[data-panel="'+tab+'"]').click();
+    await page.setViewportSize({width:320,height:740});
+    const help=page.locator('#'+list+' .metricHelp').first();
+    await expect(help).toBeVisible();
+    const data=await help.evaluate(el=>{
+      const style=getComputedStyle(el),rect=el.getBoundingClientRect();
+      return {display:style.display,decoration:style.textDecorationLine,
+        bottom:style.borderBottomStyle,right:rect.right,vw:document.documentElement.clientWidth,
+        pageWidth:document.documentElement.scrollWidth};
+    });
+    expect(data.display,'Do not recreate the inline-flex regression').not.toBe('inline-flex');
+    expect(data.bottom).toBe('none');
+    expect(data.decoration).toBe('none');
+    expect(data.pageWidth).toBeLessThanOrEqual(data.vw+1);
+    expect(data.right).toBeLessThanOrEqual(data.vw+1);
+    await help.click();
+    await expect(page.locator('#metricHelpDlg')).toBeVisible();
+    await page.locator('#closeMetricHelp').click();
+  }
 });
