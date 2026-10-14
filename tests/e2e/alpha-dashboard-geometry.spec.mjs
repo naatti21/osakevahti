@@ -27,7 +27,11 @@ const snapshot=()=> {
      r.right>vw+2&&r.left<vw+100;
  }).slice(0,12).map(e=>({tag:e.tagName,cls:typeof e.className==='string'?e.className.slice(0,50):'',
    right:Math.round(e.getBoundingClientRect().right)}));
- return {vw,sw:document.documentElement.scrollWidth,bodyW:document.body.scrollWidth,
+ const vv=window.visualViewport;
+ return {vw,windowWidth:innerWidth,physical:{w:screen.width,h:screen.height},
+   vv:{w:vv?.width,h:vv?.height,scale:vv?.scale,left:vv?.offsetLeft,top:vv?.offsetTop},
+   dpr:devicePixelRatio,
+   sw:document.documentElement.scrollWidth,bodyW:document.body.scrollWidth,
    mainRight:main.right,navLeft:nav.left,navRight:nav.right,navBottom:nav.bottom,
    innerHeight:innerHeight,offenders:elems};
 };
