@@ -36,10 +36,16 @@ const snapshot=()=> {
    innerHeight:innerHeight,offenders:elems};
 };
 
-test('screenshot-shaped dashboard never leaves mobile width and nav starts visible',async({page})=>{
- await page.goto('/index.html');
+test('screenshot-shaped dashboard never leaves mobile width and nav starts visible',async({browser})=>{
  for(const width of [320,360,375,393,412]){
-   await page.setViewportSize({width,height:720});
+   // New context before navigation: mobile layout viewport does not necessarily
+   // recalculate when setViewportSize changes a previously loaded document.
+   const context=await browser.newContext({
+     baseURL:'http://127.0.0.1:4173',isMobile:true,hasTouch:true,
+     viewport:{width,height:720},serviceWorkers:'block'
+   });
+   const page=await context.newPage();
+   await page.goto('/index.html');
    await page.evaluate(fill);
    const state=await page.evaluate(snapshot);
    console.log('USER_SCREENSHOT_GEOMETRY',JSON.stringify({width,...state}));
@@ -52,6 +58,7 @@ test('screenshot-shaped dashboard never leaves mobile width and nav starts visib
      .toBeLessThanOrEqual(state.vv.w+state.vv.left+2);
    await page.evaluate(()=>scrollTo(500,0));
    expect(await page.evaluate(()=>scrollX),'Page can still be dragged horizontally').toBe(0);
+   await context.close();
  }
 });
 
