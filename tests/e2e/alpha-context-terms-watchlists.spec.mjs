@@ -67,3 +67,22 @@ test('unknown symbols are not assigned synthetic scores and malformed symbols re
  await expect(page.locator('#rocketList .card')).toHaveCount(1);
  await expect(page.locator('#rocketList')).not.toContainText('TSLA');
 });
+
+test('metric explainers have no dotted underlines and still open from both screens',async({page})=>{
+  for(const [panel,list] of [['dividendPanel','dividendList'],['rocketPanel','rocketList']]){
+    await page.locator('.insightTab[data-panel="'+panel+'"]').click();
+    const help=page.locator('#'+list+' .metricHelp').first();
+    await expect(help).toBeVisible();
+    const style=await help.evaluate(el=>{
+      const css=getComputedStyle(el);
+      return {borderBottomStyle:css.borderBottomStyle,borderBottomWidth:css.borderBottomWidth,
+        minHeight:css.minHeight,textDecoration:css.textDecorationLine};
+    });
+    expect(style.borderBottomStyle).toBe('none');
+    expect(style.borderBottomWidth).toBe('0px');
+    expect(style.textDecoration).toBe('none');
+    await help.click();
+    await expect(page.locator('#metricHelpDlg')).toBeVisible();
+    await page.locator('#closeMetricHelp').click();
+  }
+});
