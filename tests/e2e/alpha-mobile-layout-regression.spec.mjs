@@ -59,6 +59,10 @@ test('synthetic portfolio with long labels and large numbers stays within mobile
    await page.setViewportSize({width,height:740});
    for(const view of ['portfolioView','riskView','newsView','settingsView']){
      await page.locator('.nav[data-view="'+view+'"]').click();
+     if(view==='riskView'){
+       await expect(page.locator('#risks .riskHead').first()).toBeVisible();
+       await expect(page.locator('#risks')).toContainText('VERY-LONG-TEST-TICKER');
+     }
      const result=await page.evaluate(()=>{
        const sw=document.documentElement.scrollWidth, vw=document.documentElement.clientWidth;
        const bad=[...document.querySelectorAll('body *')].filter(el=>{
