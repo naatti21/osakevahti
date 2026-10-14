@@ -133,11 +133,13 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
 .accountNotice{display:flex;align-items:center;justify-content:space-between;gap:12px;border-color:#ae8a4d;margin:0 0 12px}.accountNotice #accountReviewBannerText{font-size:13px;line-height:1.45}.accountNotice button{flex-shrink:0}.accountHelp{margin:6px 0 12px}.accountHelp summary{font-size:12px;cursor:pointer;color:var(--muted)}.accountHelp p{font-size:12px;line-height:1.5;margin:8px 0}.accountReviewWarning{font-weight:700;color:#ffcd82}@media(max-width:480px){.accountNotice{flex-direction:column;align-items:stretch}.accountNotice button{width:100%}}
 .accountNotice.hidden{display:none}
+
+.learnHelp{margin:9px 0;border-color:var(--line);background:#11171d}.learnHelp summary{font-size:12px;color:#d5e2ed;padding:10px 12px;line-height:1.45}.learnHelp .detailsBody{font-size:12px;line-height:1.55;color:#c1cbd3}.learnHelp .detailsBody p{margin:9px 0}.learnHelp .detailsBody strong{color:#f3f6f8}.riskLearn{margin-top:7px}.techOptions{margin-top:14px}.techOptions .detailsBody{padding:12px}.techOptions .detailsBody .txt{display:block;margin-top:9px}.learnHelp summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
 </style>
 </head>
 <body>
 <header class="top">
-  <div><div class="eyebrow">ALPHA 5 · VALUUTTAKURSSIT</div><h1>Osakevahti Alpha</h1></div>
+  <div><div class="eyebrow">ALPHA · v2.17.0</div><h1>Osakevahti Alpha</h1></div>
   <button id="refreshBtn" title="Päivitä">↻</button>
 </header>
 
@@ -155,7 +157,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
   <details id="targetMapBox">
-    <summary>Tavoitekartta & OST-rakennuslista</summary>
+    <summary>Salkun tavoitteet ja ostosuunnitelma</summary>
     <div class="detailsBody">
       <div id="targetMap" class="planList"></div>
       <div class="muted small" style="margin-top:10px">Luonnos, ei automaattinen osto-ohje. Tavoitepainoja voi muuttaa avaamalla omistuksen.</div>
@@ -171,6 +173,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div class="section"><div><div class="eyebrow">SUOJATASOT</div><h2>Riskivahti</h2></div></div>
   <p class="muted introCompact">Omistajan päätöstuki yhdistää teknisen tason, salkkupainon, markkinan ja uutistriggerit. Punainen tekninen taso ei yksin tarkoita myyntiä.</p>
   <div id="marketContext" class="card marketContextCard"></div>
+  <details class="learnHelp"><summary>Mitä suojataso, trailing ja ATR tarkoittavat?</summary><div class="detailsBody"><p><strong>Suojataso</strong> on laskennallinen kurssiraja, jonka lähestymistä sovellus seuraa. Se ei tee myyntitoimeksiantoja.</p><p><strong>Trailing</strong> seuraa aiempaa huippua valitun prosenttiosuuden päässä. Esimerkiksi huipusta 100 € ja trailing 12 % syntyy 88 €:n vertailutaso.</p><p><strong>ATR(14)</strong> kertoo 14 kaupankäyntipäivän keskimääräisen hintavaihtelun osakkeen valuutassa. Se ei ennusta hinnan suuntaa.</p><p>Arvioitu stop-riski kuvaa nykykurssin ja valitun suojatason välistä altistusta, ei pahinta mahdollista tappiota.</p></div></details>
   <div id="riskSummary" class="riskSummary"></div>
   <div id="risks" class="stack"></div><div id="riskEmpty" class="empty">Lisää ensin osakeomistuksia.</div>
 </section>
@@ -193,6 +196,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="dividendPanel" class="insightPanel">
     <div class="section"><div><div class="eyebrow">SUOMI</div><h2>Osinkokoneet</h2></div><button id="insightsBtn">Päivitä</button></div>
     <p class="muted introCompact">Seulonta painottaa osinkotuottoa, osingon jatkuvuutta, kurssitrendiä ja pudotusriskiä. Ei henkilökohtainen osto- tai myyntisuositus.</p>
+    <details class="learnHelp"><summary>Selitä Osinkokoneiden luvut</summary><div class="detailsBody"><p><strong>Osinkotuotto</strong> vertaa viimeisten 12 kuukauden osinkoja nykykurssiin. Tuleva osinko voi muuttua.</p><p><strong>Osinkovuosia</strong> kertoo, monenako viidestä tarkastellusta kalenterivuodesta osinkoa maksettiin.</p><p><strong>12 kk</strong> kuvaa osakekurssin muutosta, ei osingot sisältävää kokonaistuottoa.</p><p><strong>Max pudotus</strong> kertoo suurimman historiallisen huipusta pohjaan -laskun tarkastelujaksolla. Ei tulevan tappion ylärajaa.</p><p><strong>Pisteet</strong> ovat säännöillä laskettu seulontaluku, eivät nousutodennäköisyys tai arvio osingon kestävyydestä. Lista koskee ennalta valittuja yhtiöitä.</p></div></details>
     <div id="dividendUpdated" class="insightUpdated"></div>
     <div id="dividendList" class="stack"></div>
     <div id="dividendEmpty" class="empty">Osinkodata ei ole vielä saatavilla.</div>
@@ -201,6 +205,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="rocketPanel" class="insightPanel">
     <div class="section"><div><div class="eyebrow">GLOBAL MOMENTUM</div><h2>Rocket Radar</h2></div></div>
     <p class="muted introCompact">Globaali momentum-seula: 1/3/6 kk trendi, volyymikiihdytys, etäisyys 52 viikon huipusta ja volatiliteettiriski. Ei osta-nappia — radar nostaa tutkittavat nimet.</p>
+    <details class="learnHelp"><summary>Selitä Rocket Radarin luvut</summary><div class="detailsBody"><p><strong>1/3/6 kk</strong> ovat osakekurssin historiallisia muutoksia eri ajanjaksoilla.</p><p><strong>Volyymi 1,6×</strong> tarkoittaa, että viimeisten viiden kaupankäyntipäivän keskimääräinen vaihto oli 1,6-kertainen edeltäviin 20 päivään nähden.</p><p><strong>Volatiliteetti</strong> mittaa päivittäisten prosenttimuutosten hajontaa noin 20 kaupankäyntipäivältä. Se kuvaa mennyttä heiluntaa, ei ennusta tulevia päiviä.</p><p><strong>52 viikon huippu</strong> on vertailu aiemman noin vuoden korkeimpaan kurssiin.</p><p><strong>Radar-pisteet</strong> järjestävät ennalta valittuja osakkeita kurssitrendin, vaihdon ja heilunnan perusteella. Pisteet eivät ole nousun todennäköisyys.</p></div></details>
     <div id="rocketUpdated" class="insightUpdated"></div>
     <div id="rocketList" class="stack"></div>
     <div id="rocketEmpty" class="empty">Rocket Radar -data ei ole vielä saatavilla.</div>
@@ -215,19 +220,21 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <label class="txt">Riskibudjetti / osake (% koko salkusta)</label>
     <input id="riskBudgetPct" type="number" min="0.1" max="10" step="0.05" value="1.25">
     <p class="muted small">Oletus 1,25 %. Riskivahti vertaa laskennallista stop-tappiota tähän rajaan.</p>
+    <details class="learnHelp techOptions"><summary>Lisäasetukset: datayhteydet ja yhteystestit</summary><div class="detailsBody">
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Avainta käytetään vielä uutis- ja historiatoimintoihin tässä versiossa. Kurssipäivitys ei enää riipu puhelimen Finnhub-yhteydestä.</p>
     <p class="muted small">Osakekurssien ensisijainen lähde on Cloudflare Worker: Helsinki Yahoo intradaysta ja AMD Finnhubista. GitHub market-data.json toimii automaattisena varalähteenä ja rahastojen NAV-lähteenä.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub-uutisyhteys</button>
-      <button id="testNordnetBtn" type="button">Testaa Worker</button>
+      <button id="testNordnetBtn" type="button">Testaa kurssipalvelu</button>
     </div>
     <div id="apiStatus" class="statusBox muted">Yhteyksiä ei ole vielä testattu.</div>
     <div class="actions" style="margin-top:8px">
       <button id="reloadMarketDataBtn" type="button">Lataa markkinadata uudelleen</button>
     </div>
     <div id="marketDataStatus" class="statusBox muted">Datapalveluiden tilaa ei ole vielä tarkistettu.</div>
+    </div></details>
   </div>
 
   <details>
@@ -240,7 +247,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </details>
 
   <details>
-    <summary>Agenttisyöte</summary>
+    <summary>Tekniset tiedot: markkinasyöte</summary>
     <div class="detailsBody">
       <div class="muted small" style="margin-top:8px">Yksi julkinen markkinasnapshot agenteille. Se sisältää hinnan, päivän muutoksen, lähteen, noteerausajan, ATR:n/trendin ja hälytyksen — ei määriä, hankintahintoja tai tilien saldoja.</div>
       <div class="agentEndpoint">https://naatti21.github.io/osakevahti/portfolio-status.json</div>
@@ -249,7 +256,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   </details>
 
   <details>
-    <summary>Datalähteet</summary>
+    <summary>Kurssitietojen tekniset lähteet</summary>
     <div class="detailsBody">
       <div class="muted small" style="margin-top:8px">Näyttää jokaisen osakkeen lähteen ja hinnan iän. Tätä käytetään stale-datan ja API-ongelmien jäljittämiseen.</div>
       <div id="dataDiagnostics" class="dataDiag"></div>
@@ -299,7 +306,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha 5 · v2.16.2 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.0 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -653,56 +660,33 @@ function quoteContextLabel(h){
 
 function dataState(h){
   if(h.currentPrice){
+    if(!validQuoteTime(h.quoteTimestamp)) return {label:"AIKA PUUTTUU",cls:"stale"};
+    const ageMinutes=Math.max(0,(Date.now()-n(h.quoteTimestamp))/60000);
+    if(h.quoteSource==="FUND_NAV") return {label:"RAHASTON ARVO",cls:"broker"};
     if(h.assetType!=="fund" && !hasCurrentTradingDayQuote(h) && !marketLikelyOpenForHolding(h)){
-      return {label:"ED. PÄÄTÖS",cls:"manual"};
+      return ageMinutes>96*60 ? {label:"VANHA TIETO",cls:"stale"} : {label:"ED. PÄÄTÖS",cls:"manual"};
     }
-    if(h.quoteSource==="WORKER"){
-      const age=(Date.now()-n(h.quoteTimestamp))/60000;
-      const yahoo=/Yahoo/i.test(h.quoteProvider||"");
-      if(yahoo){
-        if(age<=3) return {label:"WORKER",cls:"live"};
-        if(age<=20) return {label:"WORKER VIIVE",cls:"broker"};
-        return {label:"VANHA",cls:"stale"};
-      }
-      if(age<=10) return {label:"WORKER",cls:"live"};
-      if(age<=60) return {label:"VIIMEISIN",cls:"manual"};
-      return {label:"VANHA",cls:"stale"};
+    const yahoo=/Yahoo/i.test(h.quoteProvider||"");
+    if(yahoo && (h.quoteSource==="WORKER"||h.quoteSource==="HELSINKI_CACHE")){
+      if(ageMinutes<=45) return {label:"VIIVEELLÄ",cls:"broker"};
+      if(ageMinutes<=60) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA TIETO",cls:"stale"};
     }
-    if(h.quoteSource==="FINNHUB_HELSINKI"){
-      const age=(Date.now()-n(h.quoteTimestamp))/60000;
-      if(age<=20) return {label:"LIVE*",cls:"broker"};
-      if(age<=60) return {label:"VIIMEISIN",cls:"manual"};
-      return {label:"VANHA",cls:"stale"};
+    if(h.quoteSource==="WORKER" || h.quoteSource==="FINNHUB_HELSINKI"){
+      if(ageMinutes<=10) return {label:"TUORE KURSSI",cls:"live"};
+      if(ageMinutes<=60) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA TIETO",cls:"stale"};
     }
-    if(h.quoteSource==="HELSINKI_CACHE" && /Yahoo/i.test(h.quoteProvider||"")){
-      const age=(Date.now()-n(h.quoteTimestamp))/60000;
-      if(age<=25) return {label:"YAHOO ~15m",cls:"manual"};
-      if(age<=45) return {label:"VIIVE",cls:"manual"};
-      return {label:"VANHA",cls:"stale"};
+    if(h.quoteSource==="PORTFOLIO_STATUS"||h.quoteSource==="HELSINKI_CACHE"){
+      if(ageMinutes<=24*60) return {label:"VIIMEISIN",cls:"manual"};
+      return {label:"VANHA TIETO",cls:"stale"};
     }
-    if(h.quoteSource==="PORTFOLIO_STATUS"){
-      const age=(Date.now()-n(h.quoteTimestamp))/3600000;
-      if(age<=1) return {label:"YHTEINEN",cls:"broker"};
-      if(age<=24) return {label:"VIIMEISIN",cls:"manual"};
-      return {label:"VANHA",cls:"stale"};
-    }
-    if(h.quoteSource==="FUND_NAV"){
-      return {label:"NAV",cls:"broker"};
-    }
-    if(h.quoteSource==="HELSINKI_CACHE"){
-      const age=(Date.now()-n(h.quoteTimestamp))/3600000;
-      if(age<=1) return {label:"HELSINKI",cls:"broker"};
-      if(age<=24) return {label:"VIIMEISIN",cls:"manual"};
-      return {label:"VANHA",cls:"stale"};
-    }
-    if(!h.quoteTimestamp) return {label:"VIIMEISIN",cls:"manual"};
-    const age=(Date.now()-n(h.quoteTimestamp))/3600000;
-    if(age<=0.5) return {label:"TUORE",cls:"live"};
-    if(age<=72) return {label:"VIIMEISIN",cls:"manual"};
-    return {label:"VANHA",cls:"stale"};
+    if(ageMinutes<=30) return {label:"TUORE KURSSI",cls:"live"};
+    if(ageMinutes<=72*60) return {label:"VIIMEISIN",cls:"manual"};
+    return {label:"VANHA TIETO",cls:"stale"};
   }
-  if(h.manualPrice) return {label:h.assetType==="fund"?"NAV TUONTI":"TUONTI",cls:"manual"};
-  return {label:"EI DATAA",cls:"nodata"};
+  if(h.manualPrice) return {label:"TUOTU ARVO",cls:"manual"};
+  return {label:"EI KURSSIA",cls:"nodata"};
 }
 
 function quoteAgeShort(h){
@@ -731,9 +715,10 @@ function openQuickInfo(symbol){
   const changeLabel=sessionCurrent?"Päivän muutos":"Viimeisen kaupankäyntipäivän muutos";
   const source=h.quoteProvider||h.quoteSource||"ei tietoa";
   const freshness=hasQuote?quoteContextLabel(h):"ei aikaleimaa";
-  const priceMeaning=marketLikelyOpenForHolding(h)
+  const priceMeaning=(marketLikelyOpenForHolding(h)
     ?"Kurssi on viimeisin saatavilla oleva toteutunut kauppa. Se voi olla muutaman minuutin vanha, jos osakkeella käydään vähän kauppaa."
-    :"Päätöskurssi on viimeisin saatavilla oleva toteutunut hinta markkinan sulkeuduttua. Viikonloppuna se on tavallisesti perjantain päätös.";
+    :"Päätöskurssi on viimeisin saatavilla oleva toteutunut hinta markkinan sulkeuduttua. Viikonloppuna se on tavallisesti perjantain päätös.")
+    +(/Yahoo/i.test(h.quoteProvider||"")?" Yahoo-lähde voi näyttää kaupankäyntitietoja noin 15 minuutin viiveellä.":"");
   $("quickInfoTitle").textContent=h.symbol||"Osake";
   $("quickInfoBody").innerHTML=`<div class="quickInfoHero"><div class="muted small">${esc(latestSessionLabel(h))}</div><div class="quickInfoPrice">${p?money(p,h.currency):"—"}</div><div class="${change>0?"pos":change<0?"neg":"muted"}" style="margin-top:4px;font-weight:800">${changeLabel}: ${hasQuote?sPct(change):"—"}</div></div><div class="quickInfoGrid"><div class="quickInfoCell"><span>Kurssin tila</span><strong>${esc(freshness)}</strong></div><div class="quickInfoCell"><span>Datalähde</span><strong>${esc(source)}</strong></div></div><div class="plainExplain"><strong>Mitä tämä tarkoittaa?</strong><br>${esc(priceMeaning)}<br><br>Prosenttiluku kertoo muutoksen edelliseen päätöskurssiin. Se ei yksin tarkoita, että osakkeelle pitäisi tehdä mitään.</div>`;
   $("quickInfoDlg").showModal();
@@ -1103,17 +1088,19 @@ function renderRiskCard(row,r,portfolioValue,decision,budgetUse,overweightTarget
     <div class="decisionCell"><span>Teesi</span><strong>${esc(decision.thesis.label)}</strong></div>
     <div class="decisionCell"><span>Markkina</span><strong>${esc(decision.marketLabel)}</strong></div>
   </div>
+  ${r.status==="TRIGGERED"?'<div class="statusBox statusBad" role="status">Suojataso on rikkoutunut laskennassa. Tarkista kurssin ajantasaisuus ja oma toimintasuunnitelma. Markkinan samansuuntainen lasku ei muuta tätä havaintoa.</div>':""}
   <div class="ownerAction ${actionBoxCls}"><strong>${esc(decision.action)}</strong><span>${esc(decision.reason)}</span></div>
   <div class="riskMetrics5">
     <div class="riskMetricMini"><span>Kurssi</span><strong>${p?money(p,h.currency):"—"}</strong></div>
     <div class="riskMetricMini"><span>Suojataso</span><strong>${r.activeStop?money(r.activeStop,h.currency):"—"}</strong></div>
     <div class="riskMetricMini"><span>Etäisyys</span><strong class="${r.distancePct!=null&&r.distancePct<=3?"neg":""}">${r.distancePct==null?"—":r.distancePct.toFixed(1)+" %"}</strong></div>
-    <div class="riskMetricMini"><span>€ riski</span><strong>${r.activeStop?money(r.riskEuro,state.baseCurrency):"—"}</strong></div>
-    <div class="riskMetricMini"><span>Salkusta</span><strong>${r.activeStop?riskShare.toFixed(1)+" %":"—"}</strong></div>
+    <div class="riskMetricMini"><span>Stop-arvio €</span><strong>${r.activeStop?money(r.riskEuro,state.baseCurrency):"—"}</strong></div>
+    <div class="riskMetricMini"><span>Osuus salkusta</span><strong>${r.activeStop?riskShare.toFixed(1)+" %":"—"}</strong></div>
   </div>
   ${r.activeStop?`<div class="riskDataLine">Riskibudjetista käytetty ${budgetUse.toFixed(0)} % · ${sizingText}</div><div class="riskBudgetBar"><div class="riskBudgetFill ${fillClass}" style="width:${fillWidth}%"></div></div>`:""}
   <div class="riskWhy"><strong>Teesissä seuraa:</strong> ${esc(thesisFocus(h))}</div>
-  <div class="riskDataLine">${esc(stopType)} · tuottopuskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}${r.delayNote?` · ${esc(r.delayNote)}`:""}</div>
+  <div class="riskDataLine">${esc(stopType)} · kurssituoton puskuri ${pnlCushion>=0?"+":""}${pnlCushion.toFixed(1)} %${r.trend?` · trendi ${esc(r.trend)}`:""}${r.quoteAge?` · data ${esc(r.quoteAge)}`:""}${r.delayNote?` · ${esc(r.delayNote)}`:""}</div>
+  <details class="learnHelp riskLearn"><summary>Mitä nämä riskiluvut tarkoittavat?</summary><div class="detailsBody"><p><strong>Etäisyys</strong> on kurssin ja laskennallisen suojatason ero prosentteina.</p><p><strong>Stop-arvio euroina</strong> = kurssin ja suojatason erotus × osakkeiden määrä × käytetty valuuttakurssi. Todellinen tappio voi ylittää arvion esimerkiksi kurssiaukossa.</p><p><strong>Riskibudjetti</strong> on itse valittu rajaus laskennalliselle altistukselle yhden osakkeen kohdalla, oletuksena 1,25 % salkusta.</p><p><strong>Teesi</strong> tarkoittaa syytä omistaa tai seurata yhtiötä. Uutisotsikko ei yksin todista, että teesi olisi muuttunut.</p></div></details>
   <details class="riskDetails"><summary>Lisätiedot</summary><div class="kv">
     <span>Tekninen alkuperäisstatus</span><strong>${esc(r.label)}</strong>
     <span>Uutistriggerin tulkinta</span><strong>${esc(decision.thesis.reason)}</strong>
