@@ -1405,8 +1405,9 @@ function renderInsights(){
   const divList=$("dividendList"),rocketList=$("rocketList");
   if(!divList||!rocketList) return;
   divList.innerHTML="";rocketList.innerHTML="";
-  const dividends=insights?.dividends||[];
-  const rockets=insights?.rockets||[];
+  const dividends=(insights?.dividends||[]).filter(x=>!watchPrefs.dividends.hidden.includes(tickerCode(x.ticker)));
+  const rockets=(insights?.rockets||[]).filter(x=>!watchPrefs.rockets.hidden.includes(tickerCode(x.ticker)));
+  renderWatch("dividends");renderWatch("rockets");
   $("dividendEmpty").classList.toggle("hidden",dividends.length>0);
   $("rocketEmpty").classList.toggle("hidden",rockets.length>0);
   const updated=insights?.generated_at?ago(Date.parse(insights.generated_at)):"";
@@ -1415,27 +1416,27 @@ function renderInsights(){
 
   dividends.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("dividendScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
-        <div class="metricBox"><span>Osinkotuotto</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
-        <div class="metricBox"><span>Osinkovuosia</span><strong>${n(x.dividend_years)}/5</strong></div>
-        <div class="metricBox"><span>12 kk</span><strong class="${n(x.return_12m)>=0?"pos":"neg"}">${pct(x.return_12m)}</strong></div>
-        <div class="metricBox"><span>Max pudotus</span><strong class="neg">${pct(x.max_drawdown)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("yield","Osinkotuotto")}</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("years","Osinkovuosia")}</span><strong>${n(x.dividend_years)}/5</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("ret12","12 kk")}</span><strong class="${n(x.return_12m)>=0?"pos":"neg"}">${pct(x.return_12m)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("drawdown","Max pudotus")}</span><strong class="neg">${pct(x.max_drawdown)}</strong></div>
       </div>
-      <div class="insightReason">${esc(x.reason||"")}</div>`;
+      <div class="insightReason">${esc(x.reason||"").replace(/^TTM-osinko/,metricHelpHtml("ttm","TTM-osinko"))}</div><div class="insightCardActions"><button type="button" class="watchAction" data-watch-action="hide" data-watch-kind="dividends" data-watch-ticker="${esc(x.ticker)}">Piilota listalta</button></div>`;
     divList.appendChild(d);
   });
 
   rockets.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("radarScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
-        <div class="metricBox"><span>1 kk</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
-        <div class="metricBox"><span>3 kk</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
-        <div class="metricBox"><span>6 kk</span><strong class="${n(x.m6)>=0?"pos":"neg"}">${pct(x.m6)}</strong></div>
-        <div class="metricBox"><span>Volyymi</span><strong>${n(x.volume_ratio).toFixed(1)}×</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","1 kk")}</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","3 kk")}</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("momentum","6 kk")}</span><strong class="${n(x.m6)>=0?"pos":"neg"}">${pct(x.m6)}</strong></div>
+        <div class="metricBox"><span>${metricHelpHtml("volume","Volyymi")}</span><strong>${n(x.volume_ratio).toFixed(1)}×</strong></div>
       </div>
-      <div class="insightReason">${esc(x.label||"")} · ${esc(x.reason||"")} · riski ${esc(x.risk||"—")}</div>`;
+      <div class="insightReason">${esc(x.label||"")} · ${esc(x.reason||"")} · riski ${esc(x.risk||"—")}</div><div class="insightCardActions"><button type="button" class="watchAction" data-watch-action="hide" data-watch-kind="rockets" data-watch-ticker="${esc(x.ticker)}">Piilota listalta</button></div>`;
     rocketList.appendChild(d);
   });
 }
