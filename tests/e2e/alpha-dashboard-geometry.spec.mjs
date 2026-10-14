@@ -46,7 +46,10 @@ test('screenshot-shaped dashboard never leaves mobile width and nav starts visib
    expect(state.sw,JSON.stringify(state)).toBeLessThanOrEqual(state.vw+1);
    expect(state.navLeft).toBeGreaterThanOrEqual(-1);
    expect(state.navRight).toBeLessThanOrEqual(state.vw+1);
-   expect(state.navBottom).toBeLessThanOrEqual(state.innerHeight+2);
+   expect(state.navBottom,'Navigation must fit truly visible viewport')
+     .toBeLessThanOrEqual(state.vv.h+state.vv.top+2);
+   expect(state.navRight,'Navigation must fit truly visible viewport width')
+     .toBeLessThanOrEqual(state.vv.w+state.vv.left+2);
    await page.evaluate(()=>scrollTo(500,0));
    expect(await page.evaluate(()=>scrollX),'Page can still be dragged horizontally').toBe(0);
  }
@@ -75,4 +78,22 @@ test('quick list preserves all four pieces of information without right clipping
      expect(part.right).toBeLessThanOrEqual(row.vw+1);
    }
  }
+});
+
+test('optional layout diagnostics require deliberate triple-tap and reveal only geometry',async({page})=>{
+  await page.goto('/index.html');
+  const dlg=page.locator('#layoutDiagDlg');
+  await expect(dlg).not.toBeVisible();
+  const version=page.locator('header .eyebrow');
+  await version.click();await version.click();
+  await expect(dlg).not.toBeVisible();
+  await version.click();
+  await expect(dlg).toBeVisible();
+  const report=JSON.parse(await page.locator('#layoutDiagText').textContent());
+  expect(report.version).toBe('v2.17.5');
+  expect(report.width.visible).toBeGreaterThan(0);
+  expect(report.width.scroll).toBeLessThanOrEqual(report.width.visible+1);
+  expect(report).not.toHaveProperty('holdings');
+  await page.locator('#closeLayoutDiag').click();
+  await expect(dlg).not.toBeVisible();
 });
