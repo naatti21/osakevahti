@@ -51,10 +51,11 @@ test('screenshot-shaped dashboard never leaves mobile width and nav starts visib
    const page=await context.newPage();
    await page.goto('/index.html');
    await page.evaluate(fill);
-   const beforeSync=await page.evaluate(snapshot);
-   await page.evaluate(()=>syncNavigationToVisibleScreen());
+   // The app updates quote rows asynchronously. Wait two animation frames
+   // for its ResizeObserver to re-anchor navigation without manual repair.
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
    const state=await page.evaluate(snapshot);
-   console.log('USER_SCREENSHOT_GEOMETRY',JSON.stringify({width,beforeSync,...state}));
+   console.log('USER_SCREENSHOT_GEOMETRY',JSON.stringify({width,...state}));
    expect(state.sw,JSON.stringify(state)).toBeLessThanOrEqual(state.vw+1);
    expect(state.navLeft).toBeGreaterThanOrEqual(-1);
    expect(state.navRight).toBeLessThanOrEqual(state.vw+1);
