@@ -93,10 +93,13 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const dir='dist-alpha';
-          const allow=['_headers','icon-192.png','icon-512.png','image-reader.js','index.html',
-                       'manifest.webmanifest','robots.txt','sw.js'].sort();
+          const allow=['_headers','alpha-import-engine.mjs','engine','icon-192.png','icon-512.png',
+                       'image-reader.js','index.html','manifest.webmanifest','robots.txt','sw.js'].sort();
           const files=fs.readdirSync(dir).sort();
           if(JSON.stringify(files)!==JSON.stringify(allow)) throw Error('Unexpected Alpha upload files');
+          const engine=fs.readdirSync(dir+'/engine').sort();
+          const pinned=['acceptance.mjs','csv.mjs','holdings.mjs','numbers.mjs'];
+          if(JSON.stringify(engine)!==JSON.stringify(pinned)) throw Error('Unexpected Engine module in Alpha upload');
           const manifest=JSON.parse(fs.readFileSync(dir+'/manifest.webmanifest','utf8'));
           if(manifest.id!=='./?channel=alpha' || manifest.name!=='Osakevahti Alpha' ||
              manifest.short_name!=='OV Alpha') throw Error('Wrong PWA target identity');
