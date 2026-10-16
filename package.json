@@ -5,9 +5,9 @@
   "scripts": {
     "test": "playwright test --grep-invert @ocr-stress",
     "test:smoke": "playwright test --grep @smoke",
-    "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1",
+    "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs tests/e2e/import-ocr-geometry.spec.mjs --workers=1",
     "test:qa-import": "node tests/import-qa/qa8-guards.mjs",
-    "test:engine": "node --test tests/alpha-import-engine.test.mjs"
+    "test:engine": "node --test tests/alpha-import-engine.test.mjs tests/import-root-cause.test.mjs tests/import-resolver-contract.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",
