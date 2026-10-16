@@ -5,13 +5,17 @@ import {join,resolve} from 'node:path';
 
 const root=resolve('dist-alpha');
 const paths=[
-  'index.html','image-reader.js','sw.js','manifest.webmanifest',
+  'index.html','image-reader.js','alpha-import-engine.mjs',
+  'engine/acceptance.mjs','engine/numbers.mjs','engine/csv.mjs','engine/holdings.mjs',
+  'sw.js','manifest.webmanifest',
   'icon-192.png','icon-512.png'
 ];
 
-test('Alpha build contains exactly six static PWA assets plus search-exclusion files',async()=>{
+test('Alpha build contains pinned research Engine and only explicitly allowed static assets',async()=>{
   const actual=(await readdir(root)).sort();
-  assert.deepEqual(actual,[...paths,'_headers','robots.txt'].sort());
+  assert.deepEqual(actual,[...paths.filter(name=>!name.includes('/')),'engine','_headers','robots.txt'].sort());
+  assert.deepEqual((await readdir(join(root,'engine'))).sort(),
+    paths.filter(name=>name.startsWith('engine/')).map(name=>name.slice('engine/'.length)).sort());
   for(const name of paths){
     const expected=await readFile(name),built=await readFile(join(root,name));
     assert.deepEqual(built,expected,'Source asset differs: '+name);
@@ -28,7 +32,7 @@ test('Alpha PWA identity is distinct from production and visible on screen',asyn
   const html=await readFile(join(root,'index.html'),'utf8');
   assert.match(html,/<title>Osakevahti Alpha<\/title>/);
   assert.match(html,/<h1>Osakevahti Alpha<\/h1>/);
-  assert.match(html,/ALPHA · v2.17.7/);
+  assert.match(html,/ALPHA · v2.17.8/);
   assert.match(html,/Osakevahti Alpha · v2\.17\.7/);
   assert.match(html,/rel="manifest" href="\.\/manifest.webmanifest"/);
 });
@@ -56,7 +60,7 @@ test('Alpha3 uses live public financial feeds, not nonexistent local static JSON
     assert.ok(!html.includes('fetch(\`./'+file),'Still fetching missing local JSON '+file);
   }
   assert.match(html,/function publicFeedUrl\(file\)/);
-  assert.match(html,/ALPHA · v2.17.7/);
+  assert.match(html,/ALPHA · v2.17.8/);
   const manifest=JSON.parse(await readFile(join(root,'manifest.webmanifest'),'utf8'));
   assert.equal(manifest.id,'./?channel=alpha');
 });
