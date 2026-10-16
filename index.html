@@ -2285,14 +2285,19 @@ function renderImportReview(){
   const unresolved=actions.filter(a=>a.kind==="review").length+(batchConflict?1:0);
   const additions=actions.filter(a=>a.kind==="add").length;
   const updates=actions.filter(a=>a.kind==="update").length;
+  const research= pendingImport.engineBatchAudit;
+  const researchWarning= research?.status==="review-required"
+    ?" · Engine: tarkista lähdetiedot ("+research.problems.length+" huomautusta)"
+    : research?" · Engine: ehdokastarkistus valmis":"";
   $("importReviewSummary").className=`statusBox ${unresolved?"":"statusOk"}`;
-  $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}${batchConflict?" · Ristiriitaiset rivit: korjaa lähde ennen tuontia.":""}`;
+  $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}${batchConflict?" · Ristiriitaiset rivit: korjaa lähde ennen tuontia.":""}${researchWarning}`;
   $("confirmImportReview").disabled=unresolved>0;
   $("importReviewList").innerHTML=pendingImport.rows.map((x,idx)=>{
     const h=x.holding,i=h.instrument||{};
     const action=actions[idx];
     const label=action.label;
     const sourceIsinBlocked=label==="TARKISTA ISIN";
+    const engineInfo=x.engineAudit?`<div class="engineAudit ${x.engineAudit.status==="review-required"?"warn":""}">Äppejä Import Engine: ${x.engineAudit.status==="candidate-ready"?"lähdearvot vaikuttavat yhtäpitäviltä":"käyttäjän tarkistus tarvitaan"} · ${esc((x.engineAudit.messages||[]).slice(0,3).join("; ")||"Ei estäviä huomautuksia")}. Tämä on tutkimusportin ehdotus, ei tallennuslupa.</div>`:"";
     const helpText=sourceIsinBlocked
       ?"Tarkista alkuperäinen lähdetiedosto ja tuo se uudelleen. Ristiriitaa ei voi ohittaa jättämällä tunnistamatta."
       :(x.reason||"");
@@ -2303,7 +2308,7 @@ function renderImportReview(){
     const observedText=[observed.mic?"MIC "+observed.mic:"",observed.isin?"ISIN "+observed.isin:"",observed.exchange?"Pörssi "+observed.exchange: ""].filter(Boolean).join(" · ");
     const options=(x.status==="invalid-ocr"?[]:(x.candidates||[])).slice(0,3).map((cand,ci)=>`<button type="button" class="importCandidate ${x.selected===ci?"selected":""}" data-import-row="${idx}" data-candidate="${ci}"><strong>${esc(formatCandidate(cand)||cand.symbol)}</strong><span>${esc(cand.longname||cand.shortname||"")} · osuma ${cand._score??0} · ${esc((cand._reasons||[]).join(", ")||"ei lisäperustetta")}</span></button>`).join("");
     const leave=sourceIsinBlocked?"":`<button type="button" class="importCandidate ${x.ready&&x.status==="unverified"?"selected":""}" data-import-row="${idx}" data-unverified="1"><strong>Jätä tunnistamatta</strong><span>Säilytä lähderivi ilman arvattua listausta. Kurssi- ja riskidata voivat jäädä puutteellisiksi.</span></button>`;
-    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}${observedText?`<br>Lähdehavainto (vahvistamatta): ${esc(observedText)}`:""}<br>${esc(action.detail)}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(helpText)}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${x.status==="invalid-ocr"?"":leave}</div>`}</div>`;
+    return `<div class="importReviewRow"><div class="importReviewTop"><div><div class="importReviewName">${esc(h.name||h.symbol||"Instrumentti")}</div><div class="importReviewMeta">Lähde: ${esc(i.listingTicker||h.symbol||"—")} · ${esc(h.currency||"—")} · ${n(h.quantity)} kpl${resolvedLine?`<br>Tunnistus: ${esc(resolvedLine)}`:""}${observedText?`<br>Lähdehavainto (vahvistamatta): ${esc(observedText)}`:""}<br>${esc(action.detail)}</div></div><span class="importStatus ${cls}">${label}</span></div><div class="importSource">${esc(helpText)}${x.provider?` · lähde: ${esc(x.provider)}`:""}</div>${engineInfo}${x.status==="auto"||x.status==="explicit"?"":`<div class="importCandidateList">${options}${x.status==="invalid-ocr"?"":leave}</div>`}</div>`;
   }).join("");
   $("importReviewList").querySelectorAll("[data-import-row]").forEach(btn=>btn.onclick=()=>{
     const ri=n(btn.dataset.importRow),row=pendingImport.rows[ri];
@@ -2315,6 +2320,13 @@ function renderImportReview(){
     }else{
       const ci=n(btn.dataset.candidate),cand=row.candidates[ci];
       if(!cand||sourceIsinCandidateConflict(row.holding,cand))return;
+      const title=[cand.longname||cand.shortname||row.holding.name||"Instrumentti",cand.symbol,
+        cand.full_exchange_name||cand.exchange_display||cand.exchange_name||cand.exchange,
+        cand.currency].filter(Boolean).join(" · ");
+      const currentAction=importActionForRow(row);
+      const verb=currentAction.kind==="update"?"päivittää omistuksen kokonaismääräksi":"lisätä salkkuun";
+      if(!window.confirm("Haluatko "+verb+" "+n(row.holding.quantity)+" kpl?\n"+title+
+        "\n\nKyllä: valitse listaus. Ei: palaa listausvaihtoehtoihin."))return;
       row.ready=true;row.status="manual";row.selected=ci;
       row.holding.instrument=instrumentFromCandidate(row.holding,cand,"user-confirmed");
       row.holding.providerSymbol=row.holding.instrument.providerSymbol;
@@ -2325,15 +2337,18 @@ function renderImportReview(){
     renderImportReview();
   });
 }
-async function startImportReview(holdings){
+async function startImportReview(holdings,engineAudits=[],engineBatchAudit=null){
   const box=$("importReviewSummary");
-  pendingImport={rows:[]};
+  pendingImport={rows:[],engineBatchAudit};
   $("importReviewList").innerHTML="";
   box.className="statusBox muted";box.textContent=`Tunnistetaan ${holdings.length} instrumenttia…`;
   $("confirmImportReview").disabled=true;
   $("importReviewDlg").showModal();
-  for(const h of holdings){
-    pendingImport.rows.push(await resolveImportedHolding(h));
+  for(let index=0;index<holdings.length;index++){
+    const row=await resolveImportedHolding(holdings[index]);
+    // Ephemeral evidence QA stays only in preview, never exported with holdings.
+    row.engineAudit=engineAudits[index]||null;
+    pendingImport.rows.push(row);
     renderImportReview();
   }
 }
@@ -2691,10 +2706,12 @@ function holdingFromImportRow(r,source){
   };
 }
 async function importTableText(text,source){
+  const research=await import("./alpha-import-engine.mjs");
+  const engineAudit=research.inspectCsvText(text);
   const parsed=parseImportTable(text);
   const arr=parsed.rows.map(r=>holdingFromImportRow(r,source));
   if(!arr.length)throw new Error("Taulukosta ei löytynyt tuotavia omistuksia.");
-  await startImportReview(arr);
+  await startImportReview(arr,[],engineAudit);
 }
 async function importCsv(e){
   const f=e.target.files?.[0];if(!f)return;
@@ -2931,7 +2948,11 @@ async function runOcrCandidateImport(ocr,source){
   // When every candidate is invalid, keep the OCR editor reachable instead of
   // covering it with a modal that cannot yet lead to any safe approval.
   if(invalidCount===candidates.length)return;
-  await startImportReview(candidates.map(x=>holdingFromOcrCandidate(x,source)));
+  // A failure to load the pinned local research gate must be visible, not silently bypassed.
+  const research=await import("./alpha-import-engine.mjs");
+  const holdings=candidates.map(x=>holdingFromOcrCandidate(x,source));
+  const evidence=holdings.map(h=>research.inspectOcrHolding(h));
+  await startImportReview(holdings,evidence);
 }
 async function extractScreenshotOcr(file,onProgress){
   if(typeof window.__OSAKEVAHTI_TEST_OCR__==="function")return await window.__OSAKEVAHTI_TEST_OCR__(file,onProgress);
