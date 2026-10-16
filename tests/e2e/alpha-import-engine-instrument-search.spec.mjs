@@ -106,7 +106,7 @@ test('Alpha image: pinned research Engine evaluates actual OCR rows, no data sav
  });
  await init(page);
  await page.locator('[data-view="settingsView"]').click();
- await page.locator('#portfolioImportBox summary').click();
+ await page.locator('#portfolioImportBox > summary').click();
  await page.locator('#importImage').setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from([137,80,78,71])});
  await expect(page.locator('#importReviewDlg')).toBeVisible();
  await expect(page.locator('#importReviewList')).toContainText('Äppejä Import Engine');
