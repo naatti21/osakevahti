@@ -52,6 +52,8 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .decisionCell strong{display:block;margin-top:2px;font-size:9px;line-height:1.2}
 .ownerAction{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px;padding:8px 9px;border-radius:10px;border:1px solid var(--line);background:#0e1216}
 .ownerAction strong{font-size:11px}.ownerAction span{font-size:9px;color:var(--muted);text-align:right}
+/* Size the risk title from available space, not the unwrapped company name. */
+#risks .riskHead>div{width:0;flex-grow:1}
 .actionOk{border-color:#73d3a055}.actionWatch{border-color:#ffd16666}.actionCrit{border-color:#ff6b6b77}
 @media(max-width:480px){.marketContextGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.decisionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .riskSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px}
@@ -154,7 +156,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 </head>
 <body>
 <header class="top">
-  <div><div class="eyebrow">ALPHA · v2.17.6</div><h1>Osakevahti Alpha</h1></div>
+  <div><div class="eyebrow">ALPHA · v2.17.7</div><h1>Osakevahti Alpha</h1></div>
   <button id="refreshBtn" title="Päivitä">↻</button>
 </header>
 
@@ -333,7 +335,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.6 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.7 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>

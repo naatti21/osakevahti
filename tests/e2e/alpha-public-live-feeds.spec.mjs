@@ -12,7 +12,7 @@ const remote = 'https://naatti21.github.io/osakevahti/';
 test('Alpha3 browser gets all six live financial JSON feeds and renders actual insight lists', async ({page}) => {
   test.setTimeout(90_000);
   await page.goto('/index.html');
-  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.6');
+  await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.7');
 
   const results=await page.evaluate(async (files) => {
     return await Promise.all(files.map(async file => {

@@ -17,7 +17,7 @@ test('restored Alpha metric layout has no dotted underline and no newer flex/vie
       hasFullscreenClip:[...rules].some(x=>/overflow-x:\\s*(clip|hidden)/.test(x.cssText||''))
     };
   });
-  expect(props.header).toBe('ALPHA · v2.17.6');
+  expect(props.header).toBe('ALPHA · v2.17.7');
   expect(props.rule).toContain('min-height: 30px');
   expect(props.rule).not.toMatch(/dotted|border-bottom|inline-flex|gap:\\s*4px/);
   expect(props.hasViewportPatch).toBe(false);
