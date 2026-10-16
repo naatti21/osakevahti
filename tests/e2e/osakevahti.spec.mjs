@@ -1077,6 +1077,8 @@ test('screenshot IQM without explicit ticker stays in review instead of being gu
   const before = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
   expect(before.holdings).toHaveLength(0);
 
+  // New Alpha v2.17.8 asks Kyllä/Ei when a candidate is selected.
+  page.once('dialog', d => d.accept());
   await dialog.getByRole('button', { name: /IQMX\.HE/ }).click();
   page.once('dialog', d => d.accept());
   await page.locator('#confirmImportReview').click();
