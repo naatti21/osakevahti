@@ -1,8 +1,13 @@
-const CACHE = "osakevahti-shell-v2.17.7-alpha";
+const CACHE = "osakevahti-shell-v2.17.8-alpha";
 const SHELL = [
   "./",
   "./index.html",
   "./image-reader.js",
+  "./alpha-import-engine.mjs",
+  "./engine/acceptance.mjs",
+  "./engine/numbers.mjs",
+  "./engine/csv.mjs",
+  "./engine/holdings.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
