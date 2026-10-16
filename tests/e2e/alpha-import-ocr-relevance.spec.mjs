@@ -43,7 +43,7 @@ function ocr(lines) {
 test('Alpha OCR: Nordea cannot suggest AMD, Apple or Amazon; UI commands are not holdings',async({page})=>{
   await start(page,ocr([
     'Näytä Lähteet','enemmän',
-    'Nordea Bank Abp a','91 kpl','GAV 10.50 EUR'
+    'Nordea Bank Abp a','7 kpl','GAV 13.75 EUR'
   ]), q=>q.toLowerCase().includes('nordea')?[
     ...unrelated,{symbol:'NDA-FI.HE',longname:'Nordea Bank Abp',currency:'EUR',quote_type:'EQUITY',exchange:'HEL',full_exchange_name:'Helsinki'}
   ]:unrelated);
@@ -62,7 +62,7 @@ test('Alpha OCR: Nordea cannot suggest AMD, Apple or Amazon; UI commands are not
 });
 
 test('Alpha OCR: fuzzy search returning only irrelevant companies never offers them for Nordea',async({page})=>{
-  await start(page,ocr(['Nordea Bank Abp a','91 kpl','GAV 10.50 EUR']),()=>unrelated);
+  await start(page,ocr(['Nordea Bank Abp a','7 kpl','GAV 13.75 EUR']),()=>unrelated);
   const dlg=page.locator('#importReviewDlg');
   await expect(dlg).toBeVisible();
   await expect(dlg.locator('.importReviewRow')).toHaveCount(1);
