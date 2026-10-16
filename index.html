@@ -2054,9 +2054,8 @@ function relevantImportCandidate(h,c){
   const matched=normalizedIdText(c.symbol);
   const fromName=String(h.name||i.companyName||"").trim();
   const resultName=String(c.longname||c.shortname||"").trim();
-  const sourceCurrency=normalizedIdText(i.currency||h.currency);
-  const resultCurrency=normalizedIdText(c.currency);
-  if(sourceCurrency&&resultCurrency&&sourceCurrency!==resultCurrency)return false;
+  // Keep alternate listings of the *same issuer* visible for review even if
+  // their currencies differ; the existing identity gate blocks unsafe selection.
   if(sourceIsinCandidateConflict(h,c))return false;
   if(wanted&&matched&&wanted===matched)return true;
   return !!(fromName&&resultName&&nameSimilarity(fromName,resultName)>=0.5);
