@@ -31,12 +31,14 @@ async function controlledServer() {
   expect(sw).toContain(safe);
 
   // Alpha v1 shipped the same SW logic except for its actual old cache name.
-  const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";');
+  const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";')
+    .replace(/^  "\.\/(?:alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings)\.mjs)",?\n/gm,'');
   const broken = sw.replace(initial, 'const CACHE = "' + FAILED_CACHE + '";')
     .replace('cache.addAll(SHELL)', 'cache.addAll([...SHELL, "./qa-does-not-exist-upgrade.txt"])');
   let version = 'old';
   const mimetypes = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
     '.webmanifest': 'application/manifest+json', '.png': 'image/png',
     '.json': 'application/json'
   };
@@ -67,7 +69,7 @@ async function controlledServer() {
     }
     try {
       const filename = pathname.slice(1);
-      if (!/^(image-reader\.js|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
+      if (!/^(image-reader\.js|alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings)\.mjs|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
         send(404, 'Not a shell resource'); return;
       }
       const contents = await readFile(filename);
