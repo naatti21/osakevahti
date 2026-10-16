@@ -29,6 +29,9 @@ jobs:
       - name: Install test dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Verify pinned Engine and source-evidence cases
+        run: npm run test:engine
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 

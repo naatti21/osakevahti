@@ -1,5 +1,5 @@
 // Deterministic static-only Cloudflare Pages Alpha build.
-// Only the 6 allowlisted PWA files are published; never copy .github, tests,
+// Only the explicitly allowlisted PWA files are published; never copy .github, tests,
 // docs, local credentials or an unreviewed portfolio backup.
 import { copyFile, mkdir, readFile, rm, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,11 @@ const deployBranch = 'deploy/osakevahti-alpha-20261013';
 const files = [
   'index.html',
   'image-reader.js',
+  'alpha-import-engine.mjs',
+  'engine/acceptance.mjs',
+  'engine/numbers.mjs',
+  'engine/csv.mjs',
+  'engine/holdings.mjs',
   'sw.js',
   'manifest.webmanifest',
   'icon-192.png',
@@ -41,13 +46,13 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
     !sw.includes('if (res.ok)') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.7-alpha";')) {
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.8-alpha";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 
 await rm(output, {recursive:true,force:true});
 await mkdir(output, {recursive:true});
-for(const name of files)await copyFile(join(root,name),join(output,name));
+for(const name of files){await mkdir(dirname(join(output,name)),{recursive:true});await copyFile(join(root,name),join(output,name));}
 
 // Search exclusion, not access control: an Alpha link is still public.
 // These rules apply to Cloudflare Pages static responses only.
@@ -58,10 +63,13 @@ await writeFile(join(output,'_headers'),
   '/index.html\n  Cache-Control: no-cache, no-store, must-revalidate\n', 'utf8');
 await writeFile(join(output,'robots.txt'), 'User-agent: *\nDisallow: /\n', 'utf8');
 const actual=(await readdir(output)).sort();
-const expected=[...files,'_headers','robots.txt'].sort();
+const expected=[...files.filter(name=>!name.includes('/')),'engine','_headers','robots.txt'].sort();
 if (JSON.stringify(actual)!==JSON.stringify(expected)) {
   throw new Error('Unexpected file in Cloudflare Alpha output: '+actual.join(', '));
 }
-console.log('Alpha static assets verified: '+actual.join(', '));
+const engineFiles=(await readdir(join(output,'engine'))).sort();
+const expectedEngineFiles=files.filter(name=>name.startsWith('engine/')).map(name=>name.slice('engine/'.length)).sort();
+if(JSON.stringify(engineFiles)!==JSON.stringify(expectedEngineFiles))throw new Error('Alpha Engine assets not exact allowlist');
+console.log('Alpha static assets verified: '+actual.join(', ')+' / engine: '+engineFiles.join(', '));
 console.log('Output: dist-alpha/ (Cloudflare Pages build output directory)');
 console.log('This build does NOT deploy or authorize any production release.');

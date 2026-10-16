@@ -9,11 +9,16 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.7-alpha';
+const CACHE = 'osakevahti-shell-v2.17.8-alpha';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
   'image-reader.js': 'text/javascript; charset=utf-8',
+  'alpha-import-engine.mjs': 'text/javascript; charset=utf-8',
+  'engine/acceptance.mjs': 'text/javascript; charset=utf-8',
+  'engine/numbers.mjs': 'text/javascript; charset=utf-8',
+  'engine/csv.mjs': 'text/javascript; charset=utf-8',
+  'engine/holdings.mjs': 'text/javascript; charset=utf-8',
   'manifest.webmanifest': 'application/manifest+json',
   'icon-192.png': 'image/png',
   'icon-512.png': 'image/png'
