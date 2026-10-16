@@ -52,6 +52,8 @@ button.primary{background:var(--accent);color:#07130c;border-color:transparent}.
 .decisionCell strong{display:block;margin-top:2px;font-size:9px;line-height:1.2}
 .ownerAction{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:8px;padding:8px 9px;border-radius:10px;border:1px solid var(--line);background:#0e1216}
 .ownerAction strong{font-size:11px}.ownerAction span{font-size:9px;color:var(--muted);text-align:right}
+/* Size the risk title from available space, not the unwrapped company name. */
+#risks .riskHead>div{width:0;flex-grow:1}
 .actionOk{border-color:#73d3a055}.actionWatch{border-color:#ffd16666}.actionCrit{border-color:#ff6b6b77}
 @media(max-width:480px){.marketContextGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.decisionGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .riskSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 0 10px}
