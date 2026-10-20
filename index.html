@@ -136,6 +136,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .priceHealthPanel{margin:10px 0;border:1px solid #665838;border-radius:12px;background:#171811;color:#dfd4b7;overflow:hidden}
 .priceHealthPanel[data-level="bad"]{border-color:#7a3c45;color:#f5acb5;background:#221619}
 .priceHealthPanel[data-level="info"]{border-color:var(--line);color:var(--muted);background:var(--panel)}
+.priceHealthPanel[data-level="info"]>summary{font-weight:650;padding:9px 12px}
 .priceHealthPanel>summary{padding:12px 14px;line-height:1.4;font-size:12px;font-weight:800;white-space:normal}
 .priceHealthItems{padding:2px 13px 12px;border-top:1px solid var(--line)}
 .priceHealthEntry{padding:10px 0;border-bottom:1px solid var(--line);font-size:11px;line-height:1.55;overflow-wrap:anywhere}
@@ -758,6 +759,18 @@ function verifiedNavDate(raw){
     dt.getUTCDate()!==d||ms>Date.now()+24*60*60*1000)return "";
   return [y,String(m).padStart(2,"0"),String(d).padStart(2,"0")].join("-");
 }
+// A partial date shown by a broker is useful context, not a verified NAV date.
+function fundNavDateBadge(h){
+  const complete=verifiedNavDate(h.navDate);
+  if(complete)return "NAV "+complete.slice(8,10)+"."+complete.slice(5,7)+"."+complete.slice(0,4);
+  const reported=String(h.navDate||"").trim();
+  if(/^\d{1,2}\.\d{1,2}\.$/.test(reported))return "NAV "+reported+" (vuosi?)";
+  return "NAV-päivä avoin";
+}
+function displayedPriceIssueLabel(h,issue){
+  return h.assetType==="fund"&&issue?.label==="NAV-PÄIVÄ PUUTTUU"
+    ?fundNavDateBadge(h):issue?.label||"";
+}
 function priceIssue(h){
   const health=h.quoteHealth||{};
   if(health.status==="failed")
@@ -798,23 +811,24 @@ function renderPriceHealth(){
   }
   const errors=issues.filter(x=>x.issue.level==="bad");
   const warnings=issues.filter(x=>x.issue.level==="warn");
-  box.dataset.level=errors.length?"bad":warnings.length?"warn":"info";
+  // Missing NAV year/day is not a failed quote request. Keep routine uncertainty neutral.
+  box.dataset.level=errors.length?"bad":warnings.some(x=>x.issue.label==="VANHA NAV")?"warn":"info";
   const dateMissing=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU").length;
   const navOld=warnings.filter(x=>x.issue.label==="VANHA NAV").length;
   const parts=[];
   if(errors.length)parts.push(errors.length+" "+(errors.length===1?"hintavirhe":"hintavirhettä"));
-  if(dateMissing)parts.push(dateMissing+" rahaston NAV-päivä epäselvä");
+  if(dateMissing)parts.push("NAV-päivä tarkistamatta "+dateMissing+" rahastolla");
   if(navOld)parts.push(navOld+" vanhaa NAVia");
   const rest=issues.length-errors.length-dateMissing-navOld;
   if(rest>0)parts.push(rest+" muuta tiedoksiantoa");
-  $("priceHealthSummary").textContent=parts.join(" · ")+" — Näytä lähteet ja syyt";
+  $("priceHealthSummary").textContent=parts.join(" · ")+" · Näytä tarkemmin";
   const items=$("priceHealthItems");
   items.replaceChildren();
   for(const {h,issue} of issues){
     const entry=document.createElement("div");
     entry.className="priceHealthEntry";
     const title=document.createElement("strong");
-    title.textContent=(h.name||h.symbol||"Omistus")+" · "+issue.label;
+    title.textContent=(h.name||h.symbol||"Omistus")+" · "+displayedPriceIssueLabel(h,issue);
     const detail=document.createElement("span");
     const source=h.quoteProvider||h.quoteHealth?.provider||"Lähde tuntematon";
     const day=verifiedNavDate(h.navDate);
@@ -898,6 +912,8 @@ function render(){
   renderMarketDataHealth();
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;
 
+  // One persisted holding maps to one row/card; do not hide possible real duplicates
+  // because hiding would make portfolio totals disagree with the visible list.
   const rows=state.holdings.map(h=>{
     // A malformed stored value must never render as a real negative quote.
     const p=validPositive(h.currentPrice)?Number(h.currentPrice):
@@ -960,8 +976,11 @@ function render(){
     const b=document.createElement("button");
     b.className="item";
     const issue=priceIssue(h);
-    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":issue.level==="warn"?"manual":"broker")+'">'+esc(issue.label)+'</span>':"";
-    const detailMeta=issueBadge+(state.showDetails?'<span class="sourceBadge '+ds.cls+'">'+esc(ds.label)+'</span>'+weightHtml:"");
+    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":issue.level==="warn"?"manual":"broker")+'">'+esc(displayedPriceIssueLabel(h,issue))+'</span>':"";
+    // Detail mode must never repeat the same health marker as a second badge.
+    const detailStateBadge=state.showDetails&&!issue?
+      '<span class="sourceBadge '+ds.cls+'">'+esc(ds.label)+'</span>':"";
+    const detailMeta=issueBadge+detailStateBadge+(state.showDetails?weightHtml:"");
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
     b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
