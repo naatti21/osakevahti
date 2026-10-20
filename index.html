@@ -321,6 +321,19 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
         </div>
       </details>
 
+
+      <details id="fundTrialBox" style="margin:15px 0;border:1px solid var(--line);border-radius:12px;padding:10px">
+        <summary><strong>Rahastojen määrät kuvasta · Alpha-kokeilu</strong></summary>
+        <div class="detailsBody">
+          <p class="muted small">Vain tämän Alphan omistukset. Vie ensin JSON-varmuuskopio asetuksista. Kuvasta ehdotetaan vain <strong>kpl-määrää</strong>; valitse itse oikea omistus ja tili. Rahaston NAV- tai Arvo-lukua ei käytetä hankintahintana. Puuttuva keskihinta pysyy ennallaan ja voi olla vanhentunut.</p>
+          <div class="actions"><label class="file">Valitse rahastokuva<input id="fundTrialFile" type="file" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="fundTrialAdd">+ Rivi käsin</button><button type="button" id="fundTrialClear">Tyhjennä kokeilu</button></div>
+          <div id="fundTrialStatus" class="statusBox muted" role="status">Kuva luetaan paikallisesti. Vain erikseen valitut nykyiset omistukset voidaan päivittää.</div>
+          <div id="fundTrialRows" class="importReviewList"></div>
+          <label class="muted small" style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input id="fundTrialBackupCheck" type="checkbox" style="width:auto;margin-top:2px"> Olen ladannut Alphan JSON-varmuuskopion ennen kokeilua ja tarkistanut määrät pankin kuvasta.</label>
+          <button type="button" class="primary" id="fundTrialSave" disabled>Vahvista valitut kokonaismäärät Alphaan</button>
+        </div>
+      </details>
+
       <label class="txt">Taulukko</label>
       <div class="actions">
         <label class="file">Valitse CSV / TSV / TXT<input id="importCsv" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"></label>
@@ -492,6 +505,11 @@ $("apiKey").onchange=()=>{state.apiKey=$("apiKey").value.trim();save()};
 $("testApiBtn").onclick=testFinnhub;
 $("testNordnetBtn").onclick=testNordnet;
 $("reloadMarketDataBtn").onclick=async()=>{await refreshMarket(true)};
+$("fundTrialFile").onchange=readFundTrialImage;
+$("fundTrialAdd").onclick=()=>{fundTrialRows.push({hint:"Manuaalinen kokeilurivi",qty:"",holdingId:"",gav:""});renderFundTrial()};
+$("fundTrialClear").onclick=()=>{fundTrialRequest++;fundTrialRows=[];renderFundTrial();$("fundTrialStatus").textContent="Kokeilu tyhjennetty. Salkkua ei muutettu."};
+$("fundTrialBackupCheck").onchange=fundTrialStatus;
+$("fundTrialSave").onclick=commitFundTrial;
 $("exportBtn").onclick=exportBackup;$("importBackup").onchange=importBackup;$("importCsv").onchange=importCsv;$("importTextBtn").onclick=importPastedTable;$("importImage").onchange=importImage;$("reparseOcrBtn").onclick=reparseOcrText;
 $("resetBtn").onclick=()=>{if(confirm("Tyhjennetäänkö kaikki paikallinen data?")){localStorage.removeItem(KEY);state=load();$("baseCurrency").value=state.baseCurrency;$("riskBudgetPct").value=state.riskBudgetPct??1.25;$("apiKey").value="";render()}};
 
@@ -2984,6 +3002,136 @@ async function reparseOcrText(){
   if(!text){$("imageImportStatus").className="statusBox statusBad";$("imageImportStatus").textContent="Poimittu teksti on tyhjä.";return}
   const lines=text.split(/\r?\n/).map((t,i)=>({text:t,confidence:null,top:i*20,left:0}));
   await runOcrCandidateImport({text,lines},"edited-ocr-text");
+}
+
+
+// A deliberately small Alpha-only experiment. OCR suggests unit totals, but
+// never picks a financial instrument or interprets NAV/value as acquisition price.
+let fundTrialRows=[];
+let fundTrialRequest=0;
+function fundTrialDecimal(raw){
+  const s=String(raw??"").trim().replace(/\u00a0/g,"");
+  if(!/^\d+(?:[,.]\d{1,8})?$/.test(s))return null;
+  const value=Number(s.replace(",","."));
+  return Number.isFinite(value)&&value>0&&value<1e10?value:null;
+}
+function fundTrialHints(ocr){
+  const lines=(Array.isArray(ocr?.lines)&&ocr.lines.length?ocr.lines:
+    String(ocr?.text||"").split(/\r?\n/).map(text=>({text})))
+    .map(x=>String(x?.text||"").trim()).filter(Boolean);
+  const found=[];
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    const match=line.match(/(?:^|[^\d])(\d+(?:[,.]\d{1,8})?)\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i);
+    if(!match)continue;
+    const qty=fundTrialDecimal(match[1]);
+    if(qty===null)continue;
+    const prefix=line.slice(0,match.index).replace(/\s+/g," ").trim();
+    const previous=lines.slice(Math.max(0,i-2),i).reverse().find(s=>
+      /[A-Za-zÅÄÖåäö]{3}/.test(s)&&!/^(?:rahastot|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl)\b/i.test(s));
+    found.push({hint:(prefix||previous||"Lähteen rivi "+(i+1)).slice(0,110),qty:match[1],holdingId:"",gav:""});
+  }
+  // Do not deduplicate observed lines silently; user decides whether repeated
+  // quantities belong to the same card, another account or a repeated image.
+  return found;
+}
+function fundTrialSelected(){
+  const selections=[],seen=new Set();
+  for(const item of fundTrialRows){
+    if(!item.holdingId)continue;
+    const holding=state.holdings.find(h=>String(h.id)===item.holdingId);
+    const quantity=fundTrialDecimal(item.qty),gav=item.gav.trim()?fundTrialDecimal(item.gav):null;
+    if(!holding||quantity===null||(item.gav.trim()&&gav===null)||seen.has(item.holdingId))return {error:"Tarkista omistus, positiivinen kokonaismäärä, mahdollinen keskihinta ja ettei samaa omistusta valita kahdesti."};
+    seen.add(item.holdingId);
+    selections.push({holding,quantity,gav});
+  }
+  return {selections};
+}
+function fundTrialStatus(){
+  const result=fundTrialSelected();
+  const selections=result.selections||[];
+  for(let i=0;i<fundTrialRows.length;i++){
+    const item=fundTrialRows[i],box=document.getElementById("fundTrialDiff"+i);
+    if(!box)continue;
+    const h=state.holdings.find(h=>String(h.id)===item.holdingId),q=fundTrialDecimal(item.qty);
+    box.textContent=!h?"Valitse oikea omistus ja tili.":q===null?"Anna uusi kokonaismäärä.":
+      "Määrä "+h.quantity+" → "+item.qty+" kpl · keskihinta "+
+      (item.gav.trim()?String(h.buyPrice||"—")+" → "+item.gav:String(h.buyPrice||"—")+" (vanha säilyy, voi olla vanhentunut)");
+  }
+  $("fundTrialSave").disabled=!!result.error||selections.length===0||!$("fundTrialBackupCheck").checked;
+}
+function renderFundTrial(){
+  const options=state.holdings.map(h=>'<option value="'+esc(String(h.id))+'">'+
+    esc(String(h.name||h.symbol||"Nimetön")+" · "+String(h.account||h.broker||"tili puuttuu")+
+      " · "+String(h.quantity)+" kpl")+'</option>').join("");
+  $("fundTrialRows").innerHTML=fundTrialRows.map((item,i)=>
+    '<div class="importReviewRow"><div class="muted small">OCR-vihje (ei instrumenttivarmennus): '+esc(item.hint)+'</div>'+
+    '<label class="txt" for="fundTarget'+i+'">Päivitettävä nykyinen omistus ja tili</label>'+
+    '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse itse —</option>'+options+'</select>'+
+    '<label class="txt" for="fundQty'+i+'">Uusi kokonaisosuusmäärä (kpl)</label>'+
+    '<input id="fundQty'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="qty" value="'+esc(item.qty)+'">'+
+    '<label class="txt" for="fundGav'+i+'">Uusi keskihankintahinta / osuus (valinnainen, syötä itse)</label>'+
+    '<input id="fundGav'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="gav" value="'+esc(item.gav)+'" placeholder="Tyhjä = säilytä vanha">'+
+    '<div class="muted small" id="fundTrialDiff'+i+'"></div></div>').join("");
+  $("fundTrialRows").querySelectorAll("[data-fund-i]").forEach(el=>{
+    const idx=Number(el.dataset.fundI),prop=el.dataset.fundProp;
+    el.value=fundTrialRows[idx][prop];
+    el.oninput=()=>{fundTrialRows[idx][prop]=el.value;fundTrialStatus()};
+    el.onchange=el.oninput;
+  });
+  fundTrialStatus();
+}
+async function readFundTrialImage(e){
+  const file=e.target.files?.[0];if(!file)return;
+  const seq=++fundTrialRequest;
+  $("fundTrialSave").disabled=true;
+  $("fundTrialStatus").className="statusBox muted";
+  $("fundTrialStatus").textContent="Luetaan kuvaa selaimessa…";
+  try{
+    const ocr=await extractScreenshotOcr(file,p=>{
+      if(seq!==fundTrialRequest)return;
+      $("fundTrialStatus").textContent="Luetaan paikallista kuvaa… "+(p?.progress!=null?Math.round(p.progress*100)+" %":String(p?.status||""));
+    });
+    if(seq!==fundTrialRequest)return;
+    fundTrialRows=fundTrialHints(ocr);
+    const count=fundTrialRows.length;
+    if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:""}];
+    $("fundTrialStatus").className="statusBox "+(count?"statusOk":"muted");
+    $("fundTrialStatus").textContent=count?
+      "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: valitse itse oikea omistus, tarkista määrät ja keskihinta.":
+      "OCR ei löytänyt kpl-määrää. Voit silti kokeilla syöttämällä kokonaismäärän itse.";
+    renderFundTrial();
+  }catch(err){
+    if(seq===fundTrialRequest){$("fundTrialStatus").className="statusBox statusBad";$("fundTrialStatus").textContent="Kokeilu ei lukenut kuvaa: "+String(err?.message||err)}
+  }finally{e.target.value=""}
+}
+function commitFundTrial(){
+  const result=fundTrialSelected();
+  if(result.error||!result.selections?.length||!$("fundTrialBackupCheck").checked){
+    $("fundTrialStatus").className="statusBox statusBad";
+    $("fundTrialStatus").textContent=result.error||"Tarkista varmuuskopio ja valinnat.";return;
+  }
+  const lines=result.selections.map(x=>
+    String(x.holding.name||x.holding.symbol)+" ["+String(x.holding.account||x.holding.broker||"tili?")+"] "+
+    String(x.holding.quantity)+" → "+x.quantity+" kpl"+
+    (x.gav!==null?" · keskihinta "+String(x.holding.buyPrice||"—")+" → "+x.gav:" · vanha keskihinta säilyy"));
+  if(!window.confirm("PÄIVITÄ VAIN ALPHAN OMISTUKSET?\n\n"+lines.join("\n")+
+    "\n\nLuvut ovat kokonaisomistuksia, eivät lisäostoja. Julkaisuversioon ei tehdä muutoksia."))return;
+  const changes=new Map(result.selections.map(x=>[String(x.holding.id),x]));
+  const previous=state.holdings;
+  state.holdings=previous.map(h=>{
+    const change=changes.get(String(h.id));return change?
+      {...h,quantity:change.quantity,...(change.gav!==null?{buyPrice:change.gav}:{})}:h;
+  });
+  try{save()}catch(error){
+    state.holdings=previous;
+    $("fundTrialStatus").className="statusBox statusBad";
+    $("fundTrialStatus").textContent="Tallennus epäonnistui. Alpha jätettiin ennalleen: "+String(error?.message||error);
+    return;
+  }
+  render();fundTrialRows=[];renderFundTrial();
+  $("fundTrialStatus").className="statusBox statusOk";
+  $("fundTrialStatus").textContent="Päivitetty "+changes.size+" Alphan olemassa olevaa omistusta. Ota jälkikuvat. Toistettu kokonaismäärä korvaa vanhan, sitä ei lisätä.";
 }
 
 const installBtn=$("installAppBtn");
