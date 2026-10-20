@@ -1867,6 +1867,10 @@ async function refreshMarket(showErrors=false){
           throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
         const navDay=verifiedNavDate(q.nav_date);
         const previousDay=verifiedNavDate(h.navDate);
+        // Never overwrite a price with a verified valuation date using a
+        // later-fetching but UNDATED quote. Fetch time is not NAV day.
+        if(previousDay&&!navDay)
+          throw new Error("Uuden NAV:n arvostuspäivä puuttuu; aiempi vahvistettu hinta säilyy");
         // A source page can expose an older NAV than one previously accepted.
         // If the dates are reliable, never silently roll a holding backwards.
         if(navDay&&previousDay&&navDay<previousDay)
