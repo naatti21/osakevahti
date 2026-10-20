@@ -190,11 +190,10 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
   <details id="targetMapBox">
-    <summary>Salkun tavoitteet ja ostosuunnitelma</summary>
+    <summary>Vertailupainot · aiemmat tavoitteet</summary>
     <div class="detailsBody">
+      <p class="muted small">Nämä ovat vanhoja tavoitearvoja, eivät Osinkokoneen tai salkkuanalyysin ostosuosituksia. Vertailupainot lasketaan koko salkun nykyisestä arvosta. Tavoitteita voi muuttaa avaamalla omistuksen.</p>
       <div id="targetMap" class="planList"></div>
-      <div class="muted small" style="margin-top:10px">Luonnos, ei automaattinen osto-ohje. Tavoitepainoja voi muuttaa avaamalla omistuksen.</div>
-      <div id="ostPlan" class="planList"></div>
     </div>
   </details>
   <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button></div></div>
@@ -357,6 +356,14 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <textarea id="importText" rows="6" placeholder="Esim.&#10;Ticker&#9;Nimi&#9;Kpl&#9;Keskihinta&#9;Valuutta&#10;MSFT&#9;Microsoft Corporation&#9;2&#9;400&#9;USD"></textarea>
       <div class="actions"><button type="button" id="importTextBtn">Tunnista liitetty taulukko</button></div>
       <p class="muted small">Sarakkeiden ei tarvitse olla Osakevahdin nimillä. Tunnettuja otsikoita ovat esimerkiksi Ticker/Symbol, Nimi/Company, Kpl/Qty/Shares, Keskihinta/Avg price, Valuutta/Currency ja Tili/Account. Epävarmaa instrumenttia tai puuttuvaa tietoa ei arvata hiljaa.</p>
+    </div>
+  </details>
+
+  <details id="ostPlanArchive">
+    <summary>Historia · aiempi OST-luonnos</summary>
+    <div class="detailsBody">
+      <p class="muted small">Arkistoitu vanha käsin määritelty seurantalista. Yhtiöitä, 1 000 € eriä ja prioriteetteja ei ole johdettu markkinadataan perustuvasta sijoitusanalyysistä. Ei ajantasainen ostosuunnitelma. Vanhan listan tiedot säilyvät paikallisesti, eikä niitä muuteta.</p>
+      <div id="ostPlan" class="planList"></div>
     </div>
   </details>
 
@@ -631,13 +638,8 @@ function migrateState(s){
     const key=instrumentDataKey(h);
     if(h.assetType!=="fund" && h.targetWeight==null && targetDefaults[key]!=null) h.targetWeight=targetDefaults[key];
   }
-  if(!Array.isArray(s.ostPlan)) s.ostPlan=[
-    {symbol:"KESKOB",name:"Kesko B",amount:1000,status:"Seuraava ydinpositio"},
-    {symbol:"SAMPO",name:"Sampo",amount:1000,status:"Seuraava ydinpositio"},
-    {symbol:"UPM",name:"UPM-Kymmene",amount:1000,status:"Tarkkailu"},
-    {symbol:"ELISA",name:"Elisa",amount:1000,status:"Tarkkailu"},
-    {symbol:"ORNBV",name:"Orion B",amount:1000,status:"Tarkkailu"}
-  ];
+  // Archive only persisted legacy plans; do not fabricate a historical plan for new users.
+  if(!Array.isArray(s.ostPlan)) s.ostPlan=[];
 }
 function isHelsinkiHolding(h){
   if(h.assetType==="fund") return false;
@@ -1034,14 +1036,14 @@ function render(){
   targeted.sort((a,b)=>Math.abs((tv?b.val/tv*100:0)-n(b.h.targetWeight))-Math.abs((tv?a.val/tv*100:0)-n(a.h.targetWeight))).forEach(r=>{
     const w=tv?r.val/tv*100:0,t=n(r.h.targetWeight),gap=t/100*tv-r.val;
     const row=document.createElement("div");row.className="planRow";
-    row.innerHTML=`<div><div class="planName">${esc(r.h.symbol)}</div><div class="planMeta">${w.toFixed(1)} % nyt · tavoite ${t.toFixed(1)} %</div></div><div class="planValue ${gap>0?"weightLow":"weightHigh"}">${gap>0?`vajaus ${money(gap,state.baseCurrency)}`:"ei lisäystä"}</div>`;
+    row.innerHTML=`<div><div class="planName">${esc(r.h.symbol)}</div><div class="planMeta">${w.toFixed(1)} % nyt · vanha tavoite ${t.toFixed(1)} %</div></div><div class="planValue ${gap>0?"weightLow":"weightHigh"}">ero ${gap>0?"+":""}${money(gap,state.baseCurrency)}</div>`;
     targetMap.appendChild(row);
   });
 
-  const plan=$("ostPlan");plan.innerHTML=`<div class="eyebrow" style="margin:10px 0 5px">UUSI OST-RUNKO · 1 000 € TAVOITE-ERÄT</div>`;
+  const plan=$("ostPlan");plan.innerHTML=state.ostPlan?.length?`<div class="eyebrow" style="margin:10px 0 5px">ARKISTOITU OST-LUONNOS · HISTORIATIETO</div>`:`<div class="muted small">Ei tallennettua OST-luonnosta.</div>`;
   (state.ostPlan||[]).forEach(x=>{
     const row=document.createElement("div");row.className="planRow";
-    row.innerHTML=`<div><div class="planName">${esc(x.name)}</div><div class="planMeta">${esc(x.symbol)} · ${esc(x.status||"")}</div></div><div class="planValue">${money(x.amount||1000,state.baseCurrency)}</div>`;
+    row.innerHTML=`<div><div class="planName">${esc(x.name)}</div><div class="planMeta">${esc(x.symbol)} · vanha merkintä: ${esc(x.status||"—")}</div></div><div class="planValue">${money(x.amount||0,state.baseCurrency)}</div>`;
     plan.appendChild(row);
   });
 
