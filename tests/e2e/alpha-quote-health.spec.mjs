@@ -169,7 +169,7 @@ test('real failed price source escalates to red while benign uncertainty stays a
     render();
   });
   await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','bad');
-  await expect(page.locator('#priceHealthSummary')).toContainText('1 hintavirhettä');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 hintavirhe');
   await page.locator('#priceHealthSummary').click();
   await expect(page.locator('#priceHealthItems')).toContainText('provider HTTP 503');
 });
