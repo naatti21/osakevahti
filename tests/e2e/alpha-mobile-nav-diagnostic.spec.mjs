@@ -142,7 +142,7 @@ for (const width of [320, 360, 393]) {
       await page.locator('#refreshBtn').tap();
       await expect(page.locator('#refreshBtn')).toBeEnabled();
       await expect(page.locator('#portfolioValue')).not.toHaveText(before);
-      await expect(page.locator('#quoteAge')).toContainText('NAV 6/6');
+      await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 6/6');
       await check(page, 'after-real-render-refresh', samples);
       await page.locator('#detailsToggle').tap();
       await expect(page.locator('#holdings .priceLine')).toHaveCount(13);
