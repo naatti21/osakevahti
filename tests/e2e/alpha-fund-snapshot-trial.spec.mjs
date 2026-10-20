@@ -11,7 +11,7 @@ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIH
 
 async function openTrial(page,ocr){
  await page.addInitScript(({state,ocr})=>{
-  localStorage.setItem('osakevahti.single.v1',JSON.stringify(state));
+  if(!localStorage.getItem('osakevahti.single.v1'))localStorage.setItem('osakevahti.single.v1',JSON.stringify(state));
   window.__OSAKEVAHTI_TEST_OCR__=async()=>ocr;
   window.confirm=()=>true;
  },{state:initial(),ocr});
