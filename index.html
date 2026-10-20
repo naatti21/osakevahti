@@ -3043,7 +3043,7 @@ function fundTrialHints(ocr){
     .map(x=>String(x?.text||"").trim()).filter(Boolean);
   const unit=/(?:^|[^\d])(\d+(?:[,.]\d{1,8})?)\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i;
   const cleanNamePart=text=>String(text||"").replace(/[›>→]+\s*$/,"")
-    .replace(/\s+\d[\d\s.,\u00a0]*\s*(?:EUR|USD|SEK|NOK|GBP)\s*$/i,"")
+    .replace(/\s+\d[\d\s.,\u00a0]*\s*(?:EUR|USD|SEK|NOK|GBP)(?:\s+[A-Za-z]{1,2})?\s*$/i,"")
     .replace(/\s+/g," ").trim();
   const looksLikeName=text=>/[A-Za-zÅÄÖåäö]{3}/.test(text) &&
     !/^(?:rahastot|salkku|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl|päivän muutos|rahaston arvo)\b/i.test(text) &&
