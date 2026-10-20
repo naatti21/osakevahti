@@ -88,7 +88,7 @@ test('no calculation for incomplete data and invalid stress values',async({page}
 });
 test('radar and two comparison scenarios visible and no buy/persist',async({page})=>{
  await page.locator('#portfolioAnalysisBox summary').click();
- await expect(page.locator('#portfolioAnalysisResult')).toContainText('Keskittymät');
+ await expect(page.locator('#portfolioAnalysisResult')).toContainText('keskittymät');
  await expect(page.locator('#portfolioAnalysisResult')).toContainText('SAMPLE.HE');
  await expect(page.locator('#portfolioAnalysisResult')).toContainText('2 riviä');
  await expect(page.locator('#portfolioAnalysisResult')).toContainText('Toimiala-');
