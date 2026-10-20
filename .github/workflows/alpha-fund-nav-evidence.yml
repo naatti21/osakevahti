@@ -1,0 +1,20 @@
+name: Alpha dynamic fund NAV evidence (isolated)
+on:
+  pull_request:
+    paths:
+      - 'fund-nav-evidence.mjs'
+      - 'tests/fund-nav-evidence.test.mjs'
+      - '.github/workflows/alpha-fund-nav-evidence.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fund-nav-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify pure fund evidence contract (no external network)
+        run: node --test tests/fund-nav-evidence.test.mjs
