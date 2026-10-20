@@ -54,7 +54,7 @@ test('fund NAV missing valuation date is visibly unverified despite fresh genera
   expect(result.status).toBe('unverified-nav-day');
   expect(result.issue.label).toBe('NAV-PÄIVÄ PUUTTUU');
   await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Index Fund');
-  await expect(page.locator('#holdings')).toContainText('NAV-päivä avoin');
+  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(0); // grouped notice only
 });
 test('verified complete fund NAV date is kept separate from fetched timestamp',async({page})=>{
   const day=new Date().toISOString().slice(0,10);
@@ -160,7 +160,10 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   await expect(box).toHaveAttribute('open','');
   await expect(page.locator('#priceHealthItems')).toContainText('16.10.');
   await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
-  await expect(page.locator('#holdings')).toContainText('NAV 16.10. (vuosi?)');
+  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(0);
+  await page.locator('#detailsToggle').click();
+  await expect(page.locator('#holdings .item').first()).toContainText('Lähteen pvm 16.10.');
+  await expect(page.locator('#holdings .item').first()).toContainText('Lähde: Fictional provider');
 });
 test('real failed price source escalates to red while benign uncertainty stays amber',async({page})=>{
   await setup(page);
@@ -174,7 +177,7 @@ test('real failed price source escalates to red while benign uncertainty stays a
   await expect(page.locator('#priceHealthItems')).toContainText('provider HTTP 503');
 });
 
-test('reported day/month appears once per fund card with an explicit unverified year',async({page})=>{
+test('reported day/month is neutral source metadata, never a fabricated verified year',async({page})=>{
   await setup(page);
   await page.evaluate(()=>{
     const h=state.holdings[0];
@@ -186,8 +189,10 @@ test('reported day/month appears once per fund card with an explicit unverified 
   const card=page.locator('#holdings .item');
   await expect(card).toHaveCount(1);
   const badges=card.locator('.sourceBadge');
-  await expect(badges).toHaveCount(1);
-  await expect(badges.first()).toHaveText('NAV 16.10. (vuosi?)');
+  await expect(badges).toHaveCount(0);
+  await expect(card).toContainText('Lähteen pvm 16.10.');
+  await expect(card).toContainText('Lähde: Fictional provider');
+  await expect(card).not.toContainText('vuosi?');
   await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
   await expect(page.locator('#priceHealthSummary')).toContainText('NAV-päivä tarkistamatta');
   await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
@@ -210,9 +215,33 @@ test('expanded portfolio shows exactly one item per stored holding even after re
   });
   await expect(page.locator('#holdingCount')).toHaveText('(13)');
   await expect(page.locator('#holdings > .item')).toHaveCount(13);
-  await expect(page.locator('#holdings > .item .sourceBadge')).toHaveCount(13);
+  await expect(page.locator('#holdings > .item .sourceBadge')).toHaveCount(0);
+  await expect(page.locator('#holdings > .item .priceLine')).toHaveCount(13);
   await page.locator('#detailsToggle').click();
   await page.locator('#detailsToggle').click();
   await expect(page.locator('#holdings > .item')).toHaveCount(13);
   expect(await page.evaluate(()=>state.holdings.length)).toBe(13);
+});
+
+test('verified NAV source date is shown once in details and holdings remain intact',async({page})=>{
+  await setup(page);
+  const date=new Date().toISOString().slice(0,10);
+  await page.evaluate((date)=>{
+    const h=state.holdings[0];
+    h.navDate=date;
+    h.quoteSource='FUND_NAV';
+    h.quoteProvider='Fictional provider';
+    h.quoteHealth={status:'ok',provider:'Fictional provider'};
+    state.showDetails=true;
+    render();
+  },date);
+  const card=page.locator('#holdings .item');
+  await expect(card).toContainText('Lähde: Fictional provider');
+  await expect(card).toContainText('NAV '+date.slice(8)+'.'+date.slice(5,7)+'.'+date.slice(0,4));
+  await expect(card.locator('.sourceBadge')).toHaveCount(0);
+  await expect(page.locator('#priceHealthNotice')).toBeHidden();
+  const before=await page.evaluate(()=>JSON.stringify(state.holdings));
+  await page.evaluate(()=>{render();render()});
+  expect(await page.evaluate(()=>JSON.stringify(state.holdings))).toBe(before);
+  await expect(page.locator('#holdings .item')).toHaveCount(1);
 });
