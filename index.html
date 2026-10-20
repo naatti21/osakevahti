@@ -1099,7 +1099,7 @@ function renderWhatIf(rows,valuationIncomplete,fxEstimate){
     const decreased=s.concentratedDifference< -0.0000001;
     const concentration=increased?"Keskittyneisyys kasvaa":decreased?"Keskittyneisyys pienenee":"Keskittyneisyys pysyy käytännössä ennallaan";
     return '<div class="labScenario"><h3>'+esc(title)+'</h3><div class="labGrid">'+
-     '<div class="labMetric"><span>Valittu omistusrivi nyt → jälkeen</span><strong>'+pct(base.beforeWeight)+' → '+pct(base.afterWeight)+'</strong></div>'+
+     '<div class="labMetric"><span>Omistuksen paino nyt → jälkeen</span><strong>'+pct(base.beforeWeight)+' → '+pct(base.afterWeight)+'</strong></div>'+
      '<div class="labMetric"><span>Sama instrumentti yhteensä</span><strong>'+pct(s.beforeGroupWeight)+' → '+pct(s.afterGroupWeight)+'</strong></div>'+
      '<div class="labMetric"><span>Kolme suurinta instrumenttia</span><strong>'+pct(s.before.top3Pct)+' → '+pct(s.after.top3Pct)+'</strong></div>'+
      '<div class="labMetric"><span>Hajautuksen vastineluku</span><strong>'+s.before.effectiveCount.toFixed(1)+' → '+s.after.effectiveCount.toFixed(1)+'</strong></div>'+
