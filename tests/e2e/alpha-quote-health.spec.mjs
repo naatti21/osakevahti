@@ -16,27 +16,26 @@ async function setup(page,options={}){
       localStorage.setItem('osakevahti.single.v1',JSON.stringify(seed));
   },initial);
   const navDate=options.navDate??'';
-  await page.route('https://naatti21.github.io/osakevahti/market-data.json**',async route=>{
-    if(options.failFeed)return route.fulfill({status:503,body:'down'});
-    const quote=options.stock?{quotes:{SYNTH:{price:25,currency:'EUR',
-      timestamp:Date.now(),provider:'Yahoo synthetic'}},fund_quotes:{}}:
-      {quotes:{},fund_quotes:{SYNTH_FUND:{price:10.2,currency:'EUR',
-        nav_date:navDate,timestamp:Date.now(),provider:'Fictional provider'}}};
-    return route.fulfill({contentType:'application/json',body:JSON.stringify({
-      generated_at:new Date().toISOString(),...quote
-    })});
+  await page.route('**/*',async route=>{
+    const url=new URL(route.request().url());
+    if(['127.0.0.1','localhost'].includes(url.hostname))return route.continue();
+    if(url.hostname==='naatti21.github.io'&&url.pathname.endsWith('/market-data.json')){
+      if(options.failFeed)return route.fulfill({status:503,body:'down'});
+      const quote=options.stock?{quotes:{SYNTH:{price:25,currency:'EUR',
+        timestamp:Date.now(),provider:'Yahoo synthetic'}},fund_quotes:{}}:
+        {quotes:{},fund_quotes:{SYNTH_FUND:{price:10.2,currency:'EUR',
+          nav_date:navDate,timestamp:Date.now(),provider:'Fictional provider'}}};
+      return route.fulfill({contentType:'application/json',body:JSON.stringify({
+        generated_at:new Date().toISOString(),...quote
+      })});
+    }
+    if(url.hostname==='osakevahti-market-ed59.teemu-natunen84.workers.dev')
+      return route.fulfill(options.workerDown?{status:503,body:'down'}:{
+        contentType:'application/json',
+        body:JSON.stringify({generated_at:new Date().toISOString(),assets:{},health:{failed:0}})
+      });
+    return route.fulfill({status:404,body:'not supplied in fictional test'});
   });
-  await page.route('https://osakevahti-market-ed59.teemu-natunen84.workers.dev/**',route=>
-    route.fulfill(options.workerDown?{status:503,body:'down'}:{
-      contentType:'application/json',
-      body:JSON.stringify({generated_at:new Date().toISOString(),assets:{},health:{failed:0}})
-    }));
-  await page.route('https://api.frankfurter.dev/**',route=>route.fulfill({
-    contentType:'application/json',body:JSON.stringify({base:'EUR',rates:{EUR:1}})
-  }));
-  await page.route('https://naatti21.github.io/osakevahti/**',route=>route.fulfill({
-    status:404,body:'no unrelated test data'
-  }));
   await page.goto('/index.html');
   await page.evaluate(()=>refreshMarket(false));
 }
