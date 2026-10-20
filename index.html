@@ -169,6 +169,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="valuationWarning" class="statusBox statusBad hidden" role="status"></div>
+  <div id="priceHealthNotice" class="statusBox hidden" role="status"></div>
   <div id="refreshFeedback" class="statusBox hidden" role="status" aria-live="polite"></div>
   <div id="accountSummary" class="summaryGrid"></div>
   <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
@@ -726,11 +727,73 @@ function quoteContextLabel(h){
     :quoteAgeShort(h);
 }
 
+// One price fetch is not evidence of a new trading day or fund valuation.
+// Keep a fund's real NAV date distinct from the moment its web page was read.
+function verifiedNavDate(raw){
+  const text=String(raw||"").trim();
+  let y,m,d;
+  let parts=text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(parts){y=+parts[1];m=+parts[2];d=+parts[3]}
+  else {
+    parts=text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/);
+    if(!parts)return "";
+    y=+parts[3];m=+parts[2];d=+parts[1];
+  }
+  const ms=Date.UTC(y,m-1,d,12);
+  const dt=new Date(ms);
+  if(y<2000||dt.getUTCFullYear()!==y||dt.getUTCMonth()!==m-1||
+    dt.getUTCDate()!==d||ms>Date.now()+24*60*60*1000)return "";
+  return [y,String(m).padStart(2,"0"),String(d).padStart(2,"0")].join("-");
+}
+function priceIssue(h){
+  const health=h.quoteHealth||{};
+  if(health.status==="failed")
+    return {label:h.currentPrice||h.manualPrice?"VANHA HINTA":"HINTA PUUTTUU",
+      reason:"Viimeisin haku epäonnistui: "+String(health.reason||"tietoa ei saatu"),level:"bad"};
+  if(h.assetType==="fund"){
+    const day=verifiedNavDate(h.navDate);
+    if(!day && (h.currentPrice||h.manualPrice))
+      return {label:"NAV-PÄIVÄ PUUTTUU",reason:"Rahaston todellista arvostuspäivää ei voitu vahvistaa. Hakuhetki ei ole NAV-päivä.",level:"bad"};
+    if(!day)
+      return {label:"NAV EI SAATAVILLA",reason:"Rahasto-osuuden hintaa ja arvostuspäivää ei ole vahvistettu.",level:"bad"};
+    const days=(Date.now()-Date.parse(day+"T12:00:00Z"))/86400000;
+    if(days>5)
+      return {label:"VANHA NAV",reason:"Viimeinen vahvistettu arvostuspäivä "+day+". Uudemman NAV:n saatavuus tarkistettava.",level:"bad"};
+  }
+  if(health.status==="fallback")
+    return {label:"VARASYÖTE",reason:"Hinta saatiin varasyötteestä ("+String(health.provider||"tuntematon")+
+      "). Eri hakureitit voivat käyttää samaa alkuperäistä hinnantoimittajaa.",level:"info"};
+  if(h.assetType!=="fund"&&h.currentPrice&&(!validQuoteTime(h.quoteTimestamp)||
+     quoteIsStaleWhileOpen(h)))
+    return {label:"VANHA KURSSI",reason:"Uutta pörssikurssia ei ole vahvistettu markkinan ollessa auki.",level:"bad"};
+  if(!validPositive(h.currentPrice)&&validPositive(h.manualPrice))
+    return {label:"KÄSIN SYÖTETTY",reason:"Automaattista hintatietoa ei ole vahvistettu.",level:"info"};
+  return null;
+}
+function renderPriceHealth(){
+  const box=$("priceHealthNotice");
+  if(!box)return;
+  const issues=state.holdings.map(h=>({h,issue:priceIssue(h)})).filter(x=>x.issue);
+  box.classList.toggle("hidden",!issues.length);
+  if(!issues.length){box.textContent="";return}
+  const bad=issues.filter(x=>x.issue.level==="bad").length;
+  box.className="statusBox "+(bad?"statusBad":"muted");
+  const names=issues.slice(0,3).map(x=>
+    (x.h.name||x.h.symbol||"Tuntematon")+": "+x.issue.label.toLowerCase());
+  box.textContent=(bad?bad+" omistuksen hintatieto tarvitsee tarkistuksen. ":
+    "Hintojen varalähde käytössä. ")+names.join("; ")+
+    (issues.length>3?"; +"+(issues.length-3)+" muuta":"")+
+    ". Edellinen vahvistettu hinta säilyy, jos uusi haku epäonnistuu. Päivitä ↻ yrittää uudelleen.";
+}
+
 function dataState(h){
   if(h.currentPrice){
     if(!validQuoteTime(h.quoteTimestamp)) return {label:"AIKA PUUTTUU",cls:"stale"};
     const ageMinutes=Math.max(0,(Date.now()-n(h.quoteTimestamp))/60000);
-    if(h.quoteSource==="FUND_NAV") return {label:"RAHASTON ARVO",cls:"broker"};
+    if(h.quoteSource==="FUND_NAV"){
+      const issue=priceIssue(h);
+      return issue?{label:issue.label,cls:"stale"}:{label:"NAV "+verifiedNavDate(h.navDate),cls:"broker"};
+    }
     if(h.assetType!=="fund" && !hasCurrentTradingDayQuote(h) && !marketLikelyOpenForHolding(h)){
       return ageMinutes>96*60 ? {label:"VANHA TIETO",cls:"stale"} : {label:"ED. PÄÄTÖS",cls:"manual"};
     }
@@ -856,13 +919,16 @@ function render(){
     }
     const b=document.createElement("button");
     b.className="item";
-    const detailMeta=state.showDetails?`<span class="sourceBadge ${ds.cls}">${ds.label}</span>${weightHtml}`:"";
+    const issue=priceIssue(h);
+    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":"broker")+'">'+esc(issue.label)+'</span>':"";
+    const detailMeta=issueBadge+(state.showDetails?'<span class="sourceBadge '+ds.cls+'">'+esc(ds.label)+'</span>'+weightHtml:"");
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
     b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
 
+  renderPriceHealth();
   const fundPct=tv?funds/tv*100:0;
   $("accountSummary").innerHTML=`<div class="summaryChip"><span>Tänään osakkeet</span><strong class="${todayEur>0?"pos":todayEur<0?"neg":""}">${todayEur>0?"+":""}${money(todayEur,state.baseCurrency)}</strong></div><div class="summaryChip"><span>OST · vahvistettu</span><strong>${money(ost,state.baseCurrency)}</strong></div><div class="summaryChip"><span>AOT · vahvistettu</span><strong>${money(aot,state.baseCurrency)}</strong></div><div class="summaryChip"><span>Rahasto-osuus</span><strong>${fundPct.toFixed(0)} %</strong></div>`;
   const moves=rows
@@ -1799,9 +1865,18 @@ async function refreshMarket(showErrors=false){
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
         if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
           throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
+        const navDay=verifiedNavDate(q.nav_date);
+        const previousDay=verifiedNavDate(h.navDate);
+        // A source page can expose an older NAV than one previously accepted.
+        // If the dates are reliable, never silently roll a holding backwards.
+        if(navDay&&previousDay&&navDay<previousDay)
+          throw new Error("Lähteen NAV-päivä "+navDay+" on aiempaa "+previousDay+" vanhempi");
         h.currentPrice=Number(q.price);
-        h.quoteTimestamp=navTimestamp||0;
         h.navDate=q.nav_date||"";
+        h.quoteTimestamp=navDay?Date.parse(navDay+"T12:00:00Z"):0;
+        h.quoteHealth={status:navDay?"ok":"unverified-nav-day",
+          provider:q.provider||"Rahastosivu",checkedAt:Date.now(),
+          reason:navDay?"":"Arvostuspäivä puuttuu tai ei sisällä vuotta"};
         h.dayChangePct=0;
         h.quoteSource="FUND_NAV";
         h.quoteProvider=q.provider||"Fund page";
@@ -1859,9 +1934,13 @@ async function refreshMarket(showErrors=false){
       h.quoteSource=best.source;
       h.quoteProvider=best.provider;
       h.quoteRealtime=best.realtime;
+      h.quoteHealth={status:best.source==="HELSINKI_CACHE"?"fallback":"ok",
+        provider:best.provider,checkedAt:Date.now(),observedAt:best.timestamp};
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       stockOk++;
     }catch(err){
+      h.quoteHealth={status:"failed",checkedAt:Date.now(),
+        reason:String(err?.message||err||"hintaa ei saatu").slice(0,180)};
       if(h.assetType==="fund")fundFail++;else stockFail++;
       if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
     }
