@@ -133,3 +133,43 @@ test('unknown new fund NAV date never overwrites a previously verified NAV amoun
   expect(result.issue).toBe('VANHA HINTA');
   await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Index Fund');
 });
+
+
+test('six fetched fund prices with no verified dates show compact amber summary, not six red alerts',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    state.holdings=Array.from({length:6},(_,i)=>({
+      id:'synthetic-'+i,symbol:'SYNTH_FUND_'+i,name:'Fictional Fund '+(i+1),
+      assetType:'fund',quantity:5,buyPrice:10,currentPrice:11,
+      navDate:i===0?'16.10.':'',quoteSource:'FUND_NAV',
+      quoteProvider:'Fictional provider',currency:'EUR',
+      account:'Test',accountType:'FUND',
+      quoteHealth:{status:'unverified-nav-day',provider:'Fictional provider'}
+    }));
+    state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:6,fundsTracked:6};
+    render();
+  });
+  const box=page.locator('#priceHealthNotice');
+  await expect(box).toBeVisible();
+  await expect(box).toHaveAttribute('data-level','warn');
+  await expect(box).not.toHaveAttribute('open','');
+  await expect(page.locator('#priceHealthSummary')).toContainText('6 rahaston NAV-päivä epäselvä');
+  await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 0/6');
+  await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(6);
+  await page.locator('#priceHealthSummary').click();
+  await expect(box).toHaveAttribute('open','');
+  await expect(page.locator('#priceHealthItems')).toContainText('16.10.');
+  await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
+  await expect(page.locator('#holdings')).toContainText('NAV-PÄIVÄ PUUTTUU');
+});
+test('real failed price source escalates to red while benign uncertainty stays amber',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    state.holdings[0].quoteHealth={status:'failed',reason:'provider HTTP 503'};
+    render();
+  });
+  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','bad');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 hintavirhe');
+  await page.locator('#priceHealthSummary').click();
+  await expect(page.locator('#priceHealthItems')).toContainText('provider HTTP 503');
+});

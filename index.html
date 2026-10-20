@@ -133,6 +133,16 @@ dialog{width:min(620px,calc(100% - 20px));max-height:calc(100vh - 30px);overflow
 .alphaSearch{margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.alphaSearch .actions{margin-top:8px}.alphaSearch .importCandidate{min-height:50px}.engineAudit{margin-top:7px;color:var(--muted);font-size:10px;line-height:1.4}.engineAudit.warn{color:var(--warn)}
 .importSource{font-size:9px;color:var(--muted);margin-top:7px;line-height:1.35}
 details{border:1px solid var(--line);border-radius:16px;background:var(--panel);margin-top:10px;overflow:hidden}summary{cursor:pointer;padding:12px 12px;font-weight:800;list-style:none}summary::-webkit-details-marker{display:none}summary:after{content:"＋";float:right;color:var(--muted)}details[open] summary:after{content:"−"}details .detailsBody{padding:0 12px 12px;border-top:1px solid var(--line)}.statusBox{margin-top:10px;padding:10px 12px;border-radius:11px;background:#0e1216;border:1px solid var(--line);font-size:12px;line-height:1.4}.statusOk{color:var(--ok)}.statusBad{color:var(--danger)}
+.priceHealthPanel{margin:10px 0;border:1px solid #665838;border-radius:12px;background:#171811;color:#dfd4b7;overflow:hidden}
+.priceHealthPanel[data-level="bad"]{border-color:#7a3c45;color:#f5acb5;background:#221619}
+.priceHealthPanel[data-level="info"]{border-color:var(--line);color:var(--muted);background:var(--panel)}
+.priceHealthPanel>summary{padding:12px 14px;line-height:1.4;font-size:12px;font-weight:800;white-space:normal}
+.priceHealthItems{padding:2px 13px 12px;border-top:1px solid var(--line)}
+.priceHealthEntry{padding:10px 0;border-bottom:1px solid var(--line);font-size:11px;line-height:1.55;overflow-wrap:anywhere}
+.priceHealthEntry:last-child{border-bottom:0}
+.priceHealthEntry strong{display:block;color:var(--text);font-size:12px}
+.priceHealthEntry span{color:var(--muted)}
+.priceHealthPanel.hidden{display:none}
 .summaryGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 10px}.summaryChip{background:#0e1216;border:1px solid var(--line);border-radius:11px;padding:8px 9px;min-width:0}.summaryChip span{display:block;color:var(--muted);font-size:9px;font-weight:700}.summaryChip strong{display:block;margin-top:2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metaLine{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:2px}.priceLine{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}.riskHead{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;min-width:0}.riskHead>div{min-width:0}.riskHead .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.introCompact{font-size:12px;line-height:1.35;margin:0 2px 8px}.section h2{font-size:20px;margin:0}@media(max-width:480px){.grid2{grid-template-columns:1fr}.heroValue{font-size:34px}.riskMain{grid-template-columns:repeat(3,minmax(0,1fr))}.summaryGrid{grid-template-columns:repeat(2,1fr)}}
 .accountNotice{display:flex;align-items:center;justify-content:space-between;gap:12px;border-color:#ae8a4d;margin:0 0 12px}.accountNotice #accountReviewBannerText{font-size:13px;line-height:1.45}.accountNotice button{flex-shrink:0}.accountHelp{margin:6px 0 12px}.accountHelp summary{font-size:12px;cursor:pointer;color:var(--muted)}.accountHelp p{font-size:12px;line-height:1.5;margin:8px 0}.accountReviewWarning{font-weight:700;color:#ffcd82}@media(max-width:480px){.accountNotice{flex-direction:column;align-items:stretch}.accountNotice button{width:100%}}
 .accountNotice.hidden{display:none}
@@ -169,7 +179,10 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
   <div id="valuationWarning" class="statusBox statusBad hidden" role="status"></div>
-  <div id="priceHealthNotice" class="statusBox hidden" role="status"></div>
+  <details id="priceHealthNotice" class="priceHealthPanel hidden" data-level="warn">
+    <summary id="priceHealthSummary">Hintatietojen tila</summary>
+    <div id="priceHealthItems" class="priceHealthItems"></div>
+  </details>
   <div id="refreshFeedback" class="statusBox hidden" role="status" aria-live="polite"></div>
   <div id="accountSummary" class="summaryGrid"></div>
   <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
@@ -753,12 +766,16 @@ function priceIssue(h){
   if(h.assetType==="fund"){
     const day=verifiedNavDate(h.navDate);
     if(!day && (h.currentPrice||h.manualPrice))
-      return {label:"NAV-PÄIVÄ PUUTTUU",reason:"Rahaston todellista arvostuspäivää ei voitu vahvistaa. Hakuhetki ei ole NAV-päivä.",level:"bad"};
+      return {label:"NAV-PÄIVÄ PUUTTUU",
+        reason:(h.navDate?"Lähde ilmoittaa "+String(h.navDate)+", mutta arvostusvuosi puuttuu. ":"")+
+          "NAV-hinnan oikeaa arvostuspäivää ei ole vahvistettu. Hakupäivä ei kelpaa NAV-päiväksi.",
+        level:"warn"};
     if(!day)
       return {label:"NAV EI SAATAVILLA",reason:"Rahasto-osuuden hintaa ja arvostuspäivää ei ole vahvistettu.",level:"bad"};
     const days=(Date.now()-Date.parse(day+"T12:00:00Z"))/86400000;
     if(days>5)
-      return {label:"VANHA NAV",reason:"Viimeinen vahvistettu arvostuspäivä "+day+". Uudemman NAV:n saatavuus tarkistettava.",level:"bad"};
+      return {label:"VANHA NAV",reason:"Viimeinen vahvistettu arvostuspäivä "+day+
+        ". Uudemman NAV:n saatavuus tarkistettava.",level:days>14?"bad":"warn"};
   }
   if(h.assetType!=="fund"&&h.currentPrice&&(!validQuoteTime(h.quoteTimestamp)||
      Date.now()-Number(h.quoteTimestamp)>96*60*60*1000||quoteIsStaleWhileOpen(h)))
@@ -775,25 +792,48 @@ function renderPriceHealth(){
   if(!box)return;
   const issues=state.holdings.map(h=>({h,issue:priceIssue(h)})).filter(x=>x.issue);
   box.classList.toggle("hidden",!issues.length);
-  if(!issues.length){box.textContent="";return}
-  const bad=issues.filter(x=>x.issue.level==="bad").length;
-  box.className="statusBox "+(bad?"statusBad":"muted");
-  const names=issues.slice(0,3).map(x=>
-    (x.h.name||x.h.symbol||"Tuntematon")+": "+x.issue.label.toLowerCase());
-  box.textContent=(bad?bad+" omistuksen hintatieto tarvitsee tarkistuksen. ":
-    "Hintojen varalähde käytössä. ")+names.join("; ")+
-    (issues.length>3?"; +"+(issues.length-3)+" muuta":"")+
-    ". Edellinen vahvistettu hinta säilyy, jos uusi haku epäonnistuu. Päivitä ↻ yrittää uudelleen.";
+  if(!issues.length){
+    box.open=false;$("priceHealthSummary").textContent="";
+    $("priceHealthItems").replaceChildren();return;
+  }
+  const errors=issues.filter(x=>x.issue.level==="bad");
+  const warnings=issues.filter(x=>x.issue.level==="warn");
+  box.dataset.level=errors.length?"bad":warnings.length?"warn":"info";
+  const dateMissing=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU").length;
+  const navOld=warnings.filter(x=>x.issue.label==="VANHA NAV").length;
+  const parts=[];
+  if(errors.length)parts.push(errors.length+" "+(errors.length===1?"hintavirhe":"hintavirhettä"));
+  if(dateMissing)parts.push(dateMissing+" rahaston NAV-päivä epäselvä");
+  if(navOld)parts.push(navOld+" vanhaa NAVia");
+  const rest=issues.length-errors.length-dateMissing-navOld;
+  if(rest>0)parts.push(rest+" muuta tiedoksiantoa");
+  $("priceHealthSummary").textContent=parts.join(" · ")+" — Näytä lähteet ja syyt";
+  const items=$("priceHealthItems");
+  items.replaceChildren();
+  for(const {h,issue} of issues){
+    const entry=document.createElement("div");
+    entry.className="priceHealthEntry";
+    const title=document.createElement("strong");
+    title.textContent=(h.name||h.symbol||"Omistus")+" · "+issue.label;
+    const detail=document.createElement("span");
+    const source=h.quoteProvider||h.quoteHealth?.provider||"Lähde tuntematon";
+    const day=verifiedNavDate(h.navDate);
+    detail.textContent=issue.reason+" · Lähde: "+source+
+      (day?" · NAV "+day:"");
+    entry.append(title,detail);
+    items.append(entry);
+  }
 }
 
 function dataState(h){
   if(h.currentPrice){
-    if(!validQuoteTime(h.quoteTimestamp)) return {label:"AIKA PUUTTUU",cls:"stale"};
-    const ageMinutes=Math.max(0,(Date.now()-n(h.quoteTimestamp))/60000);
     if(h.quoteSource==="FUND_NAV"){
       const issue=priceIssue(h);
-      return issue?{label:issue.label,cls:"stale"}:{label:"NAV "+verifiedNavDate(h.navDate),cls:"broker"};
+      return issue?{label:issue.label,cls:issue.level==="bad"?"stale":"manual"}:
+        {label:"NAV "+verifiedNavDate(h.navDate),cls:"broker"};
     }
+    if(!validQuoteTime(h.quoteTimestamp)) return {label:"AIKA PUUTTUU",cls:"stale"};
+    const ageMinutes=Math.max(0,(Date.now()-n(h.quoteTimestamp))/60000);
     if(h.assetType!=="fund" && !hasCurrentTradingDayQuote(h) && !marketLikelyOpenForHolding(h)){
       return ageMinutes>96*60 ? {label:"VANHA TIETO",cls:"stale"} : {label:"ED. PÄÄTÖS",cls:"manual"};
     }
@@ -920,7 +960,7 @@ function render(){
     const b=document.createElement("button");
     b.className="item";
     const issue=priceIssue(h);
-    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":"broker")+'">'+esc(issue.label)+'</span>':"";
+    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":issue.level==="warn"?"manual":"broker")+'">'+esc(issue.label)+'</span>':"";
     const detailMeta=issueBadge+(state.showDetails?'<span class="sourceBadge '+ds.cls+'">'+esc(ds.label)+'</span>'+weightHtml:"");
     const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
     b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
@@ -994,7 +1034,9 @@ function render(){
 
   if(state.refreshSummary){
     const s=state.refreshSummary;
-    const fundText=s.fundsTracked!=null?` · NAV ${s.fundsUpdated||0}/${s.fundsTracked||0}`:"";
+    const funds=state.holdings.filter(h=>h.assetType==="fund");
+    const navDated=funds.filter(h=>validPositive(h.currentPrice)&&!!verifiedNavDate(h.navDate)).length;
+    const fundText=funds.length?" · NAV-päivä "+navDated+"/"+funds.length:"";
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} osakkeet${fundText}`;
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
