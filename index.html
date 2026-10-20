@@ -96,7 +96,7 @@ input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid va
 .weightBadge{display:inline-flex;margin-left:4px;padding:2px 6px;border-radius:999px;border:1px solid var(--line);font-size:9px;font-weight:800}
 .weightOk{color:var(--ok)}.weightHigh{color:var(--warn)}.weightLow{color:#8fb7ff}
 .decisionLab{margin:0 0 10px}.decisionLab .detailsBody{padding-top:9px}.decisionLabResult{font-size:12px;line-height:1.5}.labGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:9px 0}.labMetric{min-width:0;background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:9px}.labMetric span{display:block;font-size:10px;color:var(--muted)}.labMetric strong{display:block;font-size:14px;margin-top:3px;overflow-wrap:anywhere}.labList{display:grid;gap:6px}.labLine{display:flex;justify-content:space-between;gap:8px;font-size:11px;background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:8px}.labLine>*{min-width:0;overflow-wrap:anywhere}.labNote{font-size:11px;color:var(--muted);line-height:1.45;margin:8px 0}.labDecision{padding:10px;border-left:3px solid #8fb7ff;background:#111923;border-radius:8px;margin:9px 0;line-height:1.5}.labScenario{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}.labScenario h3{margin:0 0 8px;font-size:12px}
-.whatIfPanel{margin:0 0 10px}.whatIfPanel .detailsBody{padding-top:8px}.whatIfResult{margin-top:12px;line-height:1.5}.whatIfNumbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.whatIfMetric{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:9px;min-width:0}.whatIfMetric span{display:block;font-size:10px;color:var(--muted)}.whatIfMetric strong{display:block;font-size:14px;font-weight:850;margin-top:3px;overflow-wrap:anywhere}.whatIfHint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:8px}
+.whatIfPanel{margin:0 0 10px}.whatIfPanel .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.whatIfPanel select{min-width:0}.labScenario{overflow-wrap:anywhere}@media(max-width:400px){.whatIfPanel .grid2{grid-template-columns:1fr}}.whatIfPanel .detailsBody{padding-top:8px}.whatIfResult{margin-top:12px;line-height:1.5}.whatIfNumbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.whatIfMetric{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:9px;min-width:0}.whatIfMetric span{display:block;font-size:10px;color:var(--muted)}.whatIfMetric strong{display:block;font-size:14px;font-weight:850;margin-top:3px;overflow-wrap:anywhere}.whatIfHint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:8px}
 .planList{display:grid;gap:6px;margin-top:7px}.planRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px}
 .planName{font-size:11px;font-weight:800}.planMeta{font-size:9px;color:var(--muted)}.planValue{font-size:11px;font-weight:800;text-align:right}
 .newsBadge{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;margin-left:4px;color:var(--ok)}
@@ -1078,34 +1078,64 @@ function renderPortfolioAnalysis(rows,valuationIncomplete){
 
 function renderWhatIf(rows,valuationIncomplete,fxEstimate){
   const select=$("whatIfHolding"),amountInput=$("whatIfAmount"),result=$("whatIfResult");
-  if(!select||!amountInput||!result) return;
-  const previous=select.value;
+  const alt=$("whatIfAlternative"),shockInput=$("whatIfShock");
+  if(!select||!amountInput||!result||!alt||!shockInput)return;
+  const previous=select.value,previousAlt=alt.value;
   const available=rows.filter(r=>validPositive(r.h.quantity));
-  // The ID, not the ticker, keeps separate banks/accounts independent.
-  select.innerHTML=available.map(r=>'<option value="'+esc(String(r.h.id||""))+'">'+
-    esc((r.h.assetType==="fund"?(r.h.name||r.h.symbol):r.h.symbol)+" · "+displayAccount(r.h))+"</option>").join("");
-  if(available.some(r=>String(r.h.id)===previous)) select.value=previous;
-  const update=()=>{
-    const x=calculateWhatIf(rows,select.value,amountInput.value,valuationIncomplete);
-    if(!x.ok){result.textContent=x.reason;return}
-    const current=rows.find(r=>String(r.h.id)===select.value);
-    if(!current){result.textContent="Omistusta ei löytynyt.";return}
-    const pct=v=>v.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1})+" %";
-    const warning=fxEstimate||rows.some(r=>Number(r.h.quantity)>0&&
-      (r.h.assetType==="fund"&&!verifiedNavDate(r.h.navDate)||
-       r.h.quoteHealth?.status==="failed"||
-       r.h.fxRateStatus==="stale"));
-    result.innerHTML='<div class="whatIfNumbers">'+
-      '<div class="whatIfMetric"><span>Omistuksen paino nyt → jälkeen</span><strong>'+pct(x.beforeWeight)+' → '+pct(x.afterWeight)+'</strong></div>'+
-      '<div class="whatIfMetric"><span>Koko salkun arvo nyt → jälkeen</span><strong>'+money(x.beforeTotal,state.baseCurrency)+' → '+money(x.afterTotal,state.baseCurrency)+'</strong></div>'+
-      '<div class="whatIfMetric"><span>Suurimman kolmen paino nyt → jälkeen</span><strong>'+pct(x.beforeTop3)+' → '+pct(x.afterTop3)+'</strong></div>'+
-      '<div class="whatIfMetric"><span>Rahastojen osuus nyt → jälkeen</span><strong>'+pct(x.beforeFundPct)+' → '+pct(x.afterFundPct)+'</strong></div>'+
-      '</div><div class="whatIfHint">'+
-      (warning?'<strong>Arvio:</strong> ainakin yhden hinnan arvostuspäivä tai valuuttakurssi on epävarma. ':'')+
-      'Laskelma olettaa, että koko lisäyssumma sijoitetaan valittuun omistukseen muuttumattomalla kurssilla. Ei sisällä kuluja, veroja tai markkinamuutoksia. Tulos ei ole ostosuositus.</div>';
+  const option=r=>'<option value="'+esc(String(r.h.id||""))+'">'+
+    esc((r.h.assetType==="fund"?(r.h.name||r.h.symbol):r.h.symbol)+" · "+displayAccount(r.h))+"</option>";
+  select.innerHTML=available.map(option).join("");
+  alt.innerHTML='<option value="">Ei vertailua</option>'+available.map(option).join("");
+  if(available.some(r=>String(r.h.id)===previous))select.value=previous;
+  if(available.some(r=>String(r.h.id)===previousAlt))alt.value=previousAlt;
+  const pct=v=>v.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1})+" %";
+  const warn=fxEstimate||rows.some(r=>Number(r.h.quantity)>0&&(
+    r.h.assetType==="fund"&&!verifiedNavDate(r.h.navDate)||
+    r.h.quoteHealth?.status==="failed"||
+    r.h.fxRateStatus==="stale"));
+  const describe=(scenario,title)=>{
+    const s=scenario,base=s.base;
+    const increased=s.concentratedDifference>0.0000001;
+    const decreased=s.concentratedDifference< -0.0000001;
+    const concentration=increased?"Keskittyneisyys kasvaa":decreased?"Keskittyneisyys pienenee":"Keskittyneisyys pysyy käytännössä ennallaan";
+    return '<div class="labScenario"><h3>'+esc(title)+'</h3><div class="labGrid">'+
+     '<div class="labMetric"><span>Valittu omistusrivi nyt → jälkeen</span><strong>'+pct(base.beforeWeight)+' → '+pct(base.afterWeight)+'</strong></div>'+
+     '<div class="labMetric"><span>Sama instrumentti yhteensä</span><strong>'+pct(s.beforeGroupWeight)+' → '+pct(s.afterGroupWeight)+'</strong></div>'+
+     '<div class="labMetric"><span>Kolme suurinta instrumenttia</span><strong>'+pct(s.before.top3Pct)+' → '+pct(s.after.top3Pct)+'</strong></div>'+
+     '<div class="labMetric"><span>Hajautuksen vastineluku</span><strong>'+s.before.effectiveCount.toFixed(1)+' → '+s.after.effectiveCount.toFixed(1)+'</strong></div>'+
+     '<div class="labMetric"><span>Rahastojen osuus nyt → jälkeen</span><strong>'+pct(base.beforeFundPct)+' → '+pct(base.afterFundPct)+'</strong></div>'+
+     '<div class="labMetric"><span>Uusi kokonaisarvo (lisäraha)</span><strong>'+money(base.afterTotal,state.baseCurrency)+'</strong></div>'+
+     '</div><div class="labDecision"><strong>'+concentration+'.</strong> '+
+     (s.sameTickerAccounts>1?'Tämä tunnus esiintyy '+s.sameTickerAccounts+' omistusrivillä: riskilaskelma huomioi niiden yhteisarvon. ':'')+
+     'Esimerkki: jos juuri tämän instrumentin kurssi laskisi '+pct(s.shockPct)+
+     ' muiden hintojen pysyessä ennallaan, simuloidun salkun arvo laskisi '+
+     money(s.loss,state.baseCurrency)+' ('+pct(s.lossPortfolioPct)+'). Tämä ei ole ennuste.</div></div>';
   };
-  select.onchange=update;
-  amountInput.oninput=update;
+  const update=()=>{
+    const first=scenarioPortfolio(rows,select.value,amountInput.value,valuationIncomplete,shockInput.value);
+    if(!first.ok){result.textContent=first.reason;return}
+    const firstRow=available.find(r=>String(r.h.id)===select.value);
+    const name=r=>r.h.assetType==="fund"?(r.h.name||r.h.symbol):r.h.symbol;
+    let html=describe(first,'Vaihtoehto A · '+name(firstRow)+' · '+displayAccount(firstRow.h));
+    let second=null;
+    if(alt.value&&alt.value!==select.value){
+      second=scenarioPortfolio(rows,alt.value,amountInput.value,valuationIncomplete,shockInput.value);
+      if(second.ok){
+        const secondRow=available.find(r=>String(r.h.id)===alt.value);
+        html+=describe(second,'Vaihtoehto B · '+name(secondRow)+' · '+displayAccount(secondRow.h));
+        const diff=(second.after.hhi-first.after.hhi);
+        const meaning=Math.abs(diff)<1e-7?"yhtä suuri":diff>0?"suurempi":"pienempi";
+        html+='<div class="labDecision">Vertailu samalla summalla: vaihtoehdon B painojen neliösumma on '+
+          meaning+' kuin vaihtoehdon A. Luku kuvaa keskittyneisyyttä eikä kerro tulevasta tuotosta.</div>';
+      }
+    }
+    result.innerHTML=html+
+      '<div class="whatIfHint">'+
+      (warn?'<strong>Tietovaroitus:</strong> vähintään yhden hinnan tai NAV-päivän ajantasaisuus on epävarma. ':'')+
+      'Oletus: koko summa on salkkuun tulevaa uutta rahaa. Ei huomioida kaupankäyntikuluja, käteistä, verotusta, rahastojen sisäisiä yhtiöitä eikä kurssimuutosta ostohetkellä. Laskuri ei ole ostosuositus.</div>';
+  };
+  select.onchange=update;alt.onchange=update;
+  amountInput.oninput=update;shockInput.oninput=update;
   update();
 }
 
