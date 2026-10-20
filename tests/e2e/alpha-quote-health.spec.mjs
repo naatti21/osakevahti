@@ -54,7 +54,7 @@ test('fund NAV missing valuation date is visibly unverified despite fresh genera
   expect(result.status).toBe('unverified-nav-day');
   expect(result.issue.label).toBe('NAV-PÄIVÄ PUUTTUU');
   await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Index Fund');
-  await expect(page.locator('#holdings')).toContainText('NAV-PÄIVÄ PUUTTUU');
+  await expect(page.locator('#holdings')).toContainText('NAV-päivä avoin');
 });
 test('verified complete fund NAV date is kept separate from fetched timestamp',async({page})=>{
   const day=new Date().toISOString().slice(0,10);
@@ -151,9 +151,9 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   });
   const box=page.locator('#priceHealthNotice');
   await expect(box).toBeVisible();
-  await expect(box).toHaveAttribute('data-level','warn');
+  await expect(box).toHaveAttribute('data-level','info');
   await expect(box).not.toHaveAttribute('open','');
-  await expect(page.locator('#priceHealthSummary')).toContainText('6 rahaston NAV-päivä epäselvä');
+  await expect(page.locator('#priceHealthSummary')).toContainText('NAV-päivä tarkistamatta 6 rahastolla');
   await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 0/6');
   await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(6);
   await page.locator('#priceHealthSummary').click();
@@ -172,4 +172,47 @@ test('real failed price source escalates to red while benign uncertainty stays a
   await expect(page.locator('#priceHealthSummary')).toContainText('1 hintavirhe');
   await page.locator('#priceHealthSummary').click();
   await expect(page.locator('#priceHealthItems')).toContainText('provider HTTP 503');
+});
+
+test('reported day/month appears once per fund card with an explicit unverified year',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    const h=state.holdings[0];
+    h.navDate='16.10.';
+    h.quoteSource='FUND_NAV';
+    state.showDetails=true;
+    render();
+  });
+  const card=page.locator('#holdings .item');
+  await expect(card).toHaveCount(1);
+  const badges=card.locator('.sourceBadge');
+  await expect(badges).toHaveCount(1);
+  await expect(badges.first()).toHaveText('NAV 16.10. (vuosi?)');
+  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
+  await expect(page.locator('#priceHealthSummary')).toContainText('NAV-päivä tarkistamatta');
+  await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
+  const result=await page.evaluate(()=>({date:verifiedNavDate(state.holdings[0].navDate),
+    seen:state.holdings[0].navDate,qty:state.holdings[0].quantity}));
+  expect(result).toEqual({date:'',seen:'16.10.',qty:5});
+});
+test('expanded portfolio shows exactly one item per stored holding even after repeated renders',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    const base=state.holdings[0];
+    state.holdings=Array.from({length:13},(_,i)=>({
+      ...base,id:'fictional-row-'+i,
+      symbol:'FAKE_'+i,name:'Fictional Holding '+i,
+      quantity:i+1,currentPrice:10.5,
+      navDate:'16.10.',quoteSource:'FUND_NAV'
+    }));
+    state.showDetails=true;
+    render();render();render();
+  });
+  await expect(page.locator('#holdingCount')).toHaveText('(13)');
+  await expect(page.locator('#holdings > .item')).toHaveCount(13);
+  await expect(page.locator('#holdings > .item .sourceBadge')).toHaveCount(13);
+  await page.locator('#detailsToggle').click();
+  await page.locator('#detailsToggle').click();
+  await expect(page.locator('#holdings > .item')).toHaveCount(13);
+  expect(await page.evaluate(()=>state.holdings.length)).toBe(13);
 });
