@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.8-alpha";
+const CACHE = "osakevahti-shell-v2.17.8-alpha-fund-trial1";
 const SHELL = [
   "./",
   "./index.html",
