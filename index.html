@@ -764,8 +764,8 @@ function fundNavDateBadge(h){
   const complete=verifiedNavDate(h.navDate);
   if(complete)return "NAV "+complete.slice(8,10)+"."+complete.slice(5,7)+"."+complete.slice(0,4);
   const reported=String(h.navDate||"").trim();
-  if(/^\d{1,2}\.\d{1,2}\.$/.test(reported))return "NAV "+reported+" (vuosi?)";
-  return "NAV-päivä avoin";
+  if(/^\d{1,2}\.\d{1,2}\.$/.test(reported))return "Lähteen pvm "+reported;
+  return "NAV-päivä vahvistamatta";
 }
 function displayedPriceIssueLabel(h,issue){
   return h.assetType==="fund"&&issue?.label==="NAV-PÄIVÄ PUUTTUU"
@@ -976,12 +976,17 @@ function render(){
     const b=document.createElement("button");
     b.className="item";
     const issue=priceIssue(h);
-    const issueBadge=issue?'<span class="sourceBadge '+(issue.level==="bad"?"stale":issue.level==="warn"?"manual":"broker")+'">'+esc(displayedPriceIssueLabel(h,issue))+'</span>':"";
+    const routineNavNotice=h.assetType==="fund"&&issue?.label==="NAV-PÄIVÄ PUUTTUU";
+    // A missing NAV year is routine source uncertainty, not a card-level alarm.
+    // Keep it in the expandable source report; never fabricate a valuation day.
+    const issueBadge=issue&&!routineNavNotice?'<span class="sourceBadge '+(issue.level==="bad"?"stale":issue.level==="warn"?"manual":"broker")+'">'+esc(displayedPriceIssueLabel(h,issue))+'</span>':"";
     // Detail mode must never repeat the same health marker as a second badge.
-    const detailStateBadge=state.showDetails&&!issue?
+    const detailStateBadge=state.showDetails&&!issue&&!(h.assetType==="fund"&&h.quoteSource==="FUND_NAV")?
       '<span class="sourceBadge '+ds.cls+'">'+esc(ds.label)+'</span>':"";
     const detailMeta=issueBadge+detailStateBadge+(state.showDetails?weightHtml:"");
-    const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${h.quoteSource==="FUND_NAV"&&h.navDate?` · NAV ${esc(h.navDate)}`:""}</div>`:"";
+    const fundSourceMeta=h.assetType==="fund"&&h.quoteSource==="FUND_NAV"?
+      ` · Lähde: ${esc(h.quoteProvider||h.quoteHealth?.provider||"ei tiedossa")}${h.navDate?` · ${esc(fundNavDateBadge(h))}`:""}`:"";
+    const detailPrice=state.showDetails&&p?`<div class="priceLine"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${fundSourceMeta}</div>`:"";
     b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
