@@ -72,3 +72,53 @@ test('Alpha fund trial can explicitly update GAV but cancel keeps holdings uncha
  expect(holdings.find(h=>h.id==='fund-b').quantity).toBe(8.25);
  expect(holdings.find(h=>h.id==='fund-b').buyPrice).toBe(18.4);
 });
+
+
+test('Fund overview in the original screenshot chooser routes to Alpha quantity review as ONE holding',async({page})=>{
+ const ocr={
+  text:'Rahastot\nFictional Meadow Regional Index 742,18 EUR\nClass A 42,75 kpl',
+  lines:[
+   {text:'Rahastot',top:35,left:30},
+   {text:'Fictional Meadow Regional Index 742,18 EUR',top:100,left:40},
+   {text:'Class A 42,75 kpl',top:135,left:40}
+  ]
+ };
+ await openTrial(page,ocr);
+ await page.locator('#fundTrialBox > summary').click();
+ await expect(page.locator('#fundTrialBox')).not.toHaveAttribute('open','');
+ await page.locator('#importImage').setInputFiles({name:'fictional-wrapped-fund.png',mimeType:'image/png',buffer:png});
+ await expect(page.locator('#fundTrialBox')).toHaveAttribute('open','');
+ await expect(page.locator('#importReviewDlg')).not.toBeVisible();
+ await expect(page.locator('#fundTrialRows .importReviewRow')).toHaveCount(1);
+ await expect(page.locator('#fundTrialRows')).toContainText('Fictional Meadow Regional Index Class A');
+ await expect(page.locator('#fundQty0')).toHaveValue('42,75');
+ await expect(page.locator('#fundTarget0')).toHaveValue('');
+ await page.locator('#fundTarget0').selectOption('fund-a');
+ await expect(page.locator('#fundTrialDiff0')).toContainText('12.3456 → 42,75 kpl');
+ await page.locator('#fundTrialBackupCheck').check();
+ await page.locator('#fundTrialSave').click();
+ const holdings=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,LOCAL_KEY);
+ expect(holdings.find(h=>h.id==='fund-a').quantity).toBe(42.75);
+ expect(holdings.find(h=>h.id==='fund-a').buyPrice).toBe(43.21);
+ expect(holdings.find(h=>h.id==='fund-b').quantity).toBe(8.25);
+});
+test('Fund overview with separately recognized units line keeps two source-name fragments together',async({page})=>{
+ const ocr={
+  text:'Rahastot\nFictional Birch Regional Index 258,00 EUR\nSelect A\n18,25 kpl',
+  lines:[
+   {text:'Rahastot',top:30,left:40},
+   {text:'Fictional Birch Regional Index 258,00 EUR',top:110,left:40},
+   {text:'Select A',top:152,left:40},
+   {text:'18,25 kpl',top:154,left:450}
+  ]
+ };
+ await openTrial(page,ocr);
+ await page.locator('#importImage').setInputFiles({name:'fictional-split-line.png',mimeType:'image/png',buffer:png});
+ await expect(page.locator('#fundTrialRows .importReviewRow')).toHaveCount(1);
+ await expect(page.locator('#fundTrialRows')).toContainText('Fictional Birch Regional Index Select A');
+ await expect(page.locator('#fundQty0')).toHaveValue('18,25');
+ await expect(page.locator('#fundTarget0')).toHaveValue('');
+ await expect(page.locator('#fundTrialSave')).toBeDisabled();
+ const holdings=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,LOCAL_KEY);
+ expect(holdings.find(h=>h.id==='fund-b').quantity).toBe(8.25);
+});
