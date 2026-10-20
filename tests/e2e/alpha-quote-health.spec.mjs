@@ -9,7 +9,10 @@ const stock={id:'fake-share',symbol:'SYNTH',name:'Fictional Equity',
   currentPrice:23,quoteTimestamp:Date.now()-10*86400000,account:'Test',accountType:'AOT'};
 
 async function setup(page,options={}){
-  const initial={baseCurrency:'EUR',apiKey:'',holdings:options.stock?[stock]:[fund],
+  const initialFund={...fund,...(options.previousFundDate?
+    {navDate:options.previousFundDate,currentPrice:9.75,
+     quoteTimestamp:Date.parse(options.previousFundDate+"T12:00:00Z")}: {})};
+  const initial={baseCurrency:'EUR',apiKey:'',holdings:options.stock?[stock]:[initialFund],
     news:[],quoteUpdatedAt:null,riskBudgetPct:1.25,showDetails:false};
   await page.addInitScript((seed)=>{
     if(!localStorage.getItem('osakevahti.single.v1'))
@@ -113,4 +116,20 @@ test('stale fallback trade time is warned about rather than hidden behind fallba
   });
   expect(label).toBe('VANHA KURSSI');
   await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Equity');
+});
+
+test('unknown new fund NAV date never overwrites a previously verified NAV amount',async({page})=>{
+  const previousDate=new Date(Date.now()-2*86400000).toISOString().slice(0,10);
+  await setup(page,{previousFundDate:previousDate,navDate:''});
+  const result=await page.evaluate(()=>{
+    const h=state.holdings[0];
+    return {price:h.currentPrice,navDate:h.navDate,health:h.quoteHealth?.status,
+      reason:h.quoteHealth?.reason,issue:priceIssue(h)?.label};
+  });
+  expect(result.price).toBe(9.75);
+  expect(result.navDate).toBe(previousDate);
+  expect(result.health).toBe('failed');
+  expect(result.reason).toContain('arvostuspäivä puuttuu');
+  expect(result.issue).toBe('VANHA HINTA');
+  await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Index Fund');
 });
