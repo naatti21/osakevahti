@@ -95,6 +95,7 @@ input,select{width:100%;padding:11px 12px;border-radius:11px;border:1px solid va
 .pulseCell strong{display:block;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .weightBadge{display:inline-flex;margin-left:4px;padding:2px 6px;border-radius:999px;border:1px solid var(--line);font-size:9px;font-weight:800}
 .weightOk{color:var(--ok)}.weightHigh{color:var(--warn)}.weightLow{color:#8fb7ff}
+.whatIfPanel{margin:0 0 10px}.whatIfPanel .detailsBody{padding-top:8px}.whatIfResult{margin-top:12px;line-height:1.5}.whatIfNumbers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.whatIfMetric{background:#0e1216;border:1px solid var(--line);border-radius:9px;padding:9px;min-width:0}.whatIfMetric span{display:block;font-size:10px;color:var(--muted)}.whatIfMetric strong{display:block;font-size:14px;font-weight:850;margin-top:3px;overflow-wrap:anywhere}.whatIfHint{font-size:11px;color:var(--muted);line-height:1.45;margin-top:8px}
 .planList{display:grid;gap:6px;margin-top:7px}.planRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:#0e1216;border:1px solid var(--line);border-radius:10px;padding:7px 8px}
 .planName{font-size:11px;font-weight:800}.planMeta{font-size:9px;color:var(--muted)}.planValue{font-size:11px;font-weight:800;text-align:right}
 .newsBadge{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;margin-left:4px;color:var(--ok)}
@@ -189,6 +190,17 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="accountReviewBanner" class="card accountNotice hidden" role="status"><div id="accountReviewBannerText"></div><button type="button" id="openAccountReviewBtn" class="primary">Tarkista tilit</button></div>
   <div id="dailyMoves" class="card dailyMoves"></div>
   <div id="portfolioPulse" class="card portfolioPulse"></div>
+  <details id="whatIfBox" class="whatIfPanel">
+    <summary>Mitä jos? · kokeile lisäoston vaikutusta</summary>
+    <div class="detailsBody">
+      <p class="muted small">Laskee koko salkun muutoksen nykyisillä tallennetuilla hinnoilla ja valuuttakursseilla. Ei osta osakkeita, muuta omistuksia tai käytä vanhoja tavoiteprosentteja suosituksina.</p>
+      <div class="grid2">
+        <div><label class="txt" for="whatIfHolding">Nykyinen omistus ja tili</label><select id="whatIfHolding"></select></div>
+        <div><label class="txt" for="whatIfAmount">Kokeiltava lisäys (salkun valuutassa)</label><input id="whatIfAmount" type="number" min="0.01" step="any" inputmode="decimal" value="500"></div>
+      </div>
+      <div id="whatIfResult" class="whatIfResult" role="status" aria-live="polite">Valitse omistus ja lisäyssumma.</div>
+    </div>
+  </details>
   <details id="targetMapBox">
     <summary>Vertailupainot · aiemmat tavoitteet</summary>
     <div class="detailsBody">
@@ -910,6 +922,68 @@ function openQuickInfo(symbol){
   $("quickInfoBody").innerHTML=`<div class="quickInfoHero"><div class="muted small">${esc(latestSessionLabel(h))}</div><div class="quickInfoPrice">${p?money(p,h.currency):"—"}</div><div class="${change>0?"pos":change<0?"neg":"muted"}" style="margin-top:4px;font-weight:800">${changeLabel}: ${hasQuote?sPct(change):"—"}</div></div><div class="quickInfoGrid"><div class="quickInfoCell"><span>Kurssin tila</span><strong>${esc(freshness)}</strong></div><div class="quickInfoCell"><span>Datalähde</span><strong>${esc(source)}</strong></div></div><div class="plainExplain"><strong>Mitä tämä tarkoittaa?</strong><br>${esc(priceMeaning)}<br><br>Prosenttiluku kertoo muutoksen edelliseen päätöskurssiin. Se ei yksin tarkoita, että osakkeelle pitäisi tehdä mitään.</div>`;
   $("quickInfoDlg").showModal();
 }
+
+// Only client-side arithmetic. No trade, persistence, external request, or market prediction.
+// amount is expressed in the portfolio base currency; buy-side fees/taxes are not modeled.
+function calculateWhatIf(rows,holdingId,amount,valuationIncomplete=false){
+  if(!Array.isArray(rows)||!rows.length) return {ok:false,reason:"Lisää ensin omistuksia."};
+  if(valuationIncomplete||rows.some(r=>Number(r?.h?.quantity)<0 ||
+    (Number(r?.h?.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)||!Number.isFinite(r.val)))))
+    return {ok:false,reason:"Salkun kaikkia hintoja tai valuuttakursseja ei tunneta. Simulaatiota ei voi laskea luotettavasti."};
+  const amt=Number(amount);
+  if(!Number.isFinite(amt)||amt<=0) return {ok:false,reason:"Anna positiivinen lisäyssumma."};
+  const target=rows.find(r=>String(r?.h?.id)===String(holdingId) && Number(r.h.quantity)>0);
+  if(!target) return {ok:false,reason:"Valitse olemassa oleva omistus ja oikea tili."};
+  const total=rows.reduce((sum,r)=>sum+r.val,0);
+  if(!Number.isFinite(total)||total<=0||!Number.isFinite(total+amt))
+    return {ok:false,reason:"Salkun arvo ei ole laskettavissa."};
+  const values=rows.map(r=>r===target?r.val+amt:r.val);
+  const newTotal=total+amt;
+  const top3=a=>a.slice().sort((x,y)=>y-x).slice(0,3).reduce((v,x)=>v+x,0);
+  const fundBefore=rows.filter(r=>r.h.assetType==="fund").reduce((a,r)=>a+r.val,0);
+  const fundAfter=fundBefore+(target.h.assetType==="fund"?amt:0);
+  return {ok:true,
+    beforeTotal:total,afterTotal:newTotal,
+    beforeValue:target.val,afterValue:target.val+amt,
+    beforeWeight:target.val/total*100,afterWeight:(target.val+amt)/newTotal*100,
+    beforeTop3:top3(rows.map(r=>r.val))/total*100,
+    afterTop3:top3(values)/newTotal*100,
+    beforeFundPct:fundBefore/total*100,
+    afterFundPct:fundAfter/newTotal*100};
+}
+function renderWhatIf(rows,valuationIncomplete,fxEstimate){
+  const select=$("whatIfHolding"),amountInput=$("whatIfAmount"),result=$("whatIfResult");
+  if(!select||!amountInput||!result) return;
+  const previous=select.value;
+  const available=rows.filter(r=>validPositive(r.h.quantity));
+  // The ID, not the ticker, keeps separate banks/accounts independent.
+  select.innerHTML=available.map(r=>'<option value="'+esc(String(r.h.id||""))+'">'+
+    esc((r.h.assetType==="fund"?(r.h.name||r.h.symbol):r.h.symbol)+" · "+displayAccount(r.h))+"</option>").join("");
+  if(available.some(r=>String(r.h.id)===previous)) select.value=previous;
+  const update=()=>{
+    const x=calculateWhatIf(rows,select.value,amountInput.value,valuationIncomplete);
+    if(!x.ok){result.textContent=x.reason;return}
+    const current=rows.find(r=>String(r.h.id)===select.value);
+    if(!current){result.textContent="Omistusta ei löytynyt.";return}
+    const pct=v=>v.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1})+" %";
+    const warning=fxEstimate||rows.some(r=>Number(r.h.quantity)>0&&
+      (r.h.assetType==="fund"&&!verifiedNavDate(r.h.navDate)||
+       r.h.quoteHealth?.status==="failed"||
+       r.h.fxRateStatus==="stale"));
+    result.innerHTML='<div class="whatIfNumbers">'+
+      '<div class="whatIfMetric"><span>Omistuksen paino nyt → jälkeen</span><strong>'+pct(x.beforeWeight)+' → '+pct(x.afterWeight)+'</strong></div>'+
+      '<div class="whatIfMetric"><span>Koko salkun arvo nyt → jälkeen</span><strong>'+money(x.beforeTotal,state.baseCurrency)+' → '+money(x.afterTotal,state.baseCurrency)+'</strong></div>'+
+      '<div class="whatIfMetric"><span>Suurimman kolmen paino nyt → jälkeen</span><strong>'+pct(x.beforeTop3)+' → '+pct(x.afterTop3)+'</strong></div>'+
+      '<div class="whatIfMetric"><span>Rahastojen osuus nyt → jälkeen</span><strong>'+pct(x.beforeFundPct)+' → '+pct(x.afterFundPct)+'</strong></div>'+
+      '</div><div class="whatIfHint">'+
+      (warning?'<strong>Arvio:</strong> ainakin yhden hinnan arvostuspäivä tai valuuttakurssi on epävarma. ':'')+
+      'Laskelma olettaa, että koko lisäyssumma sijoitetaan valittuun omistukseen muuttumattomalla kurssilla. Ei sisällä kuluja, veroja tai markkinamuutoksia. Tulos ei ole ostosuositus.</div>';
+  };
+  select.onchange=update;
+  amountInput.oninput=update;
+  update();
+}
+
 function render(){
   renderMarketDataHealth();
   $("holdings").innerHTML="";$("risks").innerHTML="";$("holdingCount").textContent=`(${state.holdings.length})`;
@@ -1067,6 +1141,7 @@ function render(){
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
+  renderWhatIf(rows,valuationIncomplete,fxEstimate);
   if(valuationIncomplete){
     // Never claim precise portfolio weights, concentration or risk budgets
     // while any nonempty position is unvalued.
