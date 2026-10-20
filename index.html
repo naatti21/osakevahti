@@ -308,7 +308,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="detailsBody">
       <p class="muted small">Helpoin tapa puhelimella on kuvakaappaus. Voit myös tuoda taulukon tiedostona tai kopioida solut suoraan Excelistä / Google Sheetsistä. Kaikki reitit päätyvät samaan esitarkistukseen.</p>
 
-      <label class="txt">Kuvakaappaus</label>
+      <label class="txt">Kuvakaappaus (rahastot ohjataan Alpha-kokeiluun)</label>
       <div class="actions">
         <label class="file">Valitse kuva<input id="importImage" type="file" accept="image/png,image/jpeg,image/webp"></label>
       </div>
@@ -2950,9 +2950,31 @@ function holdingFromOcrCandidate(x,source){
     }
   };
 }
+function isFundOverviewOcr(ocr){
+  // Only route clearly marked fund overview screenshots. Generic portfolio
+  // statements stay in the existing instrument-review flow.
+  const lines=Array.isArray(ocr?.lines)?ocr.lines.map(x=>String(x?.text||"")).join("\n"):"";
+  const words=[String(ocr?.text||""),lines].join("\n");
+  return /^\s*rahastot\s*$/im.test(words) &&
+    /\d+(?:[,.]\d+)?\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i.test(words);
+}
 async function runOcrCandidateImport(ocr,source){
   $("imageOcrText").value=String(ocr?.text||"").trim();
   $("ocrTextDetails").classList.remove("hidden");
+  if(isFundOverviewOcr(ocr)){
+    // The old stock/ticker OCR parser would split a two-line fund name into
+    // separate instruments and send "Select A" to unrelated US ticker search.
+    pendingImport=null;
+    if($("importReviewDlg").open)$("importReviewDlg").close();
+    ++fundTrialRequest;
+    $("fundTrialBox").open=true;
+    $("fundTrialBackupCheck").checked=false;
+    populateFundTrialFromOcr(ocr);
+    $("imageImportStatus").className="statusBox statusOk";
+    $("imageImportStatus").textContent="Rahastonäkymä siirrettiin määrien Alpha-kokeiluun. Valitse omistus itse ja tarkista kokonaismäärä alla.";
+    $("fundTrialBox").scrollIntoView({block:"start",behavior:"smooth"});
+    return;
+  }
   const candidates=screenshotCandidatesFromOcr(ocr);
   if(!candidates.length){
     $("imageImportStatus").className="statusBox statusBad";
@@ -3019,21 +3041,42 @@ function fundTrialHints(ocr){
   const lines=(Array.isArray(ocr?.lines)&&ocr.lines.length?ocr.lines:
     String(ocr?.text||"").split(/\r?\n/).map(text=>({text})))
     .map(x=>String(x?.text||"").trim()).filter(Boolean);
+  const unit=/(?:^|[^\d])(\d+(?:[,.]\d{1,8})?)\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i;
+  const cleanNamePart=text=>String(text||"").replace(/[›>→]+\s*$/,"")
+    .replace(/\s+\d[\d\s.,\u00a0]*\s*(?:EUR|USD|SEK|NOK|GBP)\s*$/i,"")
+    .replace(/\s+/g," ").trim();
+  const looksLikeName=text=>/[A-Za-zÅÄÖåäö]{3}/.test(text) &&
+    !/^(?:rahastot|salkku|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl|päivän muutos|rahaston arvo)\b/i.test(text) &&
+    !unit.test(text);
   const found=[];
   for(let i=0;i<lines.length;i++){
-    const line=lines[i];
-    const match=line.match(/(?:^|[^\d])(\d+(?:[,.]\d{1,8})?)\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i);
+    const line=lines[i],match=line.match(unit);
     if(!match)continue;
     const qty=fundTrialDecimal(match[1]);
     if(qty===null)continue;
-    const prefix=line.slice(0,match.index).replace(/\s+/g," ").trim();
-    const previous=lines.slice(Math.max(0,i-2),i).reverse().find(s=>
-      /[A-Za-zÅÄÖåäö]{3}/.test(s)&&!/^(?:rahastot|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl)\b/i.test(s));
-    found.push({hint:(prefix||previous||"Lähteen rivi "+(i+1)).slice(0,110),qty:match[1],holdingId:"",gav:""});
+    const prefix=cleanNamePart(line.slice(0,match.index));
+    let boundary=Math.max(-1,i-4);
+    for(let j=i-1;j>boundary;j--)if(unit.test(lines[j])){boundary=j;break}
+    // One bank holding can be two name lines and the amount (EUR) may
+    // appear on the first line. Join source fragments only as a REVIEW HINT;
+    // never infer the financial account or instrument identity from them.
+    const parts=lines.slice(Math.max(boundary+1,i-3),i)
+      .map(cleanNamePart).filter(looksLikeName).slice(-2);
+    if(prefix&&looksLikeName(prefix))parts.push(prefix);
+    const hint=parts.join(" ").trim()||prefix||"Lähteen rivi "+(i+1);
+    found.push({hint:hint.slice(0,140),qty:match[1],holdingId:"",gav:""});
   }
-  // Do not deduplicate observed lines silently; user decides whether repeated
-  // quantities belong to the same card, another account or a repeated image.
   return found;
+}
+function populateFundTrialFromOcr(ocr){
+  fundTrialRows=fundTrialHints(ocr);
+  const count=fundTrialRows.length;
+  if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:""}];
+  $("fundTrialStatus").className="statusBox "+(count?"statusOk":"muted");
+  $("fundTrialStatus").textContent=count?
+    "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: valitse itse oikea omistus, tarkista määrät ja keskihinta.":
+    "OCR ei löytänyt kpl-määrää. Voit silti kokeilla syöttämällä kokonaismäärän itse.";
+  renderFundTrial();
 }
 function fundTrialSelected(){
   const selections=[],seen=new Set();
@@ -3093,14 +3136,7 @@ async function readFundTrialImage(e){
       $("fundTrialStatus").textContent="Luetaan paikallista kuvaa… "+(p?.progress!=null?Math.round(p.progress*100)+" %":String(p?.status||""));
     });
     if(seq!==fundTrialRequest)return;
-    fundTrialRows=fundTrialHints(ocr);
-    const count=fundTrialRows.length;
-    if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:""}];
-    $("fundTrialStatus").className="statusBox "+(count?"statusOk":"muted");
-    $("fundTrialStatus").textContent=count?
-      "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: valitse itse oikea omistus, tarkista määrät ja keskihinta.":
-      "OCR ei löytänyt kpl-määrää. Voit silti kokeilla syöttämällä kokonaismäärän itse.";
-    renderFundTrial();
+    populateFundTrialFromOcr(ocr);
   }catch(err){
     if(seq===fundTrialRequest){$("fundTrialStatus").className="statusBox statusBad";$("fundTrialStatus").textContent="Kokeilu ei lukenut kuvaa: "+String(err?.message||err)}
   }finally{e.target.value=""}
