@@ -160,7 +160,7 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   await expect(box).toHaveAttribute('open','');
   await expect(page.locator('#priceHealthItems')).toContainText('16.10.');
   await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
-  await expect(page.locator('#holdings')).toContainText('NAV-PÄIVÄ PUUTTUU');
+  await expect(page.locator('#holdings')).toContainText('NAV 16.10. (vuosi?)');
 });
 test('real failed price source escalates to red while benign uncertainty stays amber',async({page})=>{
   await setup(page);
