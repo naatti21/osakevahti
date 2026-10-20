@@ -102,3 +102,15 @@ test('bad, future and yearless fund dates are not accepted as observed NAV days'
   });
   expect(result).toEqual({partial:'',leap:'',future:'',valid:'2024-02-29'});
 });
+
+test('stale fallback trade time is warned about rather than hidden behind fallback success',async({page})=>{
+  await setup(page,{stock:true,workerDown:true});
+  const label=await page.evaluate(()=>{
+    const h=state.holdings[0];
+    h.quoteTimestamp=Date.now()-8*86400000;
+    render();
+    return priceIssue(h)?.label;
+  });
+  expect(label).toBe('VANHA KURSSI');
+  await expect(page.locator('#priceHealthNotice')).toContainText('Fictional Equity');
+});
