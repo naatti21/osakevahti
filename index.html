@@ -2956,6 +2956,9 @@ function isFundOverviewOcr(ocr){
   const lines=Array.isArray(ocr?.lines)?ocr.lines.map(x=>String(x?.text||"")).join("\n"):"";
   const words=[String(ocr?.text||""),lines].join("\n");
   return /^\s*rahastot\s*$/im.test(words) &&
+    // A mixed screenshot with both stocks and funds must keep the legacy
+    // all-instruments review; otherwise stock rows would silently disappear.
+    !/^\s*(?:osakkeet|stocks|shares)\s*$/im.test(words) &&
     /\d+(?:[,.]\d+)?\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i.test(words);
 }
 async function runOcrCandidateImport(ocr,source){
