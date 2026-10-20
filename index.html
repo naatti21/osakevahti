@@ -802,7 +802,7 @@ function renderPriceHealth(){
   const dateMissing=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU").length;
   const navOld=warnings.filter(x=>x.issue.label==="VANHA NAV").length;
   const parts=[];
-  if(errors.length)parts.push(errors.length+" hintavirhettä");
+  if(errors.length)parts.push(errors.length+" "+(errors.length===1?"hintavirhe":"hintavirhettä"));
   if(dateMissing)parts.push(dateMissing+" rahaston NAV-päivä epäselvä");
   if(navOld)parts.push(navOld+" vanhaa NAVia");
   const rest=issues.length-errors.length-dateMissing-navOld;
