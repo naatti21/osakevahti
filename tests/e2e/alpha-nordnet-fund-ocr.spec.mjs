@@ -45,10 +45,11 @@ test('Nordnet fund detail uses quantity review, suggests an existing position an
  await expect(page.locator('#importReviewDlg')).not.toBeVisible();
  await expect(page.locator('#fundTrialRows')).toContainText('Nordnet Eurooppa Indeksi');
  await expect(page.locator('#fundQty0')).toHaveValue('3,01');
+ await expect(page.locator('#fundTrialRows')).toContainText('Mahdollinen nykyinen omistus on valikon alussa.');
  await expect(page.locator('#fundTarget0')).toHaveValue('');
- await expect(page.locator('[data-fund-suggest="0"]')).toContainText('Käytä ehdotusta');
+ await expect(page.locator('#fundTarget0 option[value="nordnet-europe"]')).toContainText('★ Nimiosuma');
  await expect(page.locator('#fundTrialSave')).toBeDisabled();
- await page.locator('[data-fund-suggest="0"]').click();
+ await page.locator('#fundTarget0').selectOption('nordnet-europe');
  await expect(page.locator('#fundTarget0')).toHaveValue('nordnet-europe');
  await expect(page.locator('#fundTrialSave')).toBeDisabled();
  await page.locator('#fundTrialBackupCheck').check();
@@ -62,8 +63,8 @@ test('Nordnet fund detail uses quantity review, suggests an existing position an
 test('Two accounts with the same fund name remain ambiguous and cannot be selected automatically',async({page})=>{
  await setup(page,nordnetDetail,[holding('fund-a','OST'),holding('fund-b','AOT')]);
  await page.locator('#importImage').setInputFiles({name:'nordnet-ambiguous.png',mimeType:'image/png',buffer:png});
- await expect(page.locator('#fundTrialRows')).toContainText('Useampi salkun omistus');
- await expect(page.locator('[data-fund-suggest="0"]')).toHaveCount(0);
+ await expect(page.locator('#fundTrialRows')).toContainText('Useita mahdollisia omistuksia');
+ await expect(page.locator('#fundTarget0 optgroup[label="Mahdolliset osumat salkussa"] option')).toHaveCount(2);
  await expect(page.locator('#fundTarget0')).toHaveValue('');
  await page.locator('#fundTrialBackupCheck').check();
  await expect(page.locator('#fundTrialSave')).toBeDisabled();
@@ -75,7 +76,7 @@ test('Unmatched fund does not fabricate a ticker or automatically create a holdi
  await setup(page,unknown,[holding('fund-a','AOT')]);
  await page.locator('#importImage').setInputFiles({name:'new-fund.png',mimeType:'image/png',buffer:png});
  await expect(page.locator('#fundQty0')).toHaveValue('3,01');
- await expect(page.locator('[data-fund-suggest="0"]')).toHaveCount(0);
+ await expect(page.locator('#fundTarget0 optgroup[label="Mahdolliset osumat salkussa"] option')).toHaveCount(0);
  await expect(page.locator('#fundTarget0')).toHaveValue('');
  await expect(page.locator('#importReviewDlg')).not.toBeVisible();
  await expect(page.locator('#fundTrialSave')).toBeDisabled();
@@ -92,4 +93,16 @@ test('OCR and pasted table editors fill the mobile import card width',async({pag
  });
  expect(boxes.ocr).toBeGreaterThan(boxes.card*.84);
  expect(boxes.text).toBeGreaterThan(boxes.card*.84);
+});
+
+test('Single main image chooser is the default route for both funds and stocks',async({page})=>{
+ await setup(page,nordnetDetail,[holding('nordnet-europe','AOT')]);
+ const chooser=page.locator('#importImage');
+ await expect(chooser).toHaveCount(1);
+ await expect(page.locator('#fundTrialBox')).not.toHaveAttribute('open','');
+ await chooser.setInputFiles({name:'nordnet-fund.png',mimeType:'image/png',buffer:png});
+ await expect(page.locator('#fundTrialBox')).toHaveAttribute('open','');
+ await expect(page.locator('#fundTrialRows')).toContainText('Nordnet Eurooppa Indeksi');
+ // The emergency force-fund chooser exists only in a collapsed troubleshooting disclosure.
+ await expect(page.locator('#fundTrialFile')).not.toBeVisible();
 });
