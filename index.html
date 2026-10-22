@@ -164,6 +164,19 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .watchNote{font-size:11px;color:var(--muted);line-height:1.4}
 .insightCardActions{display:flex;justify-content:flex-end;margin-top:7px}
 @media(max-width:480px){#dividendPanel .metricGrid,#rocketPanel .metricGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}#dividendPanel .metricBox span,#rocketPanel .metricBox span{font-size:11px;white-space:normal;overflow:visible;text-overflow:unset}#dividendPanel .metricBox strong,#rocketPanel .metricBox strong{font-size:13px}}
+/* Mobile OCR/table import: readable full-width source editors. */
+#imageOcrText,#importText{
+  box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;
+  min-height:210px;padding:12px 13px;border-radius:12px;
+  border:1px solid var(--line);background:#0c1117;color:var(--text);
+  font:500 14px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;
+  resize:vertical;overflow:auto;tab-size:4;
+}
+#imageOcrText{white-space:pre-wrap;overflow-wrap:anywhere}
+#importText{min-height:240px;white-space:pre}
+.fundMatchSuggestion{margin-top:9px;padding:10px;background:#11201b;border:1px solid #73d3a04a;border-radius:11px;font-size:12px;line-height:1.45}
+.fundMatchSuggestion button{display:block;margin-top:7px;width:100%;text-align:center;min-height:42px}
+.fundMatchAmbiguous{color:var(--warn);margin-top:8px;font-size:12px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -331,7 +344,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <details id="ocrTextDetails" class="hidden">
         <summary>Poimittu teksti</summary>
         <div class="detailsBody">
-          <textarea id="imageOcrText" rows="8" aria-label="Kuvasta poimittu teksti"></textarea>
+          <textarea id="imageOcrText" rows="12" aria-label="Kuvasta poimittu teksti"></textarea>
           <div class="actions"><button type="button" id="reparseOcrBtn">Tunnista korjatusta tekstistä</button></div>
         </div>
       </details>
@@ -354,7 +367,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
         <label class="file">Valitse CSV / TSV / TXT<input id="importCsv" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"></label>
       </div>
       <label class="txt" for="importText">Tai liitä taulukko</label>
-      <textarea id="importText" rows="6" placeholder="Esim.&#10;Ticker&#9;Nimi&#9;Kpl&#9;Keskihinta&#9;Valuutta&#10;MSFT&#9;Microsoft Corporation&#9;2&#9;400&#9;USD"></textarea>
+      <textarea id="importText" rows="12" wrap="off" placeholder="Esim.&#10;Ticker&#9;Nimi&#9;Kpl&#9;Keskihinta&#9;Valuutta&#10;MSFT&#9;Microsoft Corporation&#9;2&#9;400&#9;USD"></textarea>
       <div class="actions"><button type="button" id="importTextBtn">Tunnista liitetty taulukko</button></div>
       <p class="muted small">Sarakkeiden ei tarvitse olla Osakevahdin nimillä. Tunnettuja otsikoita ovat esimerkiksi Ticker/Symbol, Nimi/Company, Kpl/Qty/Shares, Keskihinta/Avg price, Valuutta/Currency ja Tili/Account. Epävarmaa instrumenttia tai puuttuvaa tietoa ei arvata hiljaa.</p>
     </div>
@@ -3095,15 +3108,17 @@ function holdingFromOcrCandidate(x,source){
   };
 }
 function isFundOverviewOcr(ocr){
-  // Only route clearly marked fund overview screenshots. Generic portfolio
-  // statements stay in the existing instrument-review flow.
+  // Fund overview and Nordnet's single-fund detail use two different layouts.
+  // A value/NAV number is NEVER treated as an acquisition price by the fund trial.
   const lines=Array.isArray(ocr?.lines)?ocr.lines.map(x=>String(x?.text||"")).join("\n"):"";
   const words=[String(ocr?.text||""),lines].join("\n");
-  return /^\s*rahastot\s*$/im.test(words) &&
-    // A mixed screenshot with both stocks and funds must keep the legacy
-    // all-instruments review; otherwise stock rows would silently disappear.
-    !/^\s*(?:osakkeet|stocks|shares)\s*$/im.test(words) &&
-    /\d+(?:[,.]\d+)?\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i.test(words);
+  const hasUnits=/\d+(?:[,.]\d+)?\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i.test(words);
+  const isOverview=/^\s*rahastot\s*$/im.test(words);
+  const isFundDetail=/\bNAV\s*\/\s*Keskikurssi\b/i.test(words) &&
+    /\b(?:Arvo|Tuotto|Keskikurssi)\b/i.test(words);
+  // Never swallow mixed stock/fund listings.
+  const mixedStocks=/^\s*(?:osakkeet|stocks|shares)\s*$/im.test(words);
+  return hasUnits && !mixedStocks && (isOverview||isFundDetail);
 }
 async function runOcrCandidateImport(ocr,source){
   $("imageOcrText").value=String(ocr?.text||"").trim();
@@ -3118,7 +3133,7 @@ async function runOcrCandidateImport(ocr,source){
     $("fundTrialBackupCheck").checked=false;
     populateFundTrialFromOcr(ocr);
     $("imageImportStatus").className="statusBox statusOk";
-    $("imageImportStatus").textContent="Rahastonäkymä siirrettiin määrien Alpha-kokeiluun. Valitse omistus itse ja tarkista kokonaismäärä alla.";
+    $("imageImportStatus").textContent="Rahastonäkymä siirrettiin määrien Alpha-kokeiluun. Käytä mahdollista salkkuosumaa tai valitse oikea omistus ja tili itse. Tarkista kokonaismäärä.";
     $("fundTrialBox").scrollIntoView({block:"start",behavior:"smooth"});
     return;
   }
@@ -3189,12 +3204,19 @@ function fundTrialHints(ocr){
     String(ocr?.text||"").split(/\r?\n/).map(text=>({text})))
     .map(x=>String(x?.text||"").trim()).filter(Boolean);
   const unit=/(?:^|[^\d])(\d+(?:[,.]\d{1,8})?)\s*(?:kpl|osuutt[a-zäö]*|shares|units)\b/i;
-  const cleanNamePart=text=>String(text||"").replace(/[›>→]+\s*$/,"")
-    .replace(/\s+\d[\d\s.,\u00a0]*\s*(?:EUR|USD|SEK|NOK|GBP)(?:\s+[A-Za-z]{1,2})?\s*$/i,"")
+  const cleanNamePart=text=>String(text||"")
+    .replace(/^[^A-Za-zÅÄÖåäö0-9]+/,"")
+    .replace(/[›>→]+\s*$/,"")
+    .replace(/\s+\d[\d\s.,\u00a0]*\s*(?:EUR|USD|SEK|NOK|GBP|€|\$|£)(?:\s+[A-Za-z]{1,2})?\s*$/i,"")
+    .replace(/\s+(?:Arvo\s+Tuotto|NAV\s*\/\s*Keskikurssi)\b.*$/i,"")
     .replace(/\s+/g," ").trim();
-  const looksLikeName=text=>/[A-Za-zÅÄÖåäö]{3}/.test(text) &&
-    !/^(?:rahastot|salkku|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl|päivän muutos|rahaston arvo)\b/i.test(text) &&
-    !unit.test(text);
+  const looksLikeName=text=>{
+    const s=cleanNamePart(text);
+    return /[A-Za-zÅÄÖåäö]{3}/.test(s) &&
+      !/^(?:rahastot|salkku|arvo|nav|keskikurssi|gav|tuotto|yhteensä|total|kpl|päivän muutos|rahaston arvo|value|return|price|quantity)\b/i.test(s) &&
+      !/^[+\-−]?\d/.test(s) && !unit.test(s) &&
+      !/^(?:EUR|USD|SEK|NOK|GBP)(?:\s|$)/i.test(s);
+  };
   const found=[];
   for(let i=0;i<lines.length;i++){
     const line=lines[i],match=line.match(unit);
@@ -3202,12 +3224,11 @@ function fundTrialHints(ocr){
     const qty=fundTrialDecimal(match[1]);
     if(qty===null)continue;
     const prefix=cleanNamePart(line.slice(0,match.index));
-    let boundary=Math.max(-1,i-4);
+    // Nordnet detail: between the fund name and "3,01 kpl" can be
+    // several independent NAV/return/value rows. Ignore numeric/metric rows.
+    let boundary=Math.max(-1,i-11);
     for(let j=i-1;j>boundary;j--)if(unit.test(lines[j])){boundary=j;break}
-    // One bank holding can be two name lines and the amount (EUR) may
-    // appear on the first line. Join source fragments only as a REVIEW HINT;
-    // never infer the financial account or instrument identity from them.
-    const parts=lines.slice(Math.max(boundary+1,i-3),i)
+    const parts=lines.slice(Math.max(boundary+1,i-10),i)
       .map(cleanNamePart).filter(looksLikeName).slice(-2);
     if(prefix&&looksLikeName(prefix))parts.push(prefix);
     const hint=parts.join(" ").trim()||prefix||"Lähteen rivi "+(i+1);
@@ -3215,13 +3236,32 @@ function fundTrialHints(ocr){
   }
   return found;
 }
+function fundTrialRankedMatches(hint){
+  const input=cleanNameToken(hint),inputTokens=new Set(meaningfulNameTokens(hint));
+  if(input.length<7||inputTokens.size<2)return [];
+  return state.holdings.map(h=>{
+    const name=String(h.name||h.instrument?.companyName||"");
+    const normalized=cleanNameToken(name);
+    const tokens=new Set(meaningfulNameTokens(name));
+    let shared=0;
+    for(const t of inputTokens)if(tokens.has(t))shared++;
+    let score=0;
+    if(input===normalized)score=1;
+    else if(input.length>=9&&normalized.length>=9&&(input.includes(normalized)||normalized.includes(input)))
+      score=.94;
+    else if(shared>=2&&tokens.size>=2)
+      score=shared/Math.max(inputTokens.size,tokens.size);
+    return {holding:h,score};
+  }).filter(x=>x.score>=.73).sort((a,b)=>b.score-a.score);
+}
+
 function populateFundTrialFromOcr(ocr){
   fundTrialRows=fundTrialHints(ocr);
   const count=fundTrialRows.length;
   if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:""}];
   $("fundTrialStatus").className="statusBox "+(count?"statusOk":"muted");
   $("fundTrialStatus").textContent=count?
-    "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: valitse itse oikea omistus, tarkista määrät ja keskihinta.":
+    "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: tarkista salkusta ehdotettu omistus, tili ja kokonaismäärä. Keskihinta ei päivity ilman erillistä syöttöä.":
     "OCR ei löytänyt kpl-määrää. Voit silti kokeilla syöttämällä kokonaismäärän itse.";
   renderFundTrial();
 }
@@ -3254,20 +3294,44 @@ function renderFundTrial(){
   const options=state.holdings.map(h=>'<option value="'+esc(String(h.id))+'">'+
     esc(String(h.name||h.symbol||"Nimetön")+" · "+String(h.account||h.broker||"tili puuttuu")+
       " · "+String(h.quantity)+" kpl")+'</option>').join("");
-  $("fundTrialRows").innerHTML=fundTrialRows.map((item,i)=>
-    '<div class="importReviewRow"><div class="muted small">OCR-vihje (ei instrumenttivarmennus): '+esc(item.hint)+'</div>'+
-    '<label class="txt" for="fundTarget'+i+'">Päivitettävä nykyinen omistus ja tili</label>'+
-    '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse itse —</option>'+options+'</select>'+
-    '<label class="txt" for="fundQty'+i+'">Uusi kokonaisosuusmäärä (kpl)</label>'+
-    '<input id="fundQty'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="qty" value="'+esc(item.qty)+'">'+
-    '<label class="txt" for="fundGav'+i+'">Uusi keskihankintahinta / osuus (valinnainen, syötä itse)</label>'+
-    '<input id="fundGav'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="gav" value="'+esc(item.gav)+'" placeholder="Tyhjä = säilytä vanha">'+
-    '<div class="muted small" id="fundTrialDiff'+i+'"></div></div>').join("");
+  $("fundTrialRows").innerHTML=fundTrialRows.map((item,i)=>{
+    const ranked=fundTrialRankedMatches(item.hint);
+    const top=ranked[0],next=ranked[1];
+    // Suggestions are purely visual. Even exact names NEVER change the
+    // selected holding without a user click (accounts may differ).
+    const unique=top && (!next||top.score-next.score>=.15);
+    const suggestion=unique?
+      '<div class="fundMatchSuggestion"><strong>Mahdollinen nykyinen omistus:</strong> '+
+      esc(String(top.holding.name||top.holding.symbol)+" · "+String(top.holding.account||top.holding.broker||"tili puuttuu"))+
+      '<button type="button" data-fund-suggest="'+i+'">Käytä ehdotusta (vahvista tili)</button></div>':
+      ranked.length?
+      '<div class="fundMatchAmbiguous">Useampi salkun omistus muistuttaa kuvan nimeä. Valitse oikea tili itse.</div>':
+      '<div class="muted small" style="margin-top:7px">Salkusta ei löytynyt varmaa nimiosumaa. Valitse nykyinen omistus itse.</div>';
+    return '<div class="importReviewRow"><div class="muted small">OCR-vihje (ei instrumenttivarmennus): '+esc(item.hint)+'</div>'+
+      suggestion+
+      '<label class="txt" for="fundTarget'+i+'">Päivitettävä nykyinen omistus ja tili</label>'+
+      '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse itse —</option>'+options+'</select>'+
+      '<label class="txt" for="fundQty'+i+'">Uusi kokonaisosuusmäärä (kpl)</label>'+
+      '<input id="fundQty'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="qty" value="'+esc(item.qty)+'">'+
+      '<label class="txt" for="fundGav'+i+'">Uusi keskihankintahinta / osuus (valinnainen, syötä itse)</label>'+
+      '<input id="fundGav'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="gav" value="'+esc(item.gav)+'" placeholder="Tyhjä = säilytä vanha">'+
+      '<div class="muted small" id="fundTrialDiff'+i+'"></div></div>';
+  }).join("");
   $("fundTrialRows").querySelectorAll("[data-fund-i]").forEach(el=>{
     const idx=Number(el.dataset.fundI),prop=el.dataset.fundProp;
     el.value=fundTrialRows[idx][prop];
     el.oninput=()=>{fundTrialRows[idx][prop]=el.value;fundTrialStatus()};
     el.onchange=el.oninput;
+  });
+  $("fundTrialRows").querySelectorAll("[data-fund-suggest]").forEach(btn=>{
+    btn.onclick=()=>{
+      const idx=Number(btn.dataset.fundSuggest),ranked=fundTrialRankedMatches(fundTrialRows[idx].hint);
+      if(!ranked[0]||(ranked[1]&&ranked[0].score-ranked[1].score<.15))return;
+      fundTrialRows[idx].holdingId=String(ranked[0].holding.id);
+      const select=$("fundTarget"+idx);
+      if(select)select.value=fundTrialRows[idx].holdingId;
+      fundTrialStatus();
+    };
   });
   fundTrialStatus();
 }
