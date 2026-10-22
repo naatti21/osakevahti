@@ -359,7 +359,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="detailsBody">
       <p class="muted small">Helpoin tapa puhelimella on kuvakaappaus. Voit myös tuoda taulukon tiedostona tai kopioida solut suoraan Excelistä / Google Sheetsistä. Kaikki reitit päätyvät samaan esitarkistukseen.</p>
 
-      <label class="txt">Kuvakaappaus (rahastot ohjataan Alpha-kokeiluun)</label>
+      <label class="txt">Kuvakaappaus · osakkeet ja rahastot</label>
       <div class="actions">
         <label class="file">Valitse kuva<input id="importImage" type="file" accept="image/png,image/jpeg,image/webp"></label>
       </div>
@@ -374,10 +374,11 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
 
       <details id="fundTrialBox" style="margin:15px 0;border:1px solid var(--line);border-radius:12px;padding:10px">
-        <summary><strong>Rahastojen määrät kuvasta · Alpha-kokeilu</strong></summary>
+        <summary><strong>Rahaston tunnistustulos ja päivitys</strong></summary>
         <div class="detailsBody">
-          <p class="muted small">Vain tämän Alphan omistukset. Vie ensin JSON-tallenne asetuksista. Kuvasta ehdotetaan vain <strong>kpl-määrää</strong>; valitse itse oikea omistus ja tili. Rahaston NAV- tai Arvo-lukua ei käytetä hankintahintana. Puuttuva keskihinta pysyy ennallaan ja voi olla vanhentunut.</p>
-          <div class="actions"><label class="file">Valitse rahastokuva<input id="fundTrialFile" type="file" accept="image/png,image/jpeg,image/webp"></label><button type="button" id="fundTrialAdd">+ Rivi käsin</button><button type="button" id="fundTrialClear">Tyhjennä kokeilu</button></div>
+          <p class="muted small">Käytä yllä olevaa <strong>Valitse kuva</strong> -painiketta myös rahastoille. Rahastokuvan tunnistuksen jälkeen näet osuuksien kokonaismäärän ja mahdolliset nykyiset omistukset. Vie ensin JSON-varmuuskopio. Rahaston NAV tai arvo ei ole keskihankintahinta eikä muuta sitä automaattisesti.</p>
+          <div class="actions"><button type="button" id="fundTrialAdd">+ Rivi käsin</button><button type="button" id="fundTrialClear">Tyhjennä tarkistus</button></div>
+          <details><summary>Jos rahastokuvaa ei tunnisteta</summary><div class="detailsBody"><p class="muted small">Vaihtoehtoinen vain rahaston määrää lukeva reitti Alpha-testissä. Käytä tätä, jos automaattinen kuvatunnistus ei löydä rahastoa.</p><label class="file">Valitse rahastokuva erikseen<input id="fundTrialFile" type="file" accept="image/png,image/jpeg,image/webp"></label></div></details>
           <div id="fundTrialStatus" class="statusBox muted" role="status">Kuva luetaan paikallisesti. Vain erikseen valitut nykyiset omistukset voidaan päivittää.</div>
           <div id="fundTrialRows" class="importReviewList"></div>
           <label class="muted small" style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input id="fundTrialBackupCheck" type="checkbox" style="width:auto;margin-top:2px"> Olen ladannut Alphan JSON-tallenteen ennen kokeilua ja tarkistanut määrät pankin kuvasta.</label>
@@ -3528,26 +3529,29 @@ function fundTrialStatus(){
   $("fundTrialSave").disabled=!!result.error||selections.length===0||!$("fundTrialBackupCheck").checked;
 }
 function renderFundTrial(){
-  const options=state.holdings.map(h=>'<option value="'+esc(String(h.id))+'">'+
-    esc(String(h.name||h.symbol||"Nimetön")+" · "+String(h.account||h.broker||"tili puuttuu")+
-      " · "+String(h.quantity)+" kpl")+'</option>').join("");
   $("fundTrialRows").innerHTML=fundTrialRows.map((item,i)=>{
     const ranked=fundTrialRankedMatches(item.hint);
-    const top=ranked[0],next=ranked[1];
-    // Suggestions are purely visual. Even exact names NEVER change the
-    // selected holding without a user click (accounts may differ).
-    const unique=top && (!next||top.score-next.score>=.15);
-    const suggestion=unique?
-      '<div class="fundMatchSuggestion"><strong>Mahdollinen nykyinen omistus:</strong> '+
-      esc(String(top.holding.name||top.holding.symbol)+" · "+String(top.holding.account||top.holding.broker||"tili puuttuu"))+
-      '<button type="button" data-fund-suggest="'+i+'">Käytä ehdotusta (vahvista tili)</button></div>':
-      ranked.length?
-      '<div class="fundMatchAmbiguous">Useampi salkun omistus muistuttaa kuvan nimeä. Valitse oikea tili itse.</div>':
-      '<div class="muted small" style="margin-top:7px">Salkusta ei löytynyt varmaa nimiosumaa. Valitse nykyinen omistus itse.</div>';
-    return '<div class="importReviewRow"><div class="muted small">OCR-vihje (ei instrumenttivarmennus): '+esc(item.hint)+'</div>'+
-      suggestion+
-      '<label class="txt" for="fundTarget'+i+'">Päivitettävä nykyinen omistus ja tili</label>'+
-      '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse itse —</option>'+options+'</select>'+
+    // Rank in the select itself. Never auto-select a target from an OCR hint.
+    // Accounts with the same name must remain separate options.
+    const suggestedIds=new Set(ranked.map(x=>String(x.holding.id)));
+    const suggested=ranked.map(({holding,score})=>'<option value="'+esc(String(holding.id))+'">'+
+      esc('★ Nimiosuma: '+String(holding.name||holding.symbol||"Nimetön")+" · "+
+        String(holding.account||holding.broker||"tili puuttuu")+" · "+String(holding.quantity)+" kpl")+'</option>').join("");
+    const other=state.holdings.filter(h=>!suggestedIds.has(String(h.id))).map(h=>
+      '<option value="'+esc(String(h.id))+'">'+
+      esc(String(h.name||h.symbol||"Nimetön")+" · "+String(h.account||h.broker||"tili puuttuu")+
+        " · "+String(h.quantity)+" kpl")+'</option>').join("");
+    const options=(suggested?'<optgroup label="Mahdolliset osumat salkussa">'+suggested+'</optgroup>':"")+
+      (other?'<optgroup label="Muut nykyiset omistukset">'+other+'</optgroup>':"");
+    const message=ranked.length>1?
+      '<div class="fundMatchAmbiguous">Useita mahdollisia omistuksia. Vahvista oikea tili valikosta, sovellus ei päätä puolestasi.</div>':
+      ranked.length===1?
+      '<div class="fundMatchSuggestion">Mahdollinen nykyinen omistus on valikon alussa. Valitse se itse ja tarkista tili ennen tallennusta.</div>':
+      '<div class="muted small" style="margin-top:8px">Ei luotettavaa nimiosumaa. Valitse oikea nykyinen omistus itse.</div>';
+    return '<div class="importReviewRow"><div class="muted small">Kuvasta luettu rahastovihje: '+esc(item.hint)+'</div>'+
+      message+
+      '<label class="txt" for="fundTarget'+i+'">Nykyinen omistus ja tili</label>'+
+      '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse salkun omistus —</option>'+options+'</select>'+
       '<label class="txt" for="fundQty'+i+'">Uusi kokonaisosuusmäärä (kpl)</label>'+
       '<input id="fundQty'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="qty" value="'+esc(item.qty)+'">'+
       '<label class="txt" for="fundGav'+i+'">Uusi keskihankintahinta / osuus (valinnainen, syötä itse)</label>'+
@@ -3559,16 +3563,6 @@ function renderFundTrial(){
     el.value=fundTrialRows[idx][prop];
     el.oninput=()=>{fundTrialRows[idx][prop]=el.value;fundTrialStatus()};
     el.onchange=el.oninput;
-  });
-  $("fundTrialRows").querySelectorAll("[data-fund-suggest]").forEach(btn=>{
-    btn.onclick=()=>{
-      const idx=Number(btn.dataset.fundSuggest),ranked=fundTrialRankedMatches(fundTrialRows[idx].hint);
-      if(!ranked[0]||(ranked[1]&&ranked[0].score-ranked[1].score<.15))return;
-      fundTrialRows[idx].holdingId=String(ranked[0].holding.id);
-      const select=$("fundTarget"+idx);
-      if(select)select.value=fundTrialRows[idx].holdingId;
-      fundTrialStatus();
-    };
   });
   fundTrialStatus();
 }
