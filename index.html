@@ -2000,7 +2000,7 @@ function saveHolding(){
   if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
   const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
   const selectedFundSource=fundEdit?String($("fundPriceSource").value||""):"";
-  const originalFundSource=fundEdit?String(old.fundQuoteKey||""):"";
+  const originalFundSource=fundEdit?String(old.fundQuoteKey||old.symbol||""):"";
   if(fundEdit&&selectedFundSource!==originalFundSource){
     const selectedLabel=$("fundPriceSource").selectedOptions[0]?.textContent||"Ei hintalähdettä";
     if(!window.confirm("VAHVISTA RAHASTON HINTALÄHDE\\n\\n"+
@@ -2401,7 +2401,7 @@ async function loadHelsinkiData(retries=3){
         generatedAt:j.generated_at||null,
         quoteCount:Object.keys(j.quotes||{}).length,
         fundCount:Object.keys(j.fund_quotes||{}).length,
-        fundCatalogSize:7,
+        fundCatalogSize:Object.keys(j.fund_quotes||{}).length+Object.keys(j.fund_errors||{}).length,
         checkedAt:Date.now()
       };
       save();
@@ -2430,7 +2430,7 @@ function renderMarketDataHealth(){
 
   const workerAge=w?.generatedAt?ago(Date.parse(w.generatedAt)):"—";
   const githubAge=g?.generatedAt?ago(Date.parse(g.generatedAt)):"—";
-  const navNote=g?.ok?` · NAV ${g.fundCount||0}/${g.fundCatalogSize||7}`:"";
+  const navNote=g?.ok?` · NAV ${g.fundCount||0}/${g.fundCatalogSize||g.fundCount||0}`:"";
 
   if(w?.ok){
     box.className="statusBox statusOk";
