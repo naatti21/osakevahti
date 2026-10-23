@@ -18,7 +18,7 @@ export function newAdapter(source) {
     (n.type === 'VariableDeclaration' && n.declarations.every(d => constants.has(d.id.name))));
   let candidates = [], network = 'ok';
   const context = vm.createContext({console, crypto: crypto.webcrypto, URL, AbortController,
-    setTimeout, clearTimeout, Date,
+    setTimeout, clearTimeout, Date, structuredClone, KEY:"osakevahti.single.v1",
     fetch: async () => {
       if (network === 'failure') throw new Error('Synthetic network failure');
       return {ok: network !== 'http', status: network === 'http' ? 503 : 200,
@@ -36,7 +36,7 @@ export function newAdapter(source) {
       context.__rows=structuredClone(rows); context.__existing=structuredClone(existing);
       vm.runInContext('state.holdings=__existing; pendingImport={rows:__rows};\n'+
         'globalThis.__saved=null; globalThis.__alert=null;\n'+
-        'save=function(){globalThis.__saved=JSON.parse(JSON.stringify(state.holdings))};\n'+
+        'localStorage={setItem(key,value){globalThis.__saved=JSON.parse(value).holdings}};\n'+
         'render=function(){}; $=function(){return {close(){}}};\n'+
         'alert=function(message){globalThis.__alert=message};\n'+
         'commitPendingImport();',context);

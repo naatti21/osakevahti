@@ -3029,8 +3029,18 @@ function commitPendingImport(){
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
   if(merged.conflict)return;
-  state.holdings=merged.holdings;
-  save();render();
+  // Stage the full result. A quota/serialization/validation failure must not
+  // change either the live portfolio or the review draft (which can be retried).
+  try{
+    const candidate=structuredClone({...state,holdings:merged.holdings});
+    validateBackupForRestore(candidate);
+    localStorage.setItem(KEY,JSON.stringify(candidate));
+    state=candidate;
+  }catch(err){
+    alert("Tallennus epäonnistui. Salkkua ei muutettu: "+(err?.message||err));
+    return;
+  }
+  render();
   const unresolved=incoming.filter(h=>h.instrument?.identification==="unverified").length;
   const count=incoming.length;
   pendingImport=null;$("importReviewDlg").close();
@@ -3038,6 +3048,12 @@ function commitPendingImport(){
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
+function supportedHoldingCurrency(value){
+  // ISO currencies supported by the runtime, not just the editor's short list.
+  // Reject pseudo-codes before Intl formatting or adoption of a backup.
+  return typeof value==="string" && /^[A-Z]{3}$/.test(value) &&
+    Intl.supportedValuesOf("currency").includes(value);
+}
 function validateBackupForRestore(parsed){
   if(!parsed || typeof parsed!=="object" || Array.isArray(parsed) || !Array.isArray(parsed.holdings))
     throw new Error("Varmuuskopiosta puuttuu kelvollinen omistuslista.");
@@ -3065,6 +3081,8 @@ function validateBackupForRestore(parsed){
       throw new Error(prefix+"instrumentin tunniste tai tili on virheellinen.");
     if(!String(h.symbol||h.name||h.instrument?.listingTicker||"").trim())
       throw new Error(prefix+"instrumentin tunniste puuttuu.");
+    if(!supportedHoldingCurrency(h.currency))
+      throw new Error(prefix+"omistuksen valuutta puuttuu tai ei ole tuettu.");
     if(!nonNegativeNumber(h.quantity))
       throw new Error(prefix+"määrän pitää olla ei-negatiivinen numero.");
     for(const field of ["buyPrice","manualPrice","currentPrice","manualStop","highWatermark","fxRate","atr","high20","low20","targetWeight","trailingPct"]){
@@ -3082,8 +3100,15 @@ async function importBackup(e){
   try{
     const parsed=JSON.parse(await f.text());
     validateBackupForRestore(parsed); // Check all holdings before touching the user's portfolio.
-    const candidate={...state,...parsed,apiKey:state.apiKey||""};
+    const candidate=structuredClone({...state,...parsed,apiKey:state.apiKey||""});
+    // Only internal position IDs are generated. No financial identifier is guessed.
+    const usedIds=new Set(candidate.holdings.filter(h=>h.id!=null).map(h=>String(h.id)));
+    for(const h of candidate.holdings)if(h.id==null){
+      do{h.id=uid()}while(usedIds.has(String(h.id)));
+      usedIds.add(String(h.id));
+    }
     migrateState(candidate);
+    validateBackupForRestore(candidate);
     // Save once, and only adopt the candidate in memory AFTER successful storage.
     localStorage.setItem(KEY,JSON.stringify(candidate));
     state=candidate;
