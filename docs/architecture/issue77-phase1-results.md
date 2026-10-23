@@ -49,3 +49,7 @@ Phase 1 audit is suitable for independent review. **NO-GO for deployment or ever
 ## OCR harness timing follow-up
 
 The concurrent final run on audit commit `838eb7d1e9b457ba3a7e64fb63090aba44e5c52a` failed the OCR test at the default five-second element wait. The failure snapshot already contains the correct fictional name and `0,37` quantity. The separate real-OCR profile now waits up to 60 seconds for actual OCR completion; no OCR substitution or financial assertion changed. This failed run is retained, and the delivery handoff records the subsequent exact-commit result.
+
+## Broad-profile compatibility and PWA follow-up
+
+On `73adcbf...`, the broad run recorded 189 PASS / 7 FAIL / 0 SKIP: live FX fetch, one quote-health assertion, four legacy navigation cases blocked by their hardcoded origin allowlist, and PWA old-cache recurrence. The baseline config now uses the legacy-required port 4173 instead of 4186, without changing legacy tests. The PWA cache recurrence also appeared in the earlier concurrent targeted run (33 PASS / 7 FAIL). Its cause remains unresolved; passing runs do not establish that update cleanup is reliable. Final delivery results distinguish these from financial RED cases and retain all earlier evidence.

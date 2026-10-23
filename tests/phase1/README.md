@@ -32,7 +32,7 @@ $PHASE1_LOCAL_OCR_ASSETS/lang/fin.traineddata
 $PHASE1_LOCAL_OCR_ASSETS/lang/eng.traineddata
 ```
 
-Reuse the Import Engine's documented `scripts/prepare-local-ocr.mjs` assets from a separately verified checkout/cache; do not copy models into this repository or depend on user documents. This session reused existing local Engine assets (Tesseract 5.1.0, tessdata_fast pin `87416418657359cb625c412a48b6e1d6d41c29bd`). Preparing/downloading them is a setup prerequisite, not the test's automatic external dependency. The path can point to a standalone local asset directory.
+Reuse the Import Engine's documented `scripts/prepare-local-ocr.mjs` assets from a separately verified checkout/cache; do not copy models into this repository or depend on user documents. This session reused existing local Engine assets (Tesseract 5.1.0, tessdata_fast pin `87416417357359cb625c412a48b6e1d6d41c29bd`). Preparing/downloading them is a setup prerequisite, not the test's automatic external dependency. The path can point to a standalone local asset directory.
 
 ```sh
 PHASE1_LOCAL_OCR_ASSETS=/path/to/verified/ocr-assets npx playwright test --config=tests/phase1/ocr.config.mjs
@@ -56,4 +56,4 @@ To reproduce the broad existing-suite baseline (including its separately classif
 npx playwright test --config=tests/phase1/baseline.config.mjs
 ```
 
-This uses port 4186 and keeps existing tests unchanged. It does not run the two `alpha-public-live-feeds` cases or `@ocr-stress`/CDN cases; report them NOT RUN. The isolated Phase 1 CI workflow has no external financial API requirement and publishes evidence even when its real RED assertions fail.
+This uses port 4173 and keeps existing tests unchanged. It does not run the two `alpha-public-live-feeds` cases or `@ocr-stress`/CDN cases; report them NOT RUN. The isolated Phase 1 CI workflow has no external financial API requirement and publishes evidence even when its real RED assertions fail.
