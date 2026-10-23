@@ -179,6 +179,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .fundMatchSuggestion{margin-top:9px;padding:10px;background:#11201b;border:1px solid #73d3a04a;border-radius:11px;font-size:12px;line-height:1.45}
 .fundMatchSuggestion button{display:block;margin-top:7px;width:100%;text-align:center;min-height:42px}
 .fundMatchAmbiguous{color:var(--warn);margin-top:8px;font-size:12px;line-height:1.45}
+.fundNewBox{padding:12px;margin:10px 0;background:#111d25;border:1px solid #40645a;border-radius:12px;display:grid;gap:7px}
+.fundNewBox.hidden{display:none}.fundNewBox label{margin-top:6px}.fundNewBox input[type="checkbox"]{accent-color:#76d0a3}
 </style>
 </head>
 <body>
@@ -376,13 +378,13 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <details id="fundTrialBox" style="margin:15px 0;border:1px solid var(--line);border-radius:12px;padding:10px">
         <summary><strong>Rahaston tunnistustulos ja päivitys</strong></summary>
         <div class="detailsBody">
-          <p class="muted small">Käytä samaa yllä olevaa kuvavalintaa myös rahastoille. Rahastokuvan tunnistuksen jälkeen näet osuuksien kokonaismäärän ja mahdolliset nykyiset omistukset. Vie ensin JSON-tallenne. Rahaston NAV tai arvo ei ole keskihankintahinta eikä muuta sitä automaattisesti.</p>
+          <p class="muted small">Käytä samaa yllä olevaa kuvavalintaa myös rahastoille. Rahastokuvan tunnistuksen jälkeen valitse nykyinen omistus tai lisää uusi rahasto. Uutta rahastoa varten vahvista nimi, pankki, tili, valuutta ja hankintakeskihinta itse. Vie ensin JSON-tallenne. Rahaston NAV tai arvo ei ole keskihankintahinta eikä muuta sitä automaattisesti.</p>
           <div class="actions"><button type="button" id="fundTrialAdd">+ Rivi käsin</button><button type="button" id="fundTrialClear">Tyhjennä tarkistus</button></div>
           <details><summary>Jos rahastokuvaa ei tunnisteta</summary><div class="detailsBody"><p class="muted small">Vaihtoehtoinen vain rahaston määrää lukeva reitti Alpha-testissä. Käytä tätä, jos automaattinen kuvatunnistus ei löydä rahastoa.</p><label class="file">Valitse rahastokuva erikseen<input id="fundTrialFile" type="file" accept="image/png,image/jpeg,image/webp"></label></div></details>
-          <div id="fundTrialStatus" class="statusBox muted" role="status">Kuva luetaan paikallisesti. Vain erikseen valitut nykyiset omistukset voidaan päivittää.</div>
+          <div id="fundTrialStatus" class="statusBox muted" role="status">Kuva luetaan paikallisesti. Voit päivittää nykyisen omistuksen tai lisätä uuden rahaston erikseen hyväksyen.</div>
           <div id="fundTrialRows" class="importReviewList"></div>
           <label class="muted small" style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input id="fundTrialBackupCheck" type="checkbox" style="width:auto;margin-top:2px"> Olen ladannut Alphan JSON-tallenteen ennen kokeilua ja tarkistanut määrät pankin kuvasta.</label>
-          <button type="button" class="primary" id="fundTrialSave" disabled>Vahvista valitut kokonaismäärät Alphaan</button>
+          <button type="button" class="primary" id="fundTrialSave" disabled>Vahvista valitut rahastomuutokset Alphaan</button>
         </div>
       </details>
 
@@ -566,7 +568,7 @@ $("testApiBtn").onclick=testFinnhub;
 $("testNordnetBtn").onclick=testNordnet;
 $("reloadMarketDataBtn").onclick=async()=>{await refreshMarket(true)};
 $("fundTrialFile").onchange=readFundTrialImage;
-$("fundTrialAdd").onclick=()=>{fundTrialRows.push({hint:"Manuaalinen kokeilurivi",qty:"",holdingId:"",gav:""});renderFundTrial()};
+$("fundTrialAdd").onclick=()=>{fundTrialRows.push({hint:"Manuaalinen kokeilurivi",qty:"",holdingId:"",gav:"",newName:"",newNameConfirmed:false,newBroker:"",newAccountType:"",newAccountLabel:"",newCurrency:""});renderFundTrial()};
 $("fundTrialClear").onclick=()=>{fundTrialRequest++;fundTrialRows=[];renderFundTrial();$("fundTrialStatus").textContent="Kokeilu tyhjennetty. Salkkua ei muutettu."};
 $("fundTrialBackupCheck").onchange=fundTrialStatus;
 $("fundTrialSave").onclick=commitFundTrial;
@@ -3471,7 +3473,7 @@ function fundTrialHints(ocr){
       .map(cleanNamePart).filter(looksLikeName).slice(-2);
     if(prefix&&looksLikeName(prefix))parts.push(prefix);
     const hint=parts.join(" ").trim()||prefix||"Lähteen rivi "+(i+1);
-    found.push({hint:hint.slice(0,140),qty:match[1],holdingId:"",gav:""});
+    found.push({hint:hint.slice(0,140),qty:match[1],holdingId:"",gav:"",newName:fundTrialSuggestedName(hint),newNameConfirmed:false,newBroker:"",newAccountType:"",newAccountLabel:"",newCurrency:""});
   }
   return found;
 }
@@ -3496,47 +3498,87 @@ function fundTrialRankedMatches(hint){
 function populateFundTrialFromOcr(ocr){
   fundTrialRows=fundTrialHints(ocr);
   const count=fundTrialRows.length;
-  if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:""}];
+  if(!count)fundTrialRows=[{hint:"Kpl-määrää ei löydetty — täytä käsin",qty:"",holdingId:"",gav:"",newName:"",newNameConfirmed:false,newBroker:"",newAccountType:"",newAccountLabel:"",newCurrency:""}];
   $("fundTrialStatus").className="statusBox "+(count?"statusOk":"muted");
   $("fundTrialStatus").textContent=count?
     "OCR löysi "+count+" kpl-havaintoa. Nimi on vain vihje: tarkista salkusta ehdotettu omistus, tili ja kokonaismäärä. Keskihinta ei päivity ilman erillistä syöttöä.":
     "OCR ei löytänyt kpl-määrää. Voit silti kokeilla syöttämällä kokonaismäärän itse.";
   renderFundTrial();
 }
+function fundTrialSuggestedName(hint){
+  // OCR may prefix a fund heading with "&" or an isolated "on".
+  // This is only an editable proposal; explicit name confirmation is required.
+  return String(hint||"").replace(/^[&>]+\s*/,"").replace(/^on\s+(?=[A-ZÅÄÖ])/i,"")
+    .replace(/\s+/g," ").trim().slice(0,140);
+}
 function fundTrialSelected(){
-  const selections=[],seen=new Set();
+  const selections=[],creates=[],seen=new Set(),newNames=new Set();
   for(const item of fundTrialRows){
     if(!item.holdingId)continue;
-    const holding=state.holdings.find(h=>String(h.id)===item.holdingId);
     const quantity=fundTrialDecimal(item.qty),gav=item.gav.trim()?fundTrialDecimal(item.gav):null;
-    if(!holding||quantity===null||(item.gav.trim()&&gav===null)||seen.has(item.holdingId))return {error:"Tarkista omistus, positiivinen kokonaismäärä, mahdollinen keskihinta ja ettei samaa omistusta valita kahdesti."};
+    if(quantity===null||(item.gav.trim()&&gav===null))
+      return {error:"Tarkista positiivinen kokonaismäärä ja mahdollinen keskihankintahinta."};
+    if(item.holdingId==="__new__"){
+      const name=String(item.newName||"").replace(/\s+/g," ").trim();
+      const broker=String(item.newBroker||"").trim();
+      const accountType=String(item.newAccountType||"").trim();
+      const accountLabel=String(item.newAccountLabel||"").trim();
+      const currency=String(item.newCurrency||"").trim();
+      if(!item.newNameConfirmed||!name||name.length<4||name.length>140||
+          /^(?:Lähteen rivi|Kpl-määrää ei löydetty|Manuaalinen kokeilurivi)/i.test(name)||
+          !["Nordea","Nordnet","Muu"].includes(broker)||
+          !["FUND","AOT","OTHER"].includes(accountType)||
+          !["EUR","USD","SEK","NOK","GBP"].includes(currency)||gav===null)
+        return {error:"Uusi rahasto: tarkista ja vahvista nimi, pankki, tilityyppi, valuutta sekä hankintakeskihinta. OCR:n NAV ei ole hankintahinta."};
+      const identity=cleanNameToken(name)+"|"+broker.toLowerCase()+"|"+accountType+"|"+accountLabel.toLowerCase();
+      if(newNames.has(identity))return {error:"Samaa rahastoa ja tiliä yritetään lisätä kahdesti."};
+      newNames.add(identity);
+      const duplicate=state.holdings.some(h=>cleanNameToken(h.name||h.instrument?.companyName)===cleanNameToken(name)&&
+        String(h.broker||"").toLowerCase()===broker.toLowerCase()&&h.accountType===accountType&&
+        String(h.accountLabel||"").toLowerCase()===accountLabel.toLowerCase());
+      if(duplicate)return {error:"Sama rahasto löytyy jo tältä tililtä. Valitse nykyinen omistus ja päivitä sen määrä."};
+      creates.push({name,broker,accountType,accountLabel,currency,quantity,gav});
+      continue;
+    }
+    const holding=state.holdings.find(h=>String(h.id)===item.holdingId);
+    if(!holding||seen.has(item.holdingId))return {error:"Valitse oikea nykyinen omistus ja tili. Samaa omistusta ei voi päivittää kahdesti."};
     seen.add(item.holdingId);
     selections.push({holding,quantity,gav});
   }
-  return {selections};
+  return {selections,creates};
 }
 function fundTrialStatus(){
   const result=fundTrialSelected();
-  const selections=result.selections||[];
   for(let i=0;i<fundTrialRows.length;i++){
     const item=fundTrialRows[i],box=document.getElementById("fundTrialDiff"+i);
+    const newBox=document.getElementById("fundNewBox"+i);
+    if(newBox)newBox.classList.toggle("hidden",item.holdingId!=="__new__");
     if(!box)continue;
-    const h=state.holdings.find(h=>String(h.id)===item.holdingId),q=fundTrialDecimal(item.qty);
-    box.textContent=!h?"Valitse oikea omistus ja tili.":q===null?"Anna uusi kokonaismäärä.":
+    const h=state.holdings.find(h=>String(h.id)===item.holdingId);
+    const q=fundTrialDecimal(item.qty);
+    box.textContent=item.holdingId==="__new__"?
+      "Uusi rahasto: "+(item.newName||"nimi puuttuu")+" · "+(q===null?"määrä puuttuu":item.qty+" kpl")+
+      " · keskihinta "+(item.gav||"puuttuu")+". Rahaston nimi ja tili vahvistetaan käsin.":
+      !h?"Valitse nykyinen omistus tai Lisää uusi rahasto.":q===null?"Anna uusi kokonaismäärä.":
       "Määrä "+h.quantity+" → "+item.qty+" kpl · keskihinta "+
       (item.gav.trim()?String(h.buyPrice||"—")+" → "+item.gav:String(h.buyPrice||"—")+" (vanha säilyy, voi olla vanhentunut)");
   }
-  $("fundTrialSave").disabled=!!result.error||selections.length===0||!$("fundTrialBackupCheck").checked;
+  $("fundTrialSave").disabled=!!result.error||(!result.selections?.length&&!result.creates?.length)||!$("fundTrialBackupCheck").checked;
+  const status=$("fundTrialStatus");
+  if(result.error&&fundTrialRows.some(item=>item.holdingId)) {
+    status.className="statusBox statusBad";status.textContent=result.error;
+  }else if(fundTrialRows.some(item=>item.holdingId)){
+    status.className="statusBox statusOk";
+    status.textContent="Tarkista kaikki ehdotukset ja paina Vahvista vasta JSON-varmuuskopion jälkeen.";
+  }
 }
 function renderFundTrial(){
   $("fundTrialRows").innerHTML=fundTrialRows.map((item,i)=>{
     const ranked=fundTrialRankedMatches(item.hint);
-    // Rank in the select itself. Never auto-select a target from an OCR hint.
-    // Accounts with the same name must remain separate options.
     const suggestedIds=new Set(ranked.map(x=>String(x.holding.id)));
-    const suggested=ranked.map(({holding,score})=>'<option value="'+esc(String(holding.id))+'">'+
+    const suggested=ranked.map(({holding})=>'<option value="'+esc(String(holding.id))+'">'+
       esc('★ Nimiosuma: '+String(holding.name||holding.symbol||"Nimetön")+" · "+
-        String(holding.account||holding.broker||"tili puuttuu")+" · "+String(holding.quantity)+" kpl")+'</option>').join("");
+      String(holding.account||holding.broker||"tili puuttuu")+" · "+String(holding.quantity)+" kpl")+'</option>').join("");
     const other=state.holdings.filter(h=>!suggestedIds.has(String(h.id))).map(h=>
       '<option value="'+esc(String(h.id))+'">'+
       esc(String(h.name||h.symbol||"Nimetön")+" · "+String(h.account||h.broker||"tili puuttuu")+
@@ -3544,25 +3586,49 @@ function renderFundTrial(){
     const options=(suggested?'<optgroup label="Mahdolliset osumat salkussa">'+suggested+'</optgroup>':"")+
       (other?'<optgroup label="Muut nykyiset omistukset">'+other+'</optgroup>':"");
     const message=ranked.length>1?
-      '<div class="fundMatchAmbiguous">Useita mahdollisia omistuksia. Vahvista oikea tili valikosta, sovellus ei päätä puolestasi.</div>':
+      '<div class="fundMatchAmbiguous">Useita mahdollisia omistuksia. Vahvista oikea tili valikosta.</div>':
       ranked.length===1?
-      '<div class="fundMatchSuggestion">Mahdollinen nykyinen omistus on valikon alussa. Valitse se itse ja tarkista tili ennen tallennusta.</div>':
-      '<div class="muted small" style="margin-top:8px">Ei luotettavaa nimiosumaa. Valitse oikea nykyinen omistus itse.</div>';
+      '<div class="fundMatchSuggestion">Mahdollinen nykyinen omistus on valikon alussa. Valitse se itse.</div>':
+      '<div class="muted small" style="margin-top:8px">Ei luotettavaa nimiosumaa. Voit valita nykyisen omistuksen tai lisätä uuden rahaston.</div>';
+    const optionsNew='<option value="__new__">＋ Lisää uusi rahasto salkkuun</option>';
     return '<div class="importReviewRow"><div class="muted small">Kuvasta luettu rahastovihje: '+esc(item.hint)+'</div>'+
       message+
-      '<label class="txt" for="fundTarget'+i+'">Nykyinen omistus ja tili</label>'+
-      '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse salkun omistus —</option>'+options+'</select>'+
+      '<label class="txt" for="fundTarget'+i+'">Päivitä nykyinen tai lisää uusi rahasto</label>'+
+      '<select id="fundTarget'+i+'" data-fund-i="'+i+'" data-fund-prop="holdingId"><option value="">— Valitse toiminto —</option>'+
+      optionsNew+options+'</select>'+
+      '<div id="fundNewBox'+i+'" class="fundNewBox hidden">'+
+      '<strong>Uusi rahasto · vahvista tiedot</strong>'+
+      '<label class="txt" for="fundNewName'+i+'">Rahaston nimi (tarkista OCR-vihje)</label>'+
+      '<input id="fundNewName'+i+'" maxlength="140" type="text" data-fund-i="'+i+'" data-fund-prop="newName" value="'+esc(item.newName||"")+'">'+
+      '<label class="muted small"><input type="checkbox" id="fundNewConfirmed'+i+'" data-fund-i="'+i+'" data-fund-prop="newNameConfirmed" style="width:auto"> Olen tarkistanut rahaston oikean nimen pankin näkymästä.</label>'+
+      '<label class="txt" for="fundNewBroker'+i+'">Palveluntarjoaja / pankki</label>'+
+      '<select id="fundNewBroker'+i+'" data-fund-i="'+i+'" data-fund-prop="newBroker"><option value="">— Valitse —</option><option value="Nordnet">Nordnet</option><option value="Nordea">Nordea</option><option value="Muu">Muu / ei tiedossa</option></select>'+
+      '<label class="txt" for="fundNewType'+i+'">Tilityyppi</label>'+
+      '<select id="fundNewType'+i+'" data-fund-i="'+i+'" data-fund-prop="newAccountType"><option value="">— Valitse —</option><option value="FUND">Rahastotili</option><option value="AOT">AOT</option><option value="OTHER">Muu</option></select>'+
+      '<label class="txt" for="fundNewLabel'+i+'">Tilin oma nimi (jos samalla pankilla useita tilejä)</label>'+
+      '<input id="fundNewLabel'+i+'" maxlength="80" type="text" data-fund-i="'+i+'" data-fund-prop="newAccountLabel" placeholder="Ei tilinumeroa" value="'+esc(item.newAccountLabel||"")+'">'+
+      '<label class="txt" for="fundNewCurrency'+i+'">Valuutta</label>'+
+      '<select id="fundNewCurrency'+i+'" data-fund-i="'+i+'" data-fund-prop="newCurrency"><option value="">— Tarkista valuutta —</option><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select>'+
+      '<div class="statusBox muted small">Uuden rahaston keskihankintahinta on pakollinen tässä turvallisessa ensiversiossa. Tarkista pankista, älä kopioi NAV-arvoa hankintahinnaksi.</div>'+
+      '</div>'+
       '<label class="txt" for="fundQty'+i+'">Uusi kokonaisosuusmäärä (kpl)</label>'+
       '<input id="fundQty'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="qty" value="'+esc(item.qty)+'">'+
-      '<label class="txt" for="fundGav'+i+'">Uusi keskihankintahinta / osuus (valinnainen, syötä itse)</label>'+
-      '<input id="fundGav'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="gav" value="'+esc(item.gav)+'" placeholder="Tyhjä = säilytä vanha">'+
+      '<label class="txt" for="fundGav'+i+'">Keskihankintahinta / osuus (uuteen rahastoon pakollinen)</label>'+
+      '<input id="fundGav'+i+'" type="text" inputmode="decimal" data-fund-i="'+i+'" data-fund-prop="gav" value="'+esc(item.gav)+'" placeholder="Nykyiselle tyhjä = säilytä vanha">'+
       '<div class="muted small" id="fundTrialDiff'+i+'"></div></div>';
   }).join("");
   $("fundTrialRows").querySelectorAll("[data-fund-i]").forEach(el=>{
     const idx=Number(el.dataset.fundI),prop=el.dataset.fundProp;
-    el.value=fundTrialRows[idx][prop];
-    el.oninput=()=>{fundTrialRows[idx][prop]=el.value;fundTrialStatus()};
-    el.onchange=el.oninput;
+    if(prop==="newNameConfirmed")el.checked=!!fundTrialRows[idx][prop];
+    else el.value=String(fundTrialRows[idx][prop]||"");
+    const handle=()=>{
+      fundTrialRows[idx][prop]=prop==="newNameConfirmed"?el.checked:el.value;
+      if(prop==="newName")fundTrialRows[idx].newNameConfirmed=false;
+      const check=document.getElementById("fundNewConfirmed"+idx);
+      if(prop==="newName"&&check)check.checked=false;
+      fundTrialStatus();
+    };
+    el.oninput=handle;el.onchange=handle;
   });
   fundTrialStatus();
 }
@@ -3585,33 +3651,59 @@ async function readFundTrialImage(e){
 }
 function commitFundTrial(){
   const result=fundTrialSelected();
-  if(result.error||!result.selections?.length||!$("fundTrialBackupCheck").checked){
+  if(result.error||(!result.selections?.length&&!result.creates?.length)||!$("fundTrialBackupCheck").checked){
     $("fundTrialStatus").className="statusBox statusBad";
     $("fundTrialStatus").textContent=result.error||"Tarkista varmuuskopio ja valinnat.";return;
   }
-  const lines=result.selections.map(x=>
-    String(x.holding.name||x.holding.symbol)+" ["+String(x.holding.account||x.holding.broker||"tili?")+"] "+
-    String(x.holding.quantity)+" → "+x.quantity+" kpl"+
-    (x.gav!==null?" · keskihinta "+String(x.holding.buyPrice||"—")+" → "+x.gav:" · vanha keskihinta säilyy"));
-  if(!window.confirm("PÄIVITÄ VAIN ALPHAN OMISTUKSET?\n\n"+lines.join("\n")+
-    "\n\nLuvut ovat kokonaisomistuksia, eivät lisäostoja. Julkaisuversioon ei tehdä muutoksia."))return;
-  const changes=new Map(result.selections.map(x=>[String(x.holding.id),x]));
+  const lines=[
+    ...result.selections.map(x=>String(x.holding.name||x.holding.symbol)+" ["+
+      String(x.holding.account||x.holding.broker||"tili?")+"] "+
+      x.holding.quantity+" → "+x.quantity+" kpl"+
+      (x.gav!==null?" · keskihinta "+x.holding.buyPrice+" → "+x.gav:" · vanha keskihinta säilyy")),
+    ...result.creates.map(x=>"UUSI: "+x.name+" ["+x.broker+" / "+accountTypeLabel(x.accountType)+
+      (x.accountLabel?" / "+x.accountLabel:"")+"] "+x.quantity+" kpl · keskihinta "+x.gav+" "+x.currency)
+  ];
+  if(!window.confirm("VAHVISTA VAIN ALPHAN RAHASTOMUUTOKSET?\n\n"+lines.join("\n")+
+    "\n\nUusi rahasto lisätään ilman arvattua tikkeriä tai ISINiä. Muut omistukset säilyvät. Ei tehdä oikeita kauppoja."))return;
+  // Revalidate from the current portfolio immediately before any mutation.
+  const final=fundTrialSelected();
+  if(final.error||final.creates.length!==result.creates.length||final.selections.length!==result.selections.length){
+    $("fundTrialStatus").className="statusBox statusBad";
+    $("fundTrialStatus").textContent="Salkku tai tiedot muuttuivat vahvistuksen aikana. Tarkista tuonti uudelleen.";return;
+  }
+  const updates=new Map(final.selections.map(x=>[String(x.holding.id),x]));
   const previous=state.holdings;
-  state.holdings=previous.map(h=>{
-    const change=changes.get(String(h.id));return change?
-      {...h,quantity:change.quantity,...(change.gav!==null?{buyPrice:change.gav}:{})}:h;
+  const additions=final.creates.map(x=>{
+    const accountInfo={broker:x.broker,accountType:x.accountType,accountLabel:x.accountLabel};
+    const account=derivedAccountName(accountInfo);
+    const importSource="screenshot:alpha-manual-fund-approval";
+    return {id:uid(),symbol:"",name:x.name,quantity:x.quantity,buyPrice:x.gav,
+      currency:x.currency,account,accountType:x.accountType,broker:x.broker,
+      accountLabel:x.accountLabel,accountDetailsConfirmed:true,accountOriginDerived:true,
+      legacyAccount:account,providerSymbol:"",assetType:"fund",
+      manualStop:null,manualPrice:null,trailingPct:12,riskClass:"medium",targetWeight:null,
+      importMeta:{source:importSource,rowNumber:null,importedAt:new Date().toISOString(),
+        sourceIdentifiers:{isin:"",mic:"",exchange:"",verification:"unverified"},
+        provided:{buyPrice:true,trailingPct:false,riskClass:false,targetWeight:false},
+        nameConfirmedByUser:true,costBasisEnteredByUser:true},
+      instrument:{schemaVersion:INSTRUMENT_SCHEMA_VERSION,companyName:x.name,
+        isin:"",listingTicker:"",mic:"",exchange:"",currency:x.currency,providerSymbol:"",
+        dataKey:"",assetType:"fund",source:importSource,identification:"unverified"}};
   });
+  state.holdings=[...previous.map(h=>{
+    const change=updates.get(String(h.id));
+    return change?{...h,quantity:change.quantity,...(change.gav!==null?{buyPrice:change.gav}:{})}:h;
+  }),...additions];
   try{save()}catch(error){
     state.holdings=previous;
     $("fundTrialStatus").className="statusBox statusBad";
-    $("fundTrialStatus").textContent="Tallennus epäonnistui. Alpha jätettiin ennalleen: "+String(error?.message||error);
-    return;
+    $("fundTrialStatus").textContent="Tallennus epäonnistui. Alpha jätettiin ennalleen: "+String(error?.message||error);return;
   }
   render();fundTrialRows=[];renderFundTrial();
   $("fundTrialStatus").className="statusBox statusOk";
-  $("fundTrialStatus").textContent="Päivitetty "+changes.size+" Alphan olemassa olevaa omistusta. Ota jälkikuvat. Toistettu kokonaismäärä korvaa vanhan, sitä ei lisätä.";
+  $("fundTrialStatus").textContent="Lisätty "+additions.length+" uutta rahastoa ja päivitetty "+updates.size+
+    " nykyistä omistusta. Tarkista salkusta ja ota tarvittaessa uusi varmuuskopio.";
 }
-
 const installBtn=$("installAppBtn");
 const installStatus=$("installStatus");
 function updateInstallStatus(){
