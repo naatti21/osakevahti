@@ -428,9 +428,9 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 <form id="form">
   <div class="row"><h2 id="dlgTitle">Lisää omistus</h2><button type="button" id="closeDlg">×</button></div>
   <input id="id" type="hidden">
-  <label class="txt">Tikkeri *</label><input id="symbol" required placeholder="Esim. AMD"><p class="muted small" style="margin:5px 0 0">Tähän vain pörssitunnus, esim. AMD tai FORTUM.HE.</p>
+  <div id="holdingTickerSection"><label class="txt" for="symbol">Tikkeri *</label><input id="symbol" required placeholder="Esim. AMD"><p class="muted small" style="margin:5px 0 0">Tähän vain pörssitunnus, esim. AMD tai FORTUM.HE.</p></div><div id="fundEditInfo" class="statusBox muted hidden">Muokkaat rahastoa. Pörssitikkeriä ei tarvita keskihinnan päivittämiseen. Rahaston aiemmat tunnisteet ja NAV-kurssi säilyvät ennallaan.</div>
   <label class="txt">Nimi</label><input id="name" placeholder="Esim. Advanced Micro Devices"><p class="muted small" style="margin:5px 0 0">Yhtiön nimi on vapaaehtoinen. Määrä, keskihinta ja trailing syötetään alempiin omiin kenttiinsä.</p>
-  <div class="actions"><button type="button" id="openInstrumentLookup">🔎 Etsi osake nimellä tai tunnuksella</button></div>
+  <div class="actions" id="instrumentLookupAction"><button type="button" id="openInstrumentLookup">🔎 Etsi osake nimellä tai tunnuksella</button></div>
   <div id="alphaInstrumentSearch" class="alphaSearch hidden">
     <label class="txt" for="instrumentSearchQuery">Haku · yhtiö, ticker tai ISIN</label>
     <input id="instrumentSearchQuery" type="search" maxlength="120" placeholder="Esim. Nokia">
@@ -438,7 +438,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div id="instrumentSearchStatus" class="muted small" role="status">Näytämme eri listaukset erikseen. Vahvista valinta ennen tallennusta.</div>
     <div id="instrumentSearchResults" class="importCandidateList"></div>
   </div>
-  <label class="txt">Markkinadatan tunnus</label><input id="providerSymbol" placeholder="Valinnainen, esim. FORTUM.HE"><p class="muted small" style="margin:5px 0 0">Datapalvelun tunnus. Jos sitä ei tiedetä varmasti, jätä tyhjäksi – sovellus ei arvaa.</p>
+  <div id="providerSymbolSection"><label class="txt" for="providerSymbol">Markkinadatan tunnus</label><input id="providerSymbol" placeholder="Valinnainen, esim. FORTUM.HE"><p class="muted small" style="margin:5px 0 0">Datapalvelun tunnus. Jos sitä ei tiedetä varmasti, jätä tyhjäksi – sovellus ei arvaa.</p></div>
   <div class="grid2">
     <div><label class="txt">Määrä *</label><input id="qty" required type="number" step="any" min="0"></div>
     <div><label class="txt">Keskihinta *</label><input id="buy" required type="number" step="any" min="0"></div>
@@ -1873,6 +1873,15 @@ function openDlg(id=null){
   $("accountFormHint").classList.add("hidden");
   $("deleteBtn").classList.add("hidden");
   $("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
+  const fundEdit=!!id&&state.holdings.some(x=>x.id===id&&x.assetType==="fund");
+  // Legacy funds may carry long synthetic internal identifiers; those are not
+  // exchange tickers. Hide stock-only fields without erasing their values.
+  $("holdingTickerSection").classList.toggle("hidden",fundEdit);
+  $("instrumentLookupAction").classList.toggle("hidden",fundEdit);
+  $("providerSymbolSection").classList.toggle("hidden",fundEdit);
+  $("fundEditInfo").classList.toggle("hidden",!fundEdit);
+  $("symbol").required=!fundEdit;
+  $("name").required=fundEdit;
   if(id){
     const h=state.holdings.find(x=>x.id===id);
     if(!h)return;
@@ -1886,7 +1895,7 @@ function openDlg(id=null){
     $("accountType").value=VALID_ACCOUNT_TYPES.includes(h.accountType)?h.accountType:"";
     setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox",h.broker);
     $("accountLabel").value=h.accountLabel||"";
-    $("manualPrice").value=h.manualPrice||h.currentPrice||"";
+    $("manualPrice").value=h.assetType==="fund"?(h.manualPrice??""):(h.manualPrice||h.currentPrice||"");
     $("manualStop").value=h.manualStop||"";
     $("trailing").value=h.trailingPct??12;
     $("riskClass").value=h.riskClass||"medium";
@@ -1952,12 +1961,17 @@ function boxCollapseAfterChoice() {
 }
 
 function saveHolding(){
-  const rawSymbol=$("symbol").value.trim().toUpperCase(),rawProvider=$("providerSymbol").value.trim().toUpperCase();
-  const valid=/^[A-Z0-9.^:=_-]{1,24}$/;
-  if(!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
-  if(rawProvider && !valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
   const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{};
-  const symbolChanged=!!old.symbol && normalizedIdText(old.symbol)!==rawSymbol;
+  const fundEdit=old.id&&old.assetType==="fund";
+  // Funds have no exchange ticker requirement. Preserve even historical,
+  // overlong placeholder symbols exactly; never rewrite them into fake listings.
+  const rawSymbol=fundEdit?String(old.symbol||""):$("symbol").value.trim().toUpperCase();
+  const rawProvider=fundEdit?String(old.providerSymbol||""):$("providerSymbol").value.trim().toUpperCase();
+  const valid=/^[A-Z0-9.^:=_-]{1,24}$/;
+  if(!fundEdit&&!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
+  if(!fundEdit&&rawProvider&&!valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
+  if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
+  const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
   const type=$("accountType").value,provider=$("brokerSelect").value;
   const complete=VALID_ACCOUNT_TYPES.includes(type)&&!!provider;
   if(!old.id&&!complete){
@@ -2010,10 +2024,12 @@ function saveHolding(){
   }else{
     const ident=ensureInstrumentIdentity(h,old.instrument?.source||"manual");
     ident.companyName=h.name;
-    ident.listingTicker=rawSymbol;
     ident.currency=h.currency;
-    ident.providerSymbol=rawProvider;
-    ident.dataKey=legacyDataKey(rawSymbol);
+    if(!fundEdit){
+      ident.listingTicker=rawSymbol;
+      ident.providerSymbol=rawProvider;
+      ident.dataKey=legacyDataKey(rawSymbol);
+    }
   }
   if(manualInstrumentChoice){
     const c=manualInstrumentChoice.candidate;
