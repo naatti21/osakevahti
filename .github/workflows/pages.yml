@@ -264,6 +264,11 @@ jobs:
                   "kind": "nordnet",
                   "provider": "Nordnet fund page",
               },
+              "STOREBRAND_JAPAN_A_EUR": {
+                  "url": "https://www.nordnet.fi/rahastot/lista/storebrand-japan-a-eur-dbe9644c",
+                  "kind": "nordnet",
+                  "provider": "Nordnet fund page",
+              },
           }
 
           def get_text(url):
