@@ -887,6 +887,14 @@ function priceIssue(h){
     return {label:"KÄSIN SYÖTETTY",reason:"Automaattista hintatietoa ei ole vahvistettu.",level:"info"};
   return null;
 }
+function fundValuationUncertain(h){
+  if(h.assetType!=="fund"||!validPositive(h.quantity))return false;
+  const day=verifiedNavDate(h.navDate);
+  const key=String(h.fundQuoteKey||h.symbol||"").trim();
+  return !validPositive(h.currentPrice)||!day||!key||!fundBindingMatches(h,key)||
+    h.quoteHealth?.status==="failed"||
+    Date.now()-Date.parse(day+"T12:00:00Z")>5*86400000;
+}
 function renderPriceHealth(){
   const box=$("priceHealthNotice");
   if(!box)return;
@@ -1227,6 +1235,9 @@ function render(){
   const valuationIncomplete=rows.some(r=>n(r.h.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)));
   const fxEstimate=rows.some(r=>n(r.h.quantity)>0&&r.h.currency!==state.baseCurrency&&
     validPositive(r.fx)&&r.h.fxRateStatus==="stale");
+  const navEstimate=rows.some(r=>fundValuationUncertain(r.h));
+  const valuationEstimate=fxEstimate||navEstimate;
+  const valuationUnreliable=valuationIncomplete||navEstimate;
   const tv=rows.reduce((a,r)=>a+r.val,0);
   const tc=rows.reduce((a,r)=>a+r.cost,0);
   let ost=0,aot=0,funds=0,todayEur=0;
@@ -1260,7 +1271,7 @@ function render(){
     const weight=tv?val/tv*100:0;
     const target=n(h.targetWeight);
     let weightHtml="";
-    if(h.assetType!=="fund"&&target>0){
+    if(!valuationUnreliable&&h.assetType!=="fund"&&target>0){
       const diff=weight-target;
       const cls=Math.abs(diff)<=1?"weightOk":diff>1?"weightHigh":"weightLow";
       const wf=weight.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -1281,7 +1292,7 @@ function render(){
     const fundSourceMeta=h.assetType==="fund"&&h.quoteSource==="FUND_NAV"?
       ` · Lähde: ${esc(h.quoteProvider||h.quoteHealth?.provider||"ei tiedossa")}${h.navDate?` · ${esc(fundNavDateBadge(h))}`:""}`:"";
     const detailPrice=state.showDetails&&p?`<div class="priceLine${fundSourceMeta?" fundSourceLine":""}"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${fundSourceMeta}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?(fundValuationUncertain(h)?"≈ ":"")+money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?(fundValuationUncertain(h)?"≈ ":"")+money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -1339,15 +1350,16 @@ function render(){
     plan.appendChild(row);
   });
 
-  $("portfolioValue").textContent=valuationIncomplete?"—":(fxEstimate?"≈ ":"")+money(tv,state.baseCurrency);
+  $("portfolioValue").textContent=valuationIncomplete?"—":(valuationEstimate?"≈ ":"")+money(tv,state.baseCurrency);
   const notice=$("valuationWarning");
-  notice.classList.toggle("hidden",!valuationIncomplete&&!fxEstimate);
+  notice.classList.toggle("hidden",!valuationIncomplete&&!valuationEstimate);
   notice.textContent=valuationIncomplete
     ?"Salkun arvo on puutteellinen: vähintään yhden omistuksen kurssi tai tarvittava valuuttakurssi puuttuu. Yhteissummaa, tuottoa, salkkupainoja ja riskiarvoja ei voi laskea luotettavasti."
+    :navEstimate?"Salkun arvo ja tuotto ovat arvioita: vähintään yhden rahaston NAV, arvostuspäivä tai hintalähde on vahvistamatta tai vanhentunut. Salkkupainoja ja riskilukuja ei esitetä vahvistettuina."
     :fxEstimate?"Salkun arvossa käytetään ainakin yhden omistuksen aiempaa valuuttakurssia. Arvo ja tuotto ovat arvioita; tarkista verkkoyhteys ja valuuttakurssin päivitys.":"";
   const tp=tv-tc,tpp=tc?tp/tc*100:0;
   $("portfolioProfit").textContent=valuationIncomplete?"Tuotto ei laskettavissa":
-    state.holdings.length?(fxEstimate?"≈ ":"")+money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
+    state.holdings.length?(valuationEstimate?"≈ ":"")+money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
   $("portfolioProfit").className=valuationIncomplete?"muted":tp>0?"pos":tp<0?"neg":"";
 
   if(state.refreshSummary){
@@ -1359,15 +1371,15 @@ function render(){
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
   }
-  renderPortfolioAnalysis(rows,valuationIncomplete);
-  renderWhatIf(rows,valuationIncomplete,fxEstimate);
-  if(valuationIncomplete){
+  renderPortfolioAnalysis(rows,valuationUnreliable);
+  renderWhatIf(rows,valuationUnreliable,valuationEstimate);
+  if(valuationUnreliable){
     // Never claim precise portfolio weights, concentration or risk budgets
     // while any nonempty position is unvalued.
     $("accountSummary").innerHTML='<div class="summaryChip"><strong>Tilikohtaiset arvot eivät saatavilla</strong></div>';
     $("portfolioPulse").innerHTML='<div class="muted">Salkkupainot: ei laskettavissa puuttuvien kurssitietojen vuoksi.</div>';
     $("targetMap").innerHTML='<div class="muted">Tavoite-erot: ei laskettavissa.</div>';
-    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit: ei laskettavissa, koska salkun arvosta puuttuu omistuksia.</div>';
+    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit: ei laskettavissa, koska salkun hintatiedot ovat puutteelliset tai NAV on epävarma.</div>';
     $("risks").innerHTML="";
   }else{
     renderRiskDashboard(rows,tv);
