@@ -451,6 +451,20 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect"><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
   <label class="txt" for="accountLabel">Tilin tai salkun oma nimi (valinnainen)</label><input id="accountLabel" maxlength="80" placeholder="Esim. pitkäaikainen salkku"><p class="muted small">Erottaa useita saman palvelun tilejä. Älä kirjoita tilinumeroa tai henkilötietoja.</p>
   <div id="accountFormHint" class="statusBox muted hidden"></div>
+  <div id="fundPriceSourceSection" class="hidden">
+    <label class="txt" for="fundPriceSource">Rahaston NAV-hintalähde</label>
+    <select id="fundPriceSource">
+      <option value="">— Ei yhdistettyä hintalähdettä —</option>
+      <option value="NORDEA_POHJOISMAAT_SELECT_A">Nordea Pohjoismaat Indeksi Select A</option>
+      <option value="HANDELSBANKEN_USA_INDEKSI">Handelsbanken USA Indeksi</option>
+      <option value="NORDNET_EUROOPPA_INDEKSI">Nordnet Eurooppa Indeksi</option>
+      <option value="NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI">Nordnet Kehittyvät Markkinat Indeksi</option>
+      <option value="NORDNET_MAAILMA_INDEKSI_125">Nordnet Maailma Indeksi 125</option>
+      <option value="NORDNET_SUOMI_INDEKSI">Nordnet Suomi Indeksi</option>
+      <option value="STOREBRAND_JAPAN_A_EUR">Storebrand Japan A EUR</option>
+    </select>
+    <p class="muted small">Valitse vain täsmälleen oikea rahasto. Tallennuksen jälkeen päivitä kurssit. Lähde ei vahvista NAV:n arvostusvuotta, jos se puuttuu rahastosivulta.</p>
+  </div>
   <label class="txt">Nykykurssi käsin</label><input id="manualPrice" type="number" step="any" min="0">
   <div class="grid2">
     <div><label class="txt">Oma stop</label><input id="manualStop" type="number" step="any" min="0"></div>
@@ -815,6 +829,11 @@ function displayedPriceIssueLabel(h,issue){
 }
 function priceIssue(h){
   const health=h.quoteHealth||{};
+  if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()){
+    return {label:"HINTALÄHDE PUUTTUU",
+      reason:"Rahaston NAV-hintalähdettä ei ole yhdistetty. Avaa rahaston muokkaus ja valitse oikea hintalähde. Salkun kokonaisarvo on tältä osin puutteellinen.",
+      level:"warn"};
+  }
   if(health.status==="failed")
     return {label:h.currentPrice||h.manualPrice?"VANHA HINTA":"HINTA PUUTTUU",
       reason:"Viimeisin haku epäonnistui: "+String(health.reason||"tietoa ei saatu"),level:"bad"};
@@ -854,14 +873,16 @@ function renderPriceHealth(){
   const errors=issues.filter(x=>x.issue.level==="bad");
   const warnings=issues.filter(x=>x.issue.level==="warn");
   // Missing NAV year/day is not a failed quote request. Keep routine uncertainty neutral.
-  box.dataset.level=errors.length?"bad":warnings.some(x=>x.issue.label==="VANHA NAV")?"warn":"info";
+  box.dataset.level=errors.length?"bad":warnings.some(x=>["VANHA NAV","HINTALÄHDE PUUTTUU"].includes(x.issue.label))?"warn":"info";
   const dateMissing=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU").length;
   const navOld=warnings.filter(x=>x.issue.label==="VANHA NAV").length;
+  const sourceMissing=warnings.filter(x=>x.issue.label==="HINTALÄHDE PUUTTUU").length;
   const parts=[];
   if(errors.length)parts.push(errors.length+" "+(errors.length===1?"hintavirhe":"hintavirhettä"));
   if(dateMissing)parts.push("NAV-päivä tarkistamatta "+dateMissing+" rahastolla");
   if(navOld)parts.push(navOld+" vanhaa NAVia");
-  const rest=issues.length-errors.length-dateMissing-navOld;
+  if(sourceMissing)parts.push("Hintalähde puuttuu "+sourceMissing+" rahastolta");
+  const rest=issues.length-errors.length-dateMissing-navOld-sourceMissing;
   if(rest>0)parts.push(rest+" muuta tiedoksiantoa");
   $("priceHealthSummary").textContent=parts.join(" · ")+" · Näytä tarkemmin";
   const items=$("priceHealthItems");
@@ -1880,6 +1901,8 @@ function openDlg(id=null){
   $("instrumentLookupAction").classList.toggle("hidden",fundEdit);
   $("providerSymbolSection").classList.toggle("hidden",fundEdit);
   $("fundEditInfo").classList.toggle("hidden",!fundEdit);
+  $("fundPriceSourceSection").classList.toggle("hidden",!fundEdit);
+  $("fundPriceSource").value="";
   $("symbol").required=!fundEdit;
   $("name").required=fundEdit;
   if(id){
@@ -1895,6 +1918,10 @@ function openDlg(id=null){
     $("accountType").value=VALID_ACCOUNT_TYPES.includes(h.accountType)?h.accountType:"";
     setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox",h.broker);
     $("accountLabel").value=h.accountLabel||"";
+    if(h.assetType==="fund"){
+      const key=String(h.fundQuoteKey||h.symbol||"");
+      $("fundPriceSource").value=[...$("fundPriceSource").options].some(o=>o.value===key)?key:"";
+    }
     $("manualPrice").value=h.assetType==="fund"?(h.manualPrice??""):(h.manualPrice||h.currentPrice||"");
     $("manualStop").value=h.manualStop||"";
     $("trailing").value=h.trailingPct??12;
@@ -1972,6 +1999,14 @@ function saveHolding(){
   if(!fundEdit&&rawProvider&&!valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
   if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
   const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
+  const selectedFundSource=fundEdit?String($("fundPriceSource").value||""):"";
+  const originalFundSource=fundEdit?String(old.fundQuoteKey||""):"";
+  if(fundEdit&&selectedFundSource!==originalFundSource){
+    const selectedLabel=$("fundPriceSource").selectedOptions[0]?.textContent||"Ei hintalähdettä";
+    if(!window.confirm("VAHVISTA RAHASTON HINTALÄHDE\\n\\n"+
+      String(old.name||"Rahasto")+" → "+selectedLabel+
+      "\\n\\nVäärän rahaston NAV vääristäisi salkun arvoa. Tarkista, että rahasto-osuus ja valuutta vastaavat juuri tätä lähdettä."))return;
+  }
   const type=$("accountType").value,provider=$("brokerSelect").value;
   const complete=VALID_ACCOUNT_TYPES.includes(type)&&!!provider;
   if(!old.id&&!complete){
@@ -1998,6 +2033,7 @@ function saveHolding(){
       })
     : String(old.account||"");
   const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,
+    ...(fundEdit?{fundQuoteKey:selectedFundSource}:{}),
     quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account,
     accountType:fields?.accountType||type||old.accountType||"",
     broker:fields?.broker||(provider?formBrokerValue("brokerSelect","brokerOther"):old.broker||""),
@@ -2147,7 +2183,7 @@ async function refreshMarket(showErrors=false){
     $("refreshFeedback").className="statusBox";
     $("refreshFeedback").textContent="Päivitetään kursseja, rahastoja ja valuuttoja…";
   }
-  let stockOk=0, stockFail=0, fundOk=0, fundFail=0, firstError="";
+  let stockOk=0, stockFail=0, fundOk=0, fundFail=0, fundUnlinked=0, firstError="";
   const fx={};
   const fxSuccess=new Set(),fxFailures=new Map();
   const stocks=state.holdings.filter(h=>h.assetType!=="fund");
@@ -2190,7 +2226,14 @@ async function refreshMarket(showErrors=false){
 
     try{
       if(h.assetType==="fund"){
-        const q=marketData?.fund_quotes?.[h.symbol];
+        const fundKey=String(h.fundQuoteKey||h.symbol||"").trim();
+        if(!fundKey){
+          h.quoteHealth={status:"unlinked",checkedAt:Date.now(),
+            reason:"Rahastolle ei ole valittu NAV-hintalähdettä. Avaa rahaston muokkaus ja valitse oikea NAV-hintalähde."};
+          fundUnlinked++;
+          continue;
+        }
+        const q=marketData?.fund_quotes?.[fundKey];
         if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h))
           throw new Error(`NAV puuttuu tai on virheellinen: ${h.name||h.symbol}`);
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
@@ -2290,6 +2333,7 @@ async function refreshMarket(showErrors=false){
     marketTracked:stocks.length,
     fundsUpdated:fundOk,
     fundsTracked:funds.length,
+    fundsUnlinked:fundUnlinked,
     snapshot:snapshotCount,
     failed:stockFail+fundFail,
     workerOk:!!workerData,
@@ -2357,6 +2401,7 @@ async function loadHelsinkiData(retries=3){
         generatedAt:j.generated_at||null,
         quoteCount:Object.keys(j.quotes||{}).length,
         fundCount:Object.keys(j.fund_quotes||{}).length,
+        fundCatalogSize:7,
         checkedAt:Date.now()
       };
       save();
@@ -2385,7 +2430,7 @@ function renderMarketDataHealth(){
 
   const workerAge=w?.generatedAt?ago(Date.parse(w.generatedAt)):"—";
   const githubAge=g?.generatedAt?ago(Date.parse(g.generatedAt)):"—";
-  const navNote=g?.ok?` · NAV ${g.fundCount||0}/6`:"";
+  const navNote=g?.ok?` · NAV ${g.fundCount||0}/${g.fundCatalogSize||7}`:"";
 
   if(w?.ok){
     box.className="statusBox statusOk";
