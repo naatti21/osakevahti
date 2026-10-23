@@ -1,0 +1,43 @@
+name: Issue77 Phase1 isolated audit (no deployment)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['audit/issue77-phase1-regression-baseline']
+  pull_request:
+    branches: ['fix/alpha-fund-data-source-link-health-20261023']
+permissions:
+  contents: read
+jobs:
+  phase1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: git rev-parse HEAD > phase1-tested-sha.txt
+      - run: node tests/phase1/verify-baseline.mjs
+      - run: node scripts/build-alpha-pages.mjs
+      - name: Existing Node and package contracts
+        run: node --test tests/*.test.mjs > phase1-node.log 2>&1
+      - name: Existing source integrity guards
+        run: npm run test:qa-import > phase1-qa8.log 2>&1
+      - name: Phase1 browser baseline including visible RED oracles
+        env:
+          PHASE1_JSON: test-results/phase1-results.json
+        run: npx playwright test --config=tests/phase1/playwright.config.mjs > phase1-browser.log 2>&1
+      - name: Archive developer evidence even when RED
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue77-phase1-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            phase1-tested-sha.txt
+            phase1-*.log
+            test-results/
+          retention-days: 14
