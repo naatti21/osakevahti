@@ -13,7 +13,7 @@ const baseHolding={id:'old',name:'Nordnet Eurooppa Indeksi',symbol:'',
  accountDetailsConfirmed:true};
 async function setup(page,{holdings=[baseHolding],ocr=fund,confirm=true}={}){
  await page.addInitScript(({holdings,ocr,confirm})=>{
-  localStorage.setItem('osakevahti.single.v1',JSON.stringify({
+  if(!localStorage.getItem('osakevahti.single.v1'))localStorage.setItem('osakevahti.single.v1',JSON.stringify({
    baseCurrency:'EUR',apiKey:'',holdings,news:[],quoteUpdatedAt:null,
    riskBudgetPct:1.25,showDetails:false
   }));
