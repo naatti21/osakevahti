@@ -2000,7 +2000,12 @@ function saveHolding(){
   if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
   const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
   const selectedFundSource=fundEdit?String($("fundPriceSource").value||""):"";
-  const originalFundSource=fundEdit?String(old.fundQuoteKey||old.symbol||""):"";
+  const knownFundKeys=new Set([...$("fundPriceSource").options].map(o=>o.value).filter(Boolean));
+  const currentFundSource=fundEdit?String(old.fundQuoteKey||old.symbol||""):"";
+  const originalFundSource=knownFundKeys.has(currentFundSource)?currentFundSource:"";
+  // An unknown legacy data key must not be removed by editing only GAV.
+  const savedFundSource=selectedFundSource||
+    (!originalFundSource?String(old.fundQuoteKey||""):"");
   if(fundEdit&&selectedFundSource&&$("currency").value!=="EUR"){
     alert("Valittu NAV-lähde on euromääräinen. Vahvista rahaston valuutaksi EUR tai jätä NAV-lähde yhdistämättä.");
     return;
@@ -2047,7 +2052,7 @@ function saveHolding(){
       })
     : String(old.account||"");
   const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,
-    ...(fundEdit?{fundQuoteKey:selectedFundSource}:{}),
+    ...(fundEdit?{fundQuoteKey:savedFundSource}:{}),
     quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account,
     accountType:fields?.accountType||type||old.accountType||"",
     broker:fields?.broker||(provider?formBrokerValue("brokerSelect","brokerOther"):old.broker||""),
