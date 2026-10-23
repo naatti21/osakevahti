@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.8-alpha-refresh-single1";
+const CACHE = "osakevahti-shell-v2.17.8-alpha-issue77-repair1";
 const SHELL = [
   "./",
   "./index.html",
@@ -45,48 +45,30 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  if (url.origin !== self.location.origin) return;
+  // Acquire the handle before awaiting network. A retired worker must not
+  // reopen its cache after a new worker has deleted it during activation.
+  const cacheReady = caches.open(CACHE).catch(() => null);
+  const read = key => cacheReady.then(cache => cache?.match(key));
+  const network = key => fetch(req).then(async res => {
+    if (res.ok) {
+      try { const cache = await cacheReady; if (cache) await cache.put(key, res.clone()); }
+      catch { /* Storage failure must not discard a valid online response. */ }
+    }
+    return res;
+  });
+  let response;
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req)
-        .then(res => {
-          // HTTP 404/503 still resolve fetch(). Never let a server error
-          // overwrite the last known-good offline app shell.
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then(cache => cache.put("./index.html", copy)).catch(() => {});
-          }
-          return res;
-        })
-        .catch(() => caches.match("./index.html"))
-    );
-    return;
+    response = network("./index.html").catch(async () =>
+      (await read("./index.html")) || Response.error());
+  } else if (url.pathname.endsWith("/image-reader.js")) {
+    response = network(req).catch(async () => (await read(req)) || Response.error());
+  } else {
+    response = read(req).then(cached => cached || network(req));
   }
-
-  if (url.origin === self.location.origin && url.pathname.endsWith("/image-reader.js")) {
-    // Network first specifically for the OCR module; retain offline fallback.
-    event.respondWith(
-      fetch(req).then(res => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(cache => cache.put(req, copy));
-        }
-        return res;
-      }).catch(async () => (await caches.match(req)) || Response.error())
-    );
-    return;
-  }
-
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(req).then(cached =>
-        cached || fetch(req).then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(cache => cache.put(req, copy));
-          return res;
-        })
-      )
-    );
-  }
+  event.respondWith(response);
+  // Response completion includes cache writes; retain the worker until settled.
+  event.waitUntil(response.then(() => undefined, () => undefined));
 });
 
 // Push handler is ready. Subscription and VAPID backend are added later.

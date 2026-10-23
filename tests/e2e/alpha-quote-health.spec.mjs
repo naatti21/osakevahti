@@ -40,8 +40,11 @@ async function setup(page,options={}){
     return route.fulfill({status:404,body:'not supplied in fictional test'});
   });
   await page.goto('/index.html');
-  await page.evaluate(()=>refreshMarket(false));
+  // Wait for the application's real startup refresh before mutating test state.
+  // A separate manual refresh does not cancel the pending 500 ms startup timer.
+  await page.waitForFunction(()=>lastAutoRefresh>0&&!refreshMarketInFlight);
 }
+
 test('fund NAV missing valuation date is visibly unverified despite fresh generated_at',async({page})=>{
   await setup(page);
   const result=await page.evaluate(()=>{
