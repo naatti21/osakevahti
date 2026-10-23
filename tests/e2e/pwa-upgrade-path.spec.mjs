@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CURRENT_CACHE = 'osakevahti-shell-v2.17.8-alpha-fund-source1';
+const CURRENT_CACHE = 'osakevahti-shell-v2.17.8-alpha-refresh-single1';
 const LEGACY_CACHE = 'osakevahti-shell-v2.17.6-alpha';
 const FAILED_CACHE = 'osakevahti-shell-qa-broken-v2';
 const OTHER_CACHE = 'visual-academy-qa-shell-v1';
@@ -171,7 +171,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     const cacheResult = await page.evaluate(async name => {
       const keys = await caches.keys();
       const resp = await caches.match('/visual-academy/launch');
-      const shell = await caches.open('osakevahti-shell-v2.17.8-alpha-fund-source1');
+      const shell = await caches.open('osakevahti-shell-v2.17.8-alpha-refresh-single1');
       const html = await shell.match('/index.html');
       return {keys, other:resp ? await resp.text() : null, shell:html ? await html.text() : null};
     }, OTHER_CACHE);
