@@ -45,3 +45,7 @@ Two setup mistakes were diagnosed and corrected without app changes: external co
 ## Gate
 
 Phase 1 audit is suitable for independent review. **NO-GO for deployment or everyday-use reliability claims while the RED financial/source/restore cases remain open.** The next action is review of this baseline and approval of a separately scoped first repair PR. Do not start Phase 2 automatically.
+
+## OCR harness timing follow-up
+
+The concurrent final run on audit commit `838eb7d1e9b457ba3a7e64fb63090aba44e5c52a` failed the OCR test at the default five-second element wait. The failure snapshot already contains the correct fictional name and `0,37` quantity. The separate real-OCR profile now waits up to 60 seconds for actual OCR completion; no OCR substitution or financial assertion changed. This failed run is retained, and the delivery handoff records the subsequent exact-commit result.
