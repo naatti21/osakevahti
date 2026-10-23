@@ -69,3 +69,29 @@ test('manual refresh reports FX HTTP error instead of appearing to do nothing',a
   expect(h.fxRate).toBeCloseTo(0.82);
   expect(h.fxRateStatus).toBe('stale');
 });
+test('manual and startup refresh share a single FX transaction, leaving a finished spinner',async({page})=>{
+  await mockFeeds(page);
+  let fxCalls=0;
+  await page.route(fxApi,async route=>{
+    fxCalls++;
+    await route.fulfill({status:200,contentType:'application/json',
+      body:'{"base":"USD","rates":{"EUR":0.90}}'});
+  });
+  await prepareSyntheticUSD(page);
+  const result=await page.evaluate(async()=>{
+    const a=refreshMarket(true);
+    const b=refreshMarket(false); // must join the same in-flight refresh
+    await Promise.all([a,b]);
+    return {button:document.getElementById('refreshBtn').textContent,
+      disabled:document.getElementById('refreshBtn').disabled,
+      fx:state.holdings[0].fxRate,fxState:state.holdings[0].fxRateStatus};
+  });
+  expect(fxCalls).toBe(1);
+  expect(result.fx).toBeCloseTo(.90);
+  expect(result.fxState).toBe('fresh');
+  expect(result.button).toBe('↻');
+  expect(result.disabled).toBe(false);
+  await page.waitForTimeout(900);
+  expect(fxCalls).toBe(1); // startup timer cannot re-trigger immediately
+  await expect(page.locator('#refreshBtn')).toHaveText('↻');
+});

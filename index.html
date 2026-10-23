@@ -2195,7 +2195,19 @@ async function loadWorkerData(force=false,retries=2){
   throw lastErr||new Error("Worker-dataa ei saatu");
 }
 
-async function refreshMarket(showErrors=false){
+let refreshMarketInFlight=null;
+// Coalesce explicit and automatic refreshes. Never race two writes to the same
+// holding / FX state; keep the UI spinner tied to a single completion.
+function refreshMarket(showErrors=false){
+  if(refreshMarketInFlight)return refreshMarketInFlight;
+  if(showErrors)lastAutoRefresh=Date.now();
+  const operation=runMarketRefresh(showErrors);
+  refreshMarketInFlight=operation;
+  return operation.finally(()=>{
+    if(refreshMarketInFlight===operation)refreshMarketInFlight=null;
+  });
+}
+async function runMarketRefresh(showErrors=false){
   $("refreshBtn").disabled=true;
   $("refreshBtn").textContent="…";
   if(showErrors){
@@ -3851,7 +3863,8 @@ async function maybeAutoRefresh(force=false){
     refreshMarket(false).catch(()=>{});
   }
 }
-setTimeout(()=>maybeAutoRefresh(true),500);
+// Respect a fresh user-requested refresh made before startup's timer fires.
+setTimeout(()=>maybeAutoRefresh(false),500);
 setInterval(()=>maybeAutoRefresh(false),60*1000);
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible") maybeAutoRefresh(true);
