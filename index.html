@@ -2001,8 +2001,22 @@ function saveHolding(){
   const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
   const selectedFundSource=fundEdit?String($("fundPriceSource").value||""):"";
   const originalFundSource=fundEdit?String(old.fundQuoteKey||old.symbol||""):"";
+  if(fundEdit&&selectedFundSource&&$("currency").value!=="EUR"){
+    alert("Valittu NAV-lähde on euromääräinen. Vahvista rahaston valuutaksi EUR tai jätä NAV-lähde yhdistämättä.");
+    return;
+  }
   if(fundEdit&&selectedFundSource!==originalFundSource){
     const selectedLabel=$("fundPriceSource").selectedOptions[0]?.textContent||"Ei hintalähdettä";
+    if(selectedFundSource){
+      const expected=cleanNameToken(selectedLabel),actual=cleanNameToken($("name").value.trim());
+      const expectedTerms=new Set(meaningfulNameTokens(selectedLabel));
+      const actualTerms=new Set(meaningfulNameTokens($("name").value.trim()));
+      let overlap=0;for(const term of actualTerms)if(expectedTerms.has(term))overlap++;
+      if(expected!==actual&&(!expected.includes(actual)&&!actual.includes(expected))&&overlap<2){
+        alert("Rahaston nimi ei vastaa valittua NAV-lähdettä. Älä yhdistä eri rahastojen kursseja.");
+        return;
+      }
+    }
     if(!window.confirm("VAHVISTA RAHASTON HINTALÄHDE\\n\\n"+
       String(old.name||"Rahasto")+" → "+selectedLabel+
       "\\n\\nVäärän rahaston NAV vääristäisi salkun arvoa. Tarkista, että rahasto-osuus ja valuutta vastaavat juuri tätä lähdettä."))return;
