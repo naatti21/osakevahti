@@ -1,0 +1,9 @@
+# Issue #77 repair 2: fund source identity
+
+Stacked on storage repair; retains current Alpha single-flight refresh. New bindings require the complete normalized catalog name (all class letters/numbers retained) and catalog currency. Re-check edits even when the selected key did not change. No new company exception list or provider is introduced; existing source options supply the identity contract.
+
+Refresh validates known catalog identity and any explicit quote name, ISIN, currency, source key, symbol or share-class metadata, including nested instrument metadata, before updating price/date. Conflicting or uncorroborated explicit metadata rejects the observation and retains the previous NAV. Legacy payloads without identity metadata remain compatible with existing bindings; absence of metadata is not claimed to be external identity verification. Unknown legacy source keys remain preserved.
+
+Conservative limitation: spelling aliases and explicit share classes without matching stored evidence require review instead of fuzzy acceptance. Existing genuinely ambiguous bindings may stop refreshing; retained NAV is not deleted. No identifiers or financial fields are guessed.
+
+New tests: 6 RED / 1 positive control before repair. Targeted post-repair source, refresh preservation and existing source UI cases: 22 PASS / 0 FAIL / 0 SKIP. Original PR #79 assertions are unchanged. Full combined tests follow in the delivery handoff.

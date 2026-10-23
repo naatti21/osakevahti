@@ -747,6 +747,32 @@ function quotedCurrencyMatches(quote,holding){
   return !!holding.currency&&String(quote.currency).trim().toUpperCase()===String(holding.currency).trim().toUpperCase();
 }
 function opt(v){if(v===""||v==null)return null;const x=n(v);return x>0?x:null}
+// Identity comparison retains every word, class letter and number. It never
+// treats shared name tokens or a matching feed key as instrument proof.
+function exactFundName(value){return String(value||"").normalize("NFKC").trim().toLocaleLowerCase("en").replace(/\s+/g," ")}
+function fundSourceIdentity(key){
+  const option=[...$("fundPriceSource").options].find(o=>o.value===key&&key);
+  return option?{name:option.textContent.trim(),currency:"EUR"}:null;
+}
+function fundBindingMatches(h,key){
+  const source=fundSourceIdentity(key);
+  return !source||(exactFundName(h.name)===exactFundName(source.name)&&h.currency===source.currency);
+}
+function fundQuoteIdentityMatches(q,h,key){
+  if(!fundBindingMatches(h,key))return false;
+  const metadata=[q,q.instrument].filter(x=>x&&typeof x==="object");
+  for(const m of metadata){
+    if(m.currency&&!quotedCurrencyMatches(m,h))return false;
+    for(const field of ["name","companyName","longname"])
+      if(m[field]&&exactFundName(m[field])!==exactFundName(h.name))return false;
+    if(m.isin&&normalizedIdText(m.isin)!==normalizedIdText(h.instrument?.isin||h.isin))return false;
+    for(const field of ["symbol","fundQuoteKey","sourceKey"])
+      if(m[field]&&String(m[field])!==key)return false;
+    const shareClass=m.shareClass||m.share_class;
+    if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass))return false;
+  }
+  return true;
+}
 function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency",currency:c,maximumFractionDigits:2}).format(n(v))}
 function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
@@ -2010,18 +2036,12 @@ function saveHolding(){
     alert("Valittu NAV-lähde on euromääräinen. Vahvista rahaston valuutaksi EUR tai jätä NAV-lähde yhdistämättä.");
     return;
   }
+  if(fundEdit&&selectedFundSource&&!fundBindingMatches({name:$("name").value.trim(),currency:$("currency").value},selectedFundSource)){
+    alert("Rahaston koko nimi, osuuslaji tai valuutta ei vastaa NAV-lähdettä. Jätä epävarma lähde yhdistämättä.");
+    return;
+  }
   if(fundEdit&&selectedFundSource!==originalFundSource){
     const selectedLabel=$("fundPriceSource").selectedOptions[0]?.textContent||"Ei hintalähdettä";
-    if(selectedFundSource){
-      const expected=cleanNameToken(selectedLabel),actual=cleanNameToken($("name").value.trim());
-      const expectedTerms=new Set(meaningfulNameTokens(selectedLabel));
-      const actualTerms=new Set(meaningfulNameTokens($("name").value.trim()));
-      let overlap=0;for(const term of actualTerms)if(expectedTerms.has(term))overlap++;
-      if(expected!==actual&&(!expected.includes(actual)&&!actual.includes(expected))&&overlap<2){
-        alert("Rahaston nimi ei vastaa valittua NAV-lähdettä. Älä yhdistä eri rahastojen kursseja.");
-        return;
-      }
-    }
     if(!window.confirm("VAHVISTA RAHASTON HINTALÄHDE\\n\\n"+
       String(old.name||"Rahasto")+" → "+selectedLabel+
       "\\n\\nVäärän rahaston NAV vääristäisi salkun arvoa. Tarkista, että rahasto-osuus ja valuutta vastaavat juuri tätä lähdettä."))return;
@@ -2265,7 +2285,7 @@ async function runMarketRefresh(showErrors=false){
           continue;
         }
         const q=marketData?.fund_quotes?.[fundKey];
-        if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h))
+        if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h)||!fundQuoteIdentityMatches(q,h,fundKey))
           throw new Error(`NAV puuttuu tai on virheellinen: ${h.name||h.symbol}`);
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
         if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
