@@ -89,3 +89,24 @@ test('Legacy fund cost edit does not force source remap or alter existing quote 
  expect(after.symbol).toBe('NORDNET_EUROOPPA_INDEKSI');
  expect(after.currentPrice).toBe(185);
 });
+
+test('Different fund name cannot borrow Storebrand NAV even if user would confirm',async({page})=>{
+ await seed(page,[{...storebrand,name:'Completely Different Emerging Market Fund'}]);
+ await page.locator('#holdings .item').click();
+ await page.locator('#fundPriceSource').selectOption('STOREBRAND_JAPAN_A_EUR');
+ page.on('dialog',dialog=>dialog.accept());
+ await page.locator('#form button[type="submit"]').click();
+ await expect(page.locator('#dlg')).toBeVisible();
+ const after=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).holdings[0],KEY);
+ expect(after.fundQuoteKey).toBe('');
+});
+test('EUR-only curated fund source is rejected if saved fund currency is USD',async({page})=>{
+ await seed(page,[{...storebrand,currency:'USD'}]);
+ await page.locator('#holdings .item').click();
+ await page.locator('#fundPriceSource').selectOption('STOREBRAND_JAPAN_A_EUR');
+ page.on('dialog',dialog=>dialog.accept());
+ await page.locator('#form button[type="submit"]').click();
+ await expect(page.locator('#dlg')).toBeVisible();
+ const after=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).holdings[0],KEY);
+ expect(after.fundQuoteKey).toBe('');
+});
