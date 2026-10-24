@@ -614,6 +614,7 @@ function ensureInstrumentIdentity(h,source="migration"){
   const exchange=String(old.exchange||h.exchange||"").trim();
   const explicitIdentity=!!(isin || mic || exchange);
   h.instrument={
+    ...old, // Preserve recorded class/source metadata through legacy migration.
     schemaVersion:INSTRUMENT_SCHEMA_VERSION,
     companyName:String(old.companyName||h.name||"").trim(),
     isin,
