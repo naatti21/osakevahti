@@ -902,7 +902,7 @@ function holdingValuationQuality(h,p,fx){
   if(!validPositive(p))return unavailable("Käyttökelpoinen hinta puuttuu");
   if(!validPositive(fx))return unavailable("Tarvittava valuuttakurssi puuttuu");
   const reasons=[];
-  if(h.currency!==state.baseCurrency&&h.fxRateStatus==="stale")reasons.push("valuuttakurssi on vanhentunut");
+  if(h.currency!==state.baseCurrency&&h.fxRateStatus==="stale")reasons.push("käytetään aiempaa valuuttakurssia");
   if(h.assetType==="fund"){
     const key=String(h.fundQuoteKey||h.symbol||"").trim();
     if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return unavailable("NAV-lähde on ristiriidassa instrumentin tai osuuslajin kanssa");
