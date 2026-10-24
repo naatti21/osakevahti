@@ -763,9 +763,15 @@ function fundSourceIdentity(key){
 function fundSourceNameMatches(name,currency,source){
   return !!source&&[source.name,...source.aliases].some(candidate=>exactFundName(name,currency)===exactFundName(candidate,source.currency));
 }
+function fundSourceClass(source){
+  return source?.shareClass||String(source?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
+}
 function fundBindingMatches(h,key){
   const source=fundSourceIdentity(key);
-  return fundSourceNameMatches(h.name,h.currency,source)&&h.currency===source.currency;
+  const explicitClass=h.instrument?.shareClass||h.shareClass;
+  return fundSourceNameMatches(h.name,h.currency,source)&&h.currency===source.currency&&
+    (!h.instrument?.currency||normalizedIdText(h.instrument.currency)===normalizedIdText(h.currency))&&
+    (!explicitClass||normalizedIdText(explicitClass)===normalizedIdText(fundSourceClass(source)));
 }
 function fundQuoteIdentityMatches(q,h,key){
   if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return false;
@@ -778,7 +784,7 @@ function fundQuoteIdentityMatches(q,h,key){
     for(const field of ["symbol","fundQuoteKey","sourceKey"])
       if(m[field]&&String(m[field])!==key)return false;
     const shareClass=m.shareClass||m.share_class;
-    const namedClass=fundSourceIdentity(key)?.shareClass||String(fundSourceIdentity(key)?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
+    const namedClass=fundSourceClass(fundSourceIdentity(key));
     if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass||namedClass))return false;
   }
   return true;
