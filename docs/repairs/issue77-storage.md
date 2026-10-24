@@ -9,3 +9,7 @@ Backup restoration rejects unsupported ISO holding currencies, including malform
 No schema rewrite or deployed storage migration. Runtime needs `Intl.supportedValuesOf`, already available in tested Chromium; older browsers need separate compatibility review. User backups and Palkka are untouched.
 
 Current Alpha reproduction: original 27 audit cases = 21 PASS / 6 FAIL; both added CSV/OCR quota counterexamples fail before repair. Subsequent targeted results are recorded in the delivery handoff. The remaining source/valuation RED cases are repaired in separate stacked branches.
+
+## Independent review follow-up (#80)
+
+Currency validation now uses a pinned code catalogue rather than requiring `Intl.supportedValuesOf`. Candidate cloning has a JSON-compatible fallback after validation. Browser tests remove both newer APIs and verify CHF/JPY/CAD restoration plus rejection of ZZZ. Missing historical currency remains missing (including instrument metadata); the row stays visible and unvalued with an actionable edit warning, rather than guessing EUR. Restore accepts this explicitly incomplete legacy state, while new imports still require currency. Unchanged incomplete rows no longer block unrelated valid imports. The editor preserves additional legitimate currencies and requires explicit currency selection for incomplete rows. Quota/ID/metadata guarantees remain unchanged.
