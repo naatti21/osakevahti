@@ -894,13 +894,33 @@ function priceIssue(h){
     return {label:"KÄSIN SYÖTETTY",reason:"Automaattista hintatietoa ei ole vahvistettu.",level:"info"};
   return null;
 }
-function fundValuationUncertain(h){
-  if(h.assetType!=="fund"||!validPositive(h.quantity))return false;
-  const day=verifiedNavDate(h.navDate);
-  const key=String(h.fundQuoteKey||h.symbol||"").trim();
-  return !validPositive(h.currentPrice)||!day||!key||!fundBindingMatches(h,key)||
-    h.quoteHealth?.status==="failed"||
-    Date.now()-Date.parse(day+"T12:00:00Z")>5*86400000;
+// Shared policy: usable uncertain prices remain useful estimates; absent or
+// contradictory observations must never support aggregate calculations.
+function holdingValuationQuality(h,p,fx){
+  const unavailable=reason=>({status:"unavailable",reason});
+  if(!supportedHoldingCurrency(h.currency))return unavailable("Omistuksen valuutta on vahvistamatta");
+  if(!validPositive(p))return unavailable("Käyttökelpoinen hinta puuttuu");
+  if(!validPositive(fx))return unavailable("Tarvittava valuuttakurssi puuttuu");
+  const reasons=[];
+  if(h.currency!==state.baseCurrency&&h.fxRateStatus==="stale")reasons.push("valuuttakurssi on vanhentunut");
+  if(h.assetType==="fund"){
+    const key=String(h.fundQuoteKey||h.symbol||"").trim();
+    if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return unavailable("NAV-lähde on ristiriidassa instrumentin tai osuuslajin kanssa");
+    const day=verifiedNavDate(h.navDate);
+    if(!day)reasons.push("NAV-päivä tai vuosi on vahvistamatta");
+    else if(Date.now()-Date.parse(day+"T12:00:00Z")>5*86400000)reasons.push("NAV on vanhentunut");
+    if(!fundBindingMatches(h,key))reasons.push("NAV-lähteen identiteetti on vahvistamatta");
+  }else if(!validQuoteTime(h.quoteTimestamp)||Date.now()-Number(h.quoteTimestamp)>96*3600000||quoteIsStaleWhileOpen(h))reasons.push("kurssin ajantasaisuus on vahvistamatta");
+  if(!validPositive(h.currentPrice))reasons.push("hinta on syötetty käsin");
+  if(h.quoteHealth?.status==="failed")reasons.push("viimeisin hintahaku epäonnistui; käytössä aiempi hinta");
+  return {status:reasons.length?"indicative":"verified",reason:reasons.join("; ")};
+}
+function portfolioValuationQuality(rows){
+  const active=rows.filter(r=>n(r.h.quantity)>0);
+  const unavailable=active.filter(r=>r.quality.status==="unavailable");
+  const indicative=active.filter(r=>r.quality.status==="indicative");
+  return {status:unavailable.length?"unavailable":indicative.length?"indicative":"verified",
+    reason:[...new Set([...unavailable,...indicative].map(r=>r.quality.reason))].join("; ")};
 }
 function renderPriceHealth(){
   const box=$("priceHealthNotice");
@@ -1017,7 +1037,7 @@ function openQuickInfo(symbol){
 // amount is expressed in the portfolio base currency; buy-side fees/taxes are not modeled.
 function calculateWhatIf(rows,holdingId,amount,valuationIncomplete=false){
   if(!Array.isArray(rows)||!rows.length) return {ok:false,reason:"Lisää ensin omistuksia."};
-  if(valuationIncomplete||rows.some(r=>Number(r?.h?.quantity)<0 ||
+  if(valuationIncomplete||rows.some(r=>r.quality?.status==="unavailable"||Number(r?.h?.quantity)<0 ||
     (Number(r?.h?.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)||!Number.isFinite(r.val)))))
     return {ok:false,reason:"Salkun kaikkia hintoja tai valuuttakursseja ei tunneta. Simulaatiota ei voi laskea luotettavasti."};
   const amt=Number(amount);
@@ -1058,7 +1078,7 @@ function portfolioInstrumentKey(h){
 }
 function portfolioStructure(rows,valuationIncomplete=false){
   if(!Array.isArray(rows)||!rows.length) return {ok:false,reason:"Salkussa ei ole omistuksia."};
-  if(valuationIncomplete||rows.some(r=>Number(r?.h?.quantity)>0&&
+  if(valuationIncomplete||rows.some(r=>r.quality?.status==="unavailable"||Number(r?.h?.quantity)>0&&
     (!validPositive(r.p)||!validPositive(r.fx)||!Number.isFinite(r.val)||r.val<0)))
     return {ok:false,reason:"Hintatiedot tai valuuttakurssit ovat puutteellisia. Luotettavaa salkkurakennetta ei voi laskea."};
   const included=rows.filter(r=>Number(r.h?.quantity)>0);
@@ -1167,10 +1187,8 @@ function renderWhatIf(rows,valuationIncomplete,fxEstimate){
   if(available.some(r=>String(r.h.id)===previous))select.value=previous;
   if(available.some(r=>String(r.h.id)===previousAlt))alt.value=previousAlt;
   const pct=v=>v.toLocaleString("fi-FI",{minimumFractionDigits:1,maximumFractionDigits:1})+" %";
-  const warn=fxEstimate||rows.some(r=>Number(r.h.quantity)>0&&(
-    r.h.assetType==="fund"&&!verifiedNavDate(r.h.navDate)||
-    r.h.quoteHealth?.status==="failed"||
-    r.h.fxRateStatus==="stale"));
+  const warn=fxEstimate;
+  for(const control of [select,alt,amountInput,shockInput])control.disabled=valuationIncomplete;
   const describe=(scenario,title)=>{
     const s=scenario,base=s.base;
     const increased=s.concentratedDifference>0.0000001;
@@ -1209,7 +1227,7 @@ function renderWhatIf(rows,valuationIncomplete,fxEstimate){
     }
     result.innerHTML=html+
       '<div class="whatIfHint">'+
-      (warn?'<strong>Tietovaroitus:</strong> vähintään yhden hinnan tai NAV-päivän ajantasaisuus on epävarma. ':'')+
+      (warn?'<strong>≈ Viitteellinen laskelma — Tietovaroitus:</strong> vähintään yhden hinnan tai NAV-päivän ajantasaisuus on epävarma. ':'')+
       'Oletus: koko summa on salkkuun tulevaa uutta rahaa. Ei huomioida kaupankäyntikuluja, käteistä, verotusta, rahastojen sisäisiä yhtiöitä eikä kurssimuutosta ostohetkellä. Laskuri ei ole ostosuositus.</div>';
   };
   select.onchange=update;alt.onchange=update;
@@ -1236,15 +1254,13 @@ function render(){
     const cost=n(h.buyPrice)*n(h.quantity)*fx;
     const pnl=val-cost;
     const pct=cost?pnl/cost*100:0;
-    return {h,p,fx,val,cost,pnl,pct};
+    return {h,p,fx,val,cost,pnl,pct,quality:holdingValuationQuality(h,p,fx)};
   });
 
-  const valuationIncomplete=rows.some(r=>n(r.h.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)));
-  const fxEstimate=rows.some(r=>n(r.h.quantity)>0&&r.h.currency!==state.baseCurrency&&
-    validPositive(r.fx)&&r.h.fxRateStatus==="stale");
-  const navEstimate=rows.some(r=>fundValuationUncertain(r.h));
-  const valuationEstimate=fxEstimate||navEstimate;
-  const valuationUnreliable=valuationIncomplete||navEstimate;
+  const quality=portfolioValuationQuality(rows);
+  const valuationIncomplete=quality.status==="unavailable";
+  const valuationEstimate=quality.status==="indicative";
+  const valuationUnreliable=valuationIncomplete;
   const tv=rows.reduce((a,r)=>a+r.val,0);
   const tc=rows.reduce((a,r)=>a+r.cost,0);
   let ost=0,aot=0,funds=0,todayEur=0;
@@ -1299,7 +1315,7 @@ function render(){
     const fundSourceMeta=h.assetType==="fund"&&h.quoteSource==="FUND_NAV"?
       ` · Lähde: ${esc(h.quoteProvider||h.quoteHealth?.provider||"ei tiedossa")}${h.navDate?` · ${esc(fundNavDateBadge(h))}`:""}`:"";
     const detailPrice=state.showDetails&&p?`<div class="priceLine${fundSourceMeta?" fundSourceLine":""}"><span class="numLabel">${h.assetType==="fund"?"Osuuden arvo":"Kurssi"}</span>${money(p,h.currency)}${day!=null&&h.assetType!=="fund"?` · <span class="${day>0?"pos":day<0?"neg":""}">${sPct(day)}</span>`:""}${(h.quoteSource==="HELSINKI_CACHE"||h.quoteSource==="WORKER")&&h.quoteTimestamp?` · ${quoteContextLabel(h)}`:""}${fundSourceMeta}</div>`:"";
-    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx?(fundValuationUncertain(h)?"≈ ":"")+money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx?(fundValuationUncertain(h)?"≈ ":"")+money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
+    b.innerHTML=`<div><div class="symbol">${esc(headline)}</div><div class="name">${esc(subline)}</div><div class="metaLine"><span class="name">${n(h.quantity)} ${unit} · ${esc(displayAccount(h))}</span>${detailMeta}</div></div><div><div class="value"><span class="numLabel">Arvo</span>${p&&r.fx&&r.quality.status!=="unavailable"?(r.quality.status==="indicative"?"≈ ":"")+money(val,state.baseCurrency):"—"}</div><div class="pnl ${pnl>0?"pos":pnl<0?"neg":""}"><span class="numLabel">Tuotto</span>${p&&r.fx&&r.quality.status!=="unavailable"?(r.quality.status==="indicative"?"≈ ":"")+money(pnl,state.baseCurrency)+" · "+sPct(pct):(p?"Valuuttakurssi puuttuu":"Ei kurssia")}</div>${detailPrice}</div>`;
     b.onclick=()=>openDlg(h.id);
     $("holdings").appendChild(b);
   });
@@ -1361,9 +1377,8 @@ function render(){
   const notice=$("valuationWarning");
   notice.classList.toggle("hidden",!valuationIncomplete&&!valuationEstimate);
   notice.textContent=valuationIncomplete
-    ?"Salkun arvo on puutteellinen: vähintään yhden omistuksen kurssi tai tarvittava valuuttakurssi puuttuu. Yhteissummaa, tuottoa, salkkupainoja ja riskiarvoja ei voi laskea luotettavasti."
-    :navEstimate?"Salkun arvo ja tuotto ovat arvioita: vähintään yhden rahaston NAV, arvostuspäivä tai hintalähde on vahvistamatta tai vanhentunut. Salkkupainoja ja riskilukuja ei esitetä vahvistettuina."
-    :fxEstimate?"Salkun arvossa käytetään ainakin yhden omistuksen aiempaa valuuttakurssia. Arvo ja tuotto ovat arvioita; tarkista verkkoyhteys ja valuuttakurssin päivitys.":"";
+    ?"Salkun arvo on puutteellinen: "+quality.reason+". Yhteissummaa, tuottoa ja riskiarvoja ei voi laskea luotettavasti."
+    :valuationEstimate?"≈ Viitteellinen arvostus: "+quality.reason+". Arvo, tuotto ja analyysit ovat arvioita, eivät varmennettuja tuloksia.":"";
   const tp=tv-tc,tpp=tc?tp/tc*100:0;
   $("portfolioProfit").textContent=valuationIncomplete?"Tuotto ei laskettavissa":
     state.holdings.length?(valuationEstimate?"≈ ":"")+money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
@@ -1386,10 +1401,19 @@ function render(){
     $("accountSummary").innerHTML='<div class="summaryChip"><span>OST · vahvistettu</span><strong>—</strong></div><div class="summaryChip"><span>AOT · vahvistettu</span><strong>—</strong></div><div class="summaryChip"><strong>Tilikohtaiset arvot eivät saatavilla</strong></div>';
     $("portfolioPulse").innerHTML='<div class="muted">Salkkupainot: ei laskettavissa puuttuvien kurssitietojen vuoksi.</div>';
     $("targetMap").innerHTML='<div class="muted">Tavoite-erot: ei laskettavissa.</div>';
-    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit: ei laskettavissa, koska salkun hintatiedot ovat puutteelliset tai NAV on epävarma.</div>';
+    $("riskSummary").innerHTML='<div class="statusBox statusBad">Riskimittarit: ei laskettavissa, koska salkun hintatiedot ovat puutteelliset tai ristiriitaiset.</div>';
     $("risks").innerHTML="";
   }else{
     renderRiskDashboard(rows,tv);
+  }
+  for(const id of ["portfolioValue","portfolioProfit","accountSummary","portfolioAnalysisResult","whatIfResult","riskSummary","risks","portfolioPulse","targetMap"]){
+    const element=$(id);if(element)element.dataset.valuationQuality=quality.status;
+  }
+  if(valuationEstimate){
+    const estimate='<div class="statusBox muted" style="grid-column:1/-1">≈ Viitteellinen laskelma. '+esc(quality.reason)+'.</div>';
+    for(const id of ["accountSummary","portfolioAnalysisResult","riskSummary","portfolioPulse","targetMap"]){
+      $(id).insertAdjacentHTML("afterbegin",estimate);
+    }
   }
   renderNews();
   renderInsights();
