@@ -16,3 +16,10 @@ for(const [key,name] of [['NORDNET_EUROOPPA_INDEKSI','Nordnet – Eurooppa Indek
 test('unknown legacy key is compatibility only, never identity verification',async({page})=>{
  const h={...legacyFund,symbol:'SYNTHETIC_UNKNOWN',name:'Unregistered Fictional Fund'};await setup(page,{holdings:[h],quotes:{[h.symbol]:quote()}});expect(await page.evaluate(()=>fundBindingMatches(state.holdings[0],state.holdings[0].symbol))).toBe(false);expect((await stored(page))[0].quoteIdentity.status).toBe('unverified-source');
 });
+test('existing Handelsbanken provider A1 alias refreshes legacy display name without admitting B1',async({page})=>{
+ const key='HANDELSBANKEN_USA_INDEKSI',h={...legacyFund,symbol:key,name:'Handelsbanken USA Indeksi'};await setup(page,{holdings:[h],quotes:{[key]:quote({name:'Handelsbanken USA Index A1 EUR',shareClass:'A1'})}});expect((await stored(page))[0].currentPrice).toBe(155.25);
+ await page.locator('#holdings .item').click();await page.locator('#name').fill('Handelsbanken USA Index B1 EUR');await page.locator('#form button[type="submit"]').click();expect((await stored(page))[0].name).toBe(h.name);
+});
+test('existing Handelsbanken provider spelling can select its matching source',async({page})=>{
+ await setup(page,{holdings:[newFund('Handelsbanken USA Index A1 EUR')]});await page.locator('#holdings .item').click();await page.locator('#fundPriceSource').selectOption('HANDELSBANKEN_USA_INDEKSI');await page.locator('#form button[type="submit"]').click();expect((await stored(page))[0].fundQuoteKey).toBe('HANDELSBANKEN_USA_INDEKSI');
+});

@@ -456,7 +456,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <select id="fundPriceSource">
       <option value="">— Ei yhdistettyä hintalähdettä —</option>
       <option value="NORDEA_POHJOISMAAT_SELECT_A">Nordea Pohjoismaat Indeksi Select A</option>
-      <option value="HANDELSBANKEN_USA_INDEKSI">Handelsbanken USA Indeksi</option>
+      <!-- Existing FUND_PAGES URL identifies this legacy label as USA Index A1 EUR. -->
+      <option value="HANDELSBANKEN_USA_INDEKSI" data-source-name="Handelsbanken USA Index A1 EUR" data-share-class="A1">Handelsbanken USA Indeksi</option>
       <option value="NORDNET_EUROOPPA_INDEKSI">Nordnet Eurooppa Indeksi</option>
       <option value="NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI">Nordnet Kehittyvät Markkinat Indeksi</option>
       <option value="NORDNET_MAAILMA_INDEKSI_125">Nordnet Maailma Indeksi 125</option>
@@ -757,11 +758,14 @@ function exactFundName(value,currency=""){
 }
 function fundSourceIdentity(key){
   const option=[...$("fundPriceSource").options].find(o=>o.value===key&&key);
-  return option?{name:option.textContent.trim(),currency:"EUR"}:null;
+  return option?{name:option.textContent.trim(),currency:"EUR",aliases:option.dataset.sourceName?[option.dataset.sourceName]:[],shareClass:option.dataset.shareClass||""}:null;
+}
+function fundSourceNameMatches(name,currency,source){
+  return !!source&&[source.name,...source.aliases].some(candidate=>exactFundName(name,currency)===exactFundName(candidate,source.currency));
 }
 function fundBindingMatches(h,key){
   const source=fundSourceIdentity(key);
-  return !!source&&exactFundName(h.name,h.currency)===exactFundName(source.name,source.currency)&&h.currency===source.currency;
+  return fundSourceNameMatches(h.name,h.currency,source)&&h.currency===source.currency;
 }
 function fundQuoteIdentityMatches(q,h,key){
   if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return false;
@@ -769,12 +773,12 @@ function fundQuoteIdentityMatches(q,h,key){
   for(const m of metadata){
     if(m.currency&&!quotedCurrencyMatches(m,h))return false;
     for(const field of ["name","companyName","longname"])
-      if(m[field]&&exactFundName(m[field],h.currency)!==exactFundName(h.name,h.currency))return false;
+      if(m[field]&&exactFundName(m[field],h.currency)!==exactFundName(h.name,h.currency)&&!(fundBindingMatches(h,key)&&fundSourceNameMatches(m[field],h.currency,fundSourceIdentity(key))))return false;
     if(m.isin&&normalizedIdText(m.isin)!==normalizedIdText(h.instrument?.isin||h.isin))return false;
     for(const field of ["symbol","fundQuoteKey","sourceKey"])
       if(m[field]&&String(m[field])!==key)return false;
     const shareClass=m.shareClass||m.share_class;
-    const namedClass=String(fundSourceIdentity(key)?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
+    const namedClass=fundSourceIdentity(key)?.shareClass||String(fundSourceIdentity(key)?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
     if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass||namedClass))return false;
   }
   return true;
