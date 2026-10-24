@@ -23,3 +23,6 @@ test('existing Handelsbanken provider A1 alias refreshes legacy display name wit
 test('existing Handelsbanken provider spelling can select its matching source',async({page})=>{
  await setup(page,{holdings:[newFund('Handelsbanken USA Index A1 EUR')]});await page.locator('#holdings .item').click();await page.locator('#fundPriceSource').selectOption('HANDELSBANKEN_USA_INDEKSI');await page.locator('#form button[type="submit"]').click();expect((await stored(page))[0].fundQuoteKey).toBe('HANDELSBANKEN_USA_INDEKSI');
 });
+for(const instrument of [{shareClass:'B1'},{currency:'USD'}])test('stored identity contradiction cannot reuse matching source name '+JSON.stringify(instrument),async({page})=>{
+ const h={...legacyFund,symbol:'HANDELSBANKEN_USA_INDEKSI',name:'Handelsbanken USA Indeksi',instrument};await setup(page,{holdings:[h],quotes:{[h.symbol]:quote()}});expect((await stored(page))[0].currentPrice).toBe(143.75);expect((await stored(page))[0].quoteHealth.status).toBe('failed');
+});
