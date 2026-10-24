@@ -165,7 +165,9 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   await expect(box).toHaveAttribute('open','');
   await expect(page.locator('#priceHealthItems')).toContainText(navAgo(8));
   await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
-  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(0);
+  // Eight-day NAV is intentionally marked on the individual holding.
+  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(1);
+  await expect(page.locator('#holdings .sourceBadge')).toContainText('VANHA NAV');
   await page.locator('#detailsToggle').click();
   await expect(page.locator('#holdings .item').first()).toContainText('vuosi päätelty');
   await expect(page.locator('#holdings .item').first()).toContainText('Lähde: Fictional provider');
