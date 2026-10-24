@@ -1,0 +1,55 @@
+name: Issue77 repair verification (no deployment)
+on:
+  push:
+    branches: ['fix/issue77-pwa-reliability']
+  pull_request:
+    branches: ['fix/issue77-valuation-quality']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: git rev-parse HEAD > tested-sha.txt
+      - run: node scripts/build-alpha-pages.mjs
+      - run: node --test tests/*.test.mjs > node-results.log 2>&1
+      - run: npm run test:qa-import > qa8-results.log 2>&1
+      - run: npx playwright test --config=tests/phase1/full.config.mjs > browser-results.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue77-deterministic-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            tested-sha.txt
+            *-results.log
+            test-results/
+  external-connectivity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config=tests/phase1/external.config.mjs > external-results.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue77-external-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            external-results.log
+            test-results/
