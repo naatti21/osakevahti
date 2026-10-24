@@ -6,7 +6,7 @@ CSV and generic OCR shared final commit previously adopted holdings before local
 
 Backup restoration rejects unsupported ISO holding currencies, including malformed/pseudo codes, before any write. It preserves supported currencies beyond the editor's five choices (CHF/JPY/CAD controls). Historical missing internal position IDs acquire unique IDs in the staged candidate only; existing IDs, financial identity and account metadata remain unchanged. Numeric legacy IDs remain accepted. No ticker, ISIN, date or price is generated.
 
-No schema rewrite or deployed storage migration. Runtime needs `Intl.supportedValuesOf`, already available in tested Chromium; older browsers need separate compatibility review. User backups and Palkka are untouched.
+No schema rewrite or deployed storage migration. The initial runtime dependency on `Intl.supportedValuesOf` has been removed by the review follow-up below. User backups and Palkka are untouched.
 
 Current Alpha reproduction: original 27 audit cases = 21 PASS / 6 FAIL; both added CSV/OCR quota counterexamples fail before repair. Subsequent targeted results are recorded in the delivery handoff. The remaining source/valuation RED cases are repaired in separate stacked branches.
 

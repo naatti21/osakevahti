@@ -9,3 +9,7 @@ Cache version and the exact package/browser pins were updated together. No safet
 The existing quote-health test setup now awaits actual startup refresh instead of starting a second manual refresh before its timer fires. All financial assertions remain unchanged. Deterministic full browser profile runs legacy and repair tests on required port 4173. Three external FX/feed connectivity checks have a separate config/job with their real exit status. OCR stress/CDN remains a separately invoked external profile; an actual local fictional PNG/Tesseract/review test is retained as a separate opt-in profile.
 
 No deployment workflow was changed. The added read-only CI workflow checks the exact head and archives evidence even on failure. Results and environment limitations are in the final handoff.
+
+## Independent review follow-up (#83)
+
+The updated predecessor branches are incorporated in stack order without merging any PR or changing Alpha/main. The SW cache/package/browser pins advance together to `alpha-issue77-review2` so the revised application can replace its prior offline shell upon an explicitly approved future release. Added old-runtime import verification removes Intl.supportedValuesOf and structuredClone while testing quota rollback and retry. The full deterministic suite, real local OCR, actual-SW lifecycle and Chromium PWA upgrade/offline tests are rerun on the final head; live providers remain a separate real-status job.
