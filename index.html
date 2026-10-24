@@ -749,27 +749,33 @@ function quotedCurrencyMatches(quote,holding){
 function opt(v){if(v===""||v==null)return null;const x=n(v);return x>0?x:null}
 // Identity comparison retains every word, class letter and number. It never
 // treats shared name tokens or a matching feed key as instrument proof.
-function exactFundName(value){return String(value||"").normalize("NFKC").trim().toLocaleLowerCase("en").replace(/\s+/g," ")}
+function exactFundName(value,currency=""){
+  const text=String(value||"").normalize("NFKC").toLocaleLowerCase("en")
+    .replace(/[.,:;()\[\]{}\-–—]/g," ").trim().replace(/\s+/g," ");
+  const suffix=" "+String(currency).toLowerCase();
+  return currency&&text.endsWith(suffix)?text.slice(0,-suffix.length):text;
+}
 function fundSourceIdentity(key){
   const option=[...$("fundPriceSource").options].find(o=>o.value===key&&key);
   return option?{name:option.textContent.trim(),currency:"EUR"}:null;
 }
 function fundBindingMatches(h,key){
   const source=fundSourceIdentity(key);
-  return !source||(exactFundName(h.name)===exactFundName(source.name)&&h.currency===source.currency);
+  return !!source&&exactFundName(h.name,h.currency)===exactFundName(source.name,source.currency)&&h.currency===source.currency;
 }
 function fundQuoteIdentityMatches(q,h,key){
-  if(!fundBindingMatches(h,key))return false;
+  if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return false;
   const metadata=[q,q.instrument].filter(x=>x&&typeof x==="object");
   for(const m of metadata){
     if(m.currency&&!quotedCurrencyMatches(m,h))return false;
     for(const field of ["name","companyName","longname"])
-      if(m[field]&&exactFundName(m[field])!==exactFundName(h.name))return false;
+      if(m[field]&&exactFundName(m[field],h.currency)!==exactFundName(h.name,h.currency))return false;
     if(m.isin&&normalizedIdText(m.isin)!==normalizedIdText(h.instrument?.isin||h.isin))return false;
     for(const field of ["symbol","fundQuoteKey","sourceKey"])
       if(m[field]&&String(m[field])!==key)return false;
     const shareClass=m.shareClass||m.share_class;
-    if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass))return false;
+    const namedClass=String(fundSourceIdentity(key)?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
+    if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass||namedClass))return false;
   }
   return true;
 }
@@ -2290,8 +2296,9 @@ async function runMarketRefresh(showErrors=false){
           continue;
         }
         const q=marketData?.fund_quotes?.[fundKey];
-        if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h)||!fundQuoteIdentityMatches(q,h,fundKey))
+        if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h))
           throw new Error(`NAV puuttuu tai on virheellinen: ${h.name||h.symbol}`);
+        if(!fundQuoteIdentityMatches(q,h,fundKey))throw new Error("NAV-lähteen instrumentti, osuuslaji tai valuutta on ristiriidassa. Tarkista omistuksen nimi ja hintalähde; aiempi NAV säilytettiin.");
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
         if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
           throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
@@ -2305,6 +2312,7 @@ async function runMarketRefresh(showErrors=false){
         // If the dates are reliable, never silently roll a holding backwards.
         if(navDay&&previousDay&&navDay<previousDay)
           throw new Error("Lähteen NAV-päivä "+navDay+" on aiempaa "+previousDay+" vanhempi");
+        h.quoteIdentity={status:fundBindingMatches(h,fundKey)?"catalog-compatible":"unverified-source",sourceKey:fundKey};
         h.currentPrice=Number(q.price);
         h.navDate=q.nav_date||"";
         h.quoteTimestamp=navDay?Date.parse(navDay+"T12:00:00Z"):0;
