@@ -141,18 +141,18 @@ test('unknown new fund NAV date never overwrites a previously verified NAV amoun
 
 test('six fetched fund prices with no verified dates show compact amber summary, not six red alerts',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(staleNav=>{
     state.holdings=Array.from({length:6},(_,i)=>({
       id:'synthetic-'+i,symbol:'SYNTH_FUND_'+i,name:'Fictional Fund '+(i+1),
       assetType:'fund',quantity:5,buyPrice:10,currentPrice:11,
-      navDate:i===0?navAgo(8):'',quoteSource:'FUND_NAV',
+      navDate:i===0?staleNav:'',quoteSource:'FUND_NAV',
       quoteProvider:'Fictional provider',currency:'EUR',
       account:'Test',accountType:'FUND',
       quoteHealth:{status:'unverified-nav-day',provider:'Fictional provider'}
     }));
     state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:6,fundsTracked:6};
     render();
-  });
+  },navAgo(8));
   const box=page.locator('#priceHealthNotice');
   await expect(box).toBeVisible();
   await expect(box).toHaveAttribute('data-level','warn');
@@ -200,7 +200,8 @@ test('reported day/month is neutral source metadata, never a fabricated verified
   await expect(card).toContainText('Lähde: Fictional provider');
   await expect(card).not.toContainText('vuosi?');
   await expect(page.locator('#priceHealthNotice')).toBeHidden();
-  await expect(page.locator('#portfolioValue')).not.toHaveText(/^≈ /);
+  // An unknown synthetic provider remains indicative despite recent NAV.
+  await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
   await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
   const result=await page.evaluate(()=>({date:verifiedNavDate(state.holdings[0].navDate),
     seen:state.holdings[0].navDate,qty:state.holdings[0].quantity}));
@@ -208,17 +209,17 @@ test('reported day/month is neutral source metadata, never a fabricated verified
 });
 test('expanded portfolio shows exactly one item per stored holding even after repeated renders',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(todayNav=>{
     const base=state.holdings[0];
     state.holdings=Array.from({length:13},(_,i)=>({
       ...base,id:'fictional-row-'+i,
       symbol:'FAKE_'+i,name:'Fictional Holding '+i,
       quantity:i+1,currentPrice:10.5,
-      navDate:'16.10.',quoteSource:'FUND_NAV'
+      navDate:todayNav,quoteSource:'FUND_NAV'
     }));
     state.showDetails=true;
     render();render();render();
-  });
+  },navAgo(2));
   await expect(page.locator('#holdingCount')).toHaveText('(13)');
   await expect(page.locator('#holdings > .item')).toHaveCount(13);
   await expect(page.locator('#holdings > .item .sourceBadge')).toHaveCount(0);
@@ -254,21 +255,21 @@ test('verified NAV source date is shown once in details and holdings remain inta
 
 test('seven real catalog source labels with yearless NAV show one calm explanation, never red',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(freshNav=>{
     const options=[...document.querySelector('#fundPriceSource').options].filter(o=>o.value);
     state.holdings=options.map((option,i)=>({
       id:'synthetic-catalog-'+i,symbol:option.value,fundQuoteKey:option.value,
       name:option.textContent.trim(),assetType:'fund',quantity:2,
       buyPrice:30,currentPrice:51.75,currency:'EUR',
       instrument:{currency:'EUR',...(option.dataset.shareClass?{shareClass:option.dataset.shareClass}:{})},
-      navDate:navAgo(2),quoteTimestamp:0,quoteSource:'FUND_NAV',
+      navDate:freshNav,quoteTimestamp:0,quoteSource:'FUND_NAV',
       quoteProvider:'Synthetic public fund page',
       quoteHealth:{status:'unverified-nav-day',provider:'Synthetic public fund page'},
       account:'Synthetic AOT',accountType:'AOT',broker:'Synthetic',accountDetailsConfirmed:true
     }));
     state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:7,fundsTracked:7};
     render();
-  });
+  },navAgo(2));
   const before=await page.evaluate(()=>JSON.stringify(state.holdings));
   await expect(page.locator('#portfolioValue')).not.toHaveText(/^≈ /);
   await expect(page.locator('#valuationWarning')).toBeHidden();
