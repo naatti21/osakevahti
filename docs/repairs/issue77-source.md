@@ -7,3 +7,9 @@ Refresh validates known catalog identity and any explicit quote name, ISIN, curr
 Conservative limitation: spelling aliases and explicit share classes without matching stored evidence require review instead of fuzzy acceptance. Existing genuinely ambiguous bindings may stop refreshing; retained NAV is not deleted. No identifiers or financial fields are guessed.
 
 New tests: 6 RED / 1 positive control before repair. Targeted post-repair source, refresh preservation and existing source UI cases: 22 PASS / 0 FAIL / 0 SKIP. Original PR #79 assertions are unchanged. Full combined tests follow in the delivery handoff.
+
+## Independent review follow-up (#81)
+
+Formatting aliases now normalize punctuation, Unicode spacing and an optional matching currency suffix, while preserving every name word, class letter and number. This supports catalog Nordnet/Nordea/Handelsbanken spellings and Storebrand A with/without EUR; B remains distinct. No fuzzy overlap, inferred brand rename or new company exception list is added. Other aliases still require authoritative identity evidence rather than guessing.
+
+An unknown historical source key can remain compatible with a legacy observation but `fundBindingMatches` no longer reports it as matched. Accepted quotes record `catalog-compatible` or `unverified-source`, never independent instrument verification. Contradictory observations retain the previous NAV and give an actionable source/class warning. Post-review source controls: 27 PASS, including five new RED→GREEN cases.
