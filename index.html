@@ -1037,7 +1037,7 @@ function openQuickInfo(symbol){
 // amount is expressed in the portfolio base currency; buy-side fees/taxes are not modeled.
 function calculateWhatIf(rows,holdingId,amount,valuationIncomplete=false){
   if(!Array.isArray(rows)||!rows.length) return {ok:false,reason:"Lisää ensin omistuksia."};
-  if(valuationIncomplete||rows.some(r=>r.quality?.status==="unavailable"||Number(r?.h?.quantity)<0 ||
+  if(valuationIncomplete||rows.some(r=>(Number(r?.h?.quantity)>0&&r.quality?.status==="unavailable")||Number(r?.h?.quantity)<0 ||
     (Number(r?.h?.quantity)>0&&(!validPositive(r.p)||!validPositive(r.fx)||!Number.isFinite(r.val)))))
     return {ok:false,reason:"Salkun kaikkia hintoja tai valuuttakursseja ei tunneta. Simulaatiota ei voi laskea luotettavasti."};
   const amt=Number(amount);
@@ -1078,7 +1078,7 @@ function portfolioInstrumentKey(h){
 }
 function portfolioStructure(rows,valuationIncomplete=false){
   if(!Array.isArray(rows)||!rows.length) return {ok:false,reason:"Salkussa ei ole omistuksia."};
-  if(valuationIncomplete||rows.some(r=>r.quality?.status==="unavailable"||Number(r?.h?.quantity)>0&&
+  if(valuationIncomplete||rows.some(r=>(Number(r?.h?.quantity)>0&&r.quality?.status==="unavailable")||Number(r?.h?.quantity)>0&&
     (!validPositive(r.p)||!validPositive(r.fx)||!Number.isFinite(r.val)||r.val<0)))
     return {ok:false,reason:"Hintatiedot tai valuuttakurssit ovat puutteellisia. Luotettavaa salkkurakennetta ei voi laskea."};
   const included=rows.filter(r=>Number(r.h?.quantity)>0);
