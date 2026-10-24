@@ -18,6 +18,8 @@ async function stateAsRendered(page,holdings){
 function foreign(overrides={}){
   return {id:'synthetic-foreign',symbol:'QAUSD',name:'Synthetic USD Holding',
     currency:'USD',quantity:10,buyPrice:50,currentPrice:100,fxRate:0.8,
+    // Isolate FX quality: the stock price has a current observation timestamp.
+    quoteTimestamp:Date.now(),
     assetType:'stock',account:'AOT',accountDetailsConfirmed:true,...overrides};
 }
 
