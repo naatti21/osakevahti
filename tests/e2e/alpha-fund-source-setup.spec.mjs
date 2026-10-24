@@ -65,7 +65,7 @@ test('User-confirmed Storebrand source loads only source NAV with unverified day
  expect(after.quantity).toBe(.37);
  expect(after.symbol).toBe('');
  expect(after.instrument.identification).toBe('unverified');
- expect(await page.locator('#priceHealthNotice').getAttribute('data-level')).toBe('info');
+ await expect(page.locator('#priceHealthNotice')).toBeHidden();
 });
 test('Source selection cancelled at explicit confirmation does not change mapping',async({page})=>{
  await seed(page,[storebrand],false);
