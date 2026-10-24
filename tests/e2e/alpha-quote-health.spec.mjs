@@ -154,11 +154,11 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   });
   const box=page.locator('#priceHealthNotice');
   await expect(box).toBeVisible();
-  await expect(box).toHaveAttribute('data-level','info');
+  await expect(box).toHaveAttribute('data-level','warn');
   await expect(box).not.toHaveAttribute('open','');
-  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 vanhaa NAVia');
   await expect(page.locator('#priceHealthSummary')).toContainText('5 rahastolta puuttuu tarkka NAV-päivä');
-  await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 0/6');
+  await expect(page.locator('#quoteAge')).toContainText('NAV ≤7 pv 0/6');
   await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(6);
   await page.locator('#priceHealthSummary').click();
   await expect(box).toHaveAttribute('open','');
@@ -166,7 +166,7 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
   await expect(page.locator('#holdings .sourceBadge')).toHaveCount(0);
   await page.locator('#detailsToggle').click();
-  await expect(page.locator('#holdings .item').first()).toContainText('Lähteen pvm 16.10.');
+  await expect(page.locator('#holdings .item').first()).toContainText('NAV 16.10.2026 (vuosi päätelty)');
   await expect(page.locator('#holdings .item').first()).toContainText('Lähde: Fictional provider');
 });
 test('real failed price source escalates to red while benign uncertainty stays amber',async({page})=>{
@@ -194,11 +194,11 @@ test('reported day/month is neutral source metadata, never a fabricated verified
   await expect(card).toHaveCount(1);
   const badges=card.locator('.sourceBadge');
   await expect(badges).toHaveCount(0);
-  await expect(card).toContainText('Lähteen pvm 16.10.');
+  await expect(card).toContainText('NAV 16.10.2026 (vuosi päätelty)');
   await expect(card).toContainText('Lähde: Fictional provider');
   await expect(card).not.toContainText('vuosi?');
   await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
-  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 vanhaa NAVia');
   await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
   const result=await page.evaluate(()=>({date:verifiedNavDate(state.holdings[0].navDate),
     seen:state.holdings[0].navDate,qty:state.holdings[0].quantity}));
