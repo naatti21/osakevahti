@@ -1,0 +1,6 @@
+// Entirely synthetic portfolio. Public fund names are compatibility cases, not user data.
+export const KEY='osakevahti.single.v1';
+export const NOW='2026-10-23T12:00:00Z';
+export const legacyFund={id:'SYNTHETIC-LEGACY',name:'Nordnet Kehittyvät Markkinat Indeksi',symbol:'NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI',assetType:'fund',quantity:4.3,buyPrice:121.25,currency:'EUR',account:'Nordnet / AOT / Test A',accountType:'AOT',broker:'Nordnet',accountLabel:'Test A',accountDetailsConfirmed:true,currentPrice:143.75,navDate:'2026-10-22',quoteTimestamp:Date.parse('2026-10-22T12:00:00Z'),quoteSource:'FUND_NAV',quoteProvider:'Synthetic fixture'};
+export const newFund=(name='Cedar Aurora Japan A EUR')=>({id:'SYNTHETIC-NEW',name,symbol:'',assetType:'fund',quantity:.37,buyPrice:101.25,currency:'EUR',account:'Nordnet / Rahastotili / Test B',accountType:'FUND',broker:'Nordnet',accountLabel:'Test B',accountDetailsConfirmed:true});
+export const ocrFund=(name='Cedar Aurora Japan A EUR',quantity='0,37')=>({text:`Rahastot\n${name}\n${quantity} kpl\nNAV 143,75 EUR`,lines:[{text:'Rahastot',left:40,top:40},{text:name,left:40,top:140},{text:`${quantity} kpl`,left:500,top:210},{text:'NAV 143,75 EUR',left:500,top:270}]});

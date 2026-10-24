@@ -444,7 +444,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div><label class="txt">Keskihinta *</label><input id="buy" required type="number" step="any" min="0"></div>
   </div>
   <div class="grid2">
-    <div><label class="txt">Valuutta</label><select id="currency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
+    <div><label class="txt">Valuutta</label><select id="currency"><option value="">— Vahvista valuutta —</option><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option></select></div>
     <div><label class="txt" for="accountType">Tilityyppi</label><select id="accountType"><option value="">Valitse tilityyppi</option><option value="AOT">AOT – arvo-osuustili</option><option value="OST">OST – osakesäästötili</option><option value="FUND">Rahastotili</option><option value="OTHER">Muu</option></select></div>
   </div>
   <details class="accountHelp"><summary aria-label="Tilityyppien selitteet">ⓘ Mitä tilityypit tarkoittavat?</summary><p><strong>AOT</strong> = arvo-osuustili, yleinen osakkeiden ja ETF:ien säilytys. <strong>OST</strong> = osakesäästötili; rahasto-osuuksia ja ETF:iä ei voi pitää OST:llä. <strong>Rahastotili</strong> = sovelluksen yleisnimitys rahasto-omistusten säilytykselle, ei pankin virallinen tilinimi. <strong>Muu</strong> = muu järjestely tai epävarma tilityyppi.</p></details>
@@ -619,7 +619,7 @@ function ensureInstrumentIdentity(h,source="migration"){
     listingTicker,
     mic,
     exchange,
-    currency:normalizedIdText(old.currency||h.currency||"EUR"),
+    currency:normalizedIdText(old.currency||h.currency||""),
     providerSymbol,
     dataKey:normalizedIdText(old.dataKey||legacyDataKey(listingTicker)),
     source:String(old.source||source),
@@ -828,6 +828,7 @@ function displayedPriceIssueLabel(h,issue){
     ?fundNavDateBadge(h):issue?.label||"";
 }
 function priceIssue(h){
+  if(!supportedHoldingCurrency(h.currency))return {label:"VALUUTTA VAHVISTAMATTA",reason:"Historiallisen omistuksen valuutta puuttuu tai on virheellinen. Avaa omistus ja vahvista valuutta; tietoja ei poisteta eikä valuuttaa arvata.",level:"warn"};
   const health=h.quoteHealth||{};
   if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()){
     return {label:"HINTALÄHDE PUUTTUU",
@@ -1184,7 +1185,7 @@ function render(){
   // because hiding would make portfolio totals disagree with the visible list.
   const rows=state.holdings.map(h=>{
     // A malformed stored value must never render as a real negative quote.
-    const p=validPositive(h.currentPrice)?Number(h.currentPrice):
+    const p=!supportedHoldingCurrency(h.currency)?0:validPositive(h.currentPrice)?Number(h.currentPrice):
       (validPositive(h.manualPrice)?Number(h.manualPrice):0);
     // Pre-fix foreign FX=1 may be a previously fabricated fallback. It is not
     // trusted without evidence of a successful rate verification.
@@ -1914,7 +1915,10 @@ function openDlg(id=null){
     $("providerSymbol").value=h.providerSymbol||"";
     $("qty").value=h.quantity||"";
     $("buy").value=h.buyPrice||"";
-    $("currency").value=h.currency||"EUR";
+    if(supportedHoldingCurrency(h.currency)&&![...$("currency").options].some(o=>o.value===h.currency)){
+      const option=document.createElement("option");option.value=h.currency;option.textContent=h.currency;$("currency").appendChild(option);
+    }
+    $("currency").value=h.currency||"";
     $("accountType").value=VALID_ACCOUNT_TYPES.includes(h.accountType)?h.accountType:"";
     setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox",h.broker);
     $("accountLabel").value=h.accountLabel||"";
@@ -1988,6 +1992,7 @@ function boxCollapseAfterChoice() {
 }
 
 function saveHolding(){
+  if(!supportedHoldingCurrency($("currency").value)){alert("Vahvista omistuksen valuutta ennen tallennusta. Mitään ei muutettu.");return}
   const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{};
   const fundEdit=old.id&&old.assetType==="fund";
   // Funds have no exchange ticker requirement. Preserve even historical,
@@ -3029,8 +3034,20 @@ function commitPendingImport(){
   const incoming=pendingImport.rows.map(x=>x.holding);
   const merged=mergeImportedHoldings(state.holdings,incoming);
   if(merged.conflict)return;
-  state.holdings=merged.holdings;
-  save();render();
+  // Stage the full result. A quota/serialization/validation failure must not
+  // change either the live portfolio or the review draft (which can be retried).
+  try{
+    validateBackupForRestore({holdings:incoming});
+    const staged={...state,holdings:merged.holdings};
+    validateBackupForRestore(staged,{allowMissingCurrency:true});
+    const candidate=clonePortfolioCandidate(staged);
+    localStorage.setItem(KEY,JSON.stringify(candidate));
+    state=candidate;
+  }catch(err){
+    alert("Tallennus epäonnistui. Salkkua ei muutettu: "+(err?.message||err));
+    return;
+  }
+  render();
   const unresolved=incoming.filter(h=>h.instrument?.identification==="unverified").length;
   const count=incoming.length;
   pendingImport=null;$("importReviewDlg").close();
@@ -3038,7 +3055,16 @@ function commitPendingImport(){
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
-function validateBackupForRestore(parsed){
+function clonePortfolioCandidate(value){
+  return typeof structuredClone==="function"?structuredClone(value):JSON.parse(JSON.stringify(value));
+}
+function supportedHoldingCurrency(value){
+  // Pinned currency-code catalogue (ICU/CLDR currency enumeration, 2026-10).
+  // Validation must not depend on Android exposing Intl.supportedValuesOf.
+  // This validates currency identity, not availability of an FX provider.
+  return typeof value==="string"&&(" AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XDR XOF XPF XSU YER ZAR ZMW ZWG ZWL ").includes(" "+value+" ")&&/^[A-Z]{3}$/.test(value);
+}
+function validateBackupForRestore(parsed,{allowMissingCurrency=false}={}){
   if(!parsed || typeof parsed!=="object" || Array.isArray(parsed) || !Array.isArray(parsed.holdings))
     throw new Error("Varmuuskopiosta puuttuu kelvollinen omistuslista.");
   if(parsed.baseCurrency!==undefined && !["EUR","USD","SEK"].includes(parsed.baseCurrency))
@@ -3065,6 +3091,8 @@ function validateBackupForRestore(parsed){
       throw new Error(prefix+"instrumentin tunniste tai tili on virheellinen.");
     if(!String(h.symbol||h.name||h.instrument?.listingTicker||"").trim())
       throw new Error(prefix+"instrumentin tunniste puuttuu.");
+    if(!(allowMissingCurrency&&(h.currency==null||h.currency===""))&&!supportedHoldingCurrency(h.currency))
+      throw new Error(prefix+"omistuksen valuutta puuttuu tai ei ole tuettu.");
     if(!nonNegativeNumber(h.quantity))
       throw new Error(prefix+"määrän pitää olla ei-negatiivinen numero.");
     for(const field of ["buyPrice","manualPrice","currentPrice","manualStop","highWatermark","fxRate","atr","high20","low20","targetWeight","trailingPct"]){
@@ -3081,9 +3109,16 @@ async function importBackup(e){
   const f=e.target.files?.[0];if(!f)return;
   try{
     const parsed=JSON.parse(await f.text());
-    validateBackupForRestore(parsed); // Check all holdings before touching the user's portfolio.
-    const candidate={...state,...parsed,apiKey:state.apiKey||""};
+    validateBackupForRestore(parsed,{allowMissingCurrency:true}); // Check all holdings before touching the user's portfolio.
+    const candidate=clonePortfolioCandidate({...state,...parsed,apiKey:state.apiKey||""});
+    // Only internal position IDs are generated. No financial identifier is guessed.
+    const usedIds=new Set(candidate.holdings.filter(h=>h.id!=null).map(h=>String(h.id)));
+    for(const h of candidate.holdings)if(h.id==null){
+      do{h.id=uid()}while(usedIds.has(String(h.id)));
+      usedIds.add(String(h.id));
+    }
     migrateState(candidate);
+    validateBackupForRestore(candidate,{allowMissingCurrency:true});
     // Save once, and only adopt the candidate in memory AFTER successful storage.
     localStorage.setItem(KEY,JSON.stringify(candidate));
     state=candidate;
