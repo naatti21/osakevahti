@@ -196,7 +196,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div id="portfolioValue" class="heroValue">0,00 €</div>
     <div class="row"><span id="portfolioProfit">Ei omistuksia</span><span id="quoteAge" class="muted small">Ei päivitetty</span></div>
   </div>
-  <div id="valuationWarning" class="statusBox statusBad hidden" role="status"></div>
+  <div id="valuationWarning" class="statusBox hidden" role="status"></div>
   <details id="priceHealthNotice" class="priceHealthPanel hidden" data-level="warn">
     <summary id="priceHealthSummary">Hintatietojen tila</summary>
     <div id="priceHealthItems" class="priceHealthItems"></div>
@@ -885,8 +885,9 @@ function priceIssue(h){
     const day=verifiedNavDate(h.navDate);
     if(!day && (h.currentPrice||h.manualPrice))
       return {label:"NAV-PÄIVÄ PUUTTUU",
-        reason:(h.navDate?"Lähde ilmoittaa "+String(h.navDate)+", mutta arvostusvuosi puuttuu. ":"")+
-          "NAV-hinnan oikeaa arvostuspäivää ei ole vahvistettu. Hakupäivä ei kelpaa NAV-päiväksi.",
+        reason:/^\d{1,2}\.\d{1,2}\.$/.test(String(h.navDate||"").trim())
+          ?"Lähde ilmoittaa NAV-päiväksi "+String(h.navDate).trim()+" ilman vuotta. Hinta on saatavilla, mutta päivämäärää ei voi vahvistaa kokonaan."
+          :"NAV-hinnalle ei ole lähteessä täyttä arvostuspäivää. Hinta voidaan näyttää arviona, ei vahvistettuna päivähintana.",
         level:"warn"};
     if(!day)
       return {label:"NAV EI SAATAVILLA",reason:"Rahasto-osuuden hintaa ja arvostuspäivää ei ole vahvistettu.",level:"bad"};
@@ -947,16 +948,18 @@ function renderPriceHealth(){
   // Missing NAV year/day is not a failed quote request. Keep routine uncertainty neutral.
   box.dataset.level=errors.length?"bad":warnings.some(x=>["VANHA NAV","HINTALÄHDE PUUTTUU"].includes(x.issue.label))?"warn":"info";
   const dateMissing=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU").length;
+  const yearless=warnings.filter(x=>x.issue.label==="NAV-PÄIVÄ PUUTTUU"&&/^\d{1,2}\.\d{1,2}\.$/.test(String(x.h.navDate||"").trim())).length;
   const navOld=warnings.filter(x=>x.issue.label==="VANHA NAV").length;
   const sourceMissing=warnings.filter(x=>x.issue.label==="HINTALÄHDE PUUTTUU").length;
   const parts=[];
   if(errors.length)parts.push(errors.length+" "+(errors.length===1?"hintavirhe":"hintavirhettä"));
-  if(dateMissing)parts.push("NAV-päivä tarkistamatta "+dateMissing+" rahastolla");
+  if(yearless)parts.push(yearless+" rahaston NAV-lähde ilmoittaa päivän ilman vuotta");
+  if(dateMissing>yearless)parts.push((dateMissing-yearless)+" rahastolta puuttuu tarkka NAV-päivä");
   if(navOld)parts.push(navOld+" vanhaa NAVia");
   if(sourceMissing)parts.push("Hintalähde puuttuu "+sourceMissing+" rahastolta");
   const rest=issues.length-errors.length-dateMissing-navOld-sourceMissing;
   if(rest>0)parts.push(rest+" muuta tiedoksiantoa");
-  $("priceHealthSummary").textContent=parts.join(" · ")+" · Näytä tarkemmin";
+  $("priceHealthSummary").textContent=parts.join(" · ")+" · Lisätiedot";
   const items=$("priceHealthItems");
   items.replaceChildren();
   for(const {h,issue} of issues){
@@ -1386,10 +1389,19 @@ function render(){
 
   $("portfolioValue").textContent=valuationIncomplete?"—":(valuationEstimate?"≈ ":"")+money(tv,state.baseCurrency);
   const notice=$("valuationWarning");
-  notice.classList.toggle("hidden",!valuationIncomplete&&!valuationEstimate);
+  // A provider's day/month-only NAV is routine source metadata, not an alarm.
+  // The ≈ prefix remains on valuations and the day evidence stays in the
+  // expandable source details. Missing/contradictory data stays prominent.
+  const yearlessOnly=valuationEstimate&&rows.some(r=>n(r.h.quantity)>0)&&
+    rows.filter(r=>n(r.h.quantity)>0&&r.quality.status==="indicative").every(r=>
+      r.h.assetType==="fund"&&
+      /^\d{1,2}\.\d{1,2}\.$/.test(String(r.h.navDate||"").trim())&&
+      r.quality.reason==="NAV-päivä tai vuosi on vahvistamatta");
+  notice.className="statusBox"+(valuationIncomplete?" statusBad":" muted")+
+    ((!valuationIncomplete&&!valuationEstimate)||yearlessOnly?" hidden":"");
   notice.textContent=valuationIncomplete
-    ?"Salkun arvo on puutteellinen: "+quality.reason+". Yhteissummaa, tuottoa ja riskiarvoja ei voi laskea luotettavasti."
-    :valuationEstimate?"≈ Viitteellinen arvostus: "+quality.reason+". Arvo, tuotto ja analyysit ovat arvioita, eivät varmennettuja tuloksia.":"";
+    ?"Salkun arvostus puutteellinen: "+quality.reason+". Kaikkia yhteislukuja ei voida laskea."
+    :valuationEstimate?"≈ Salkun luvut ovat suuntaa antavia. "+quality.reason+". Tarkemmat lähdetiedot löydät yllä olevista lisätiedoista.":"";
   const tp=tv-tc,tpp=tc?tp/tc*100:0;
   $("portfolioProfit").textContent=valuationIncomplete?"Tuotto ei laskettavissa":
     state.holdings.length?(valuationEstimate?"≈ ":"")+money(tp,state.baseCurrency)+" · "+sPct(tpp):"Ei omistuksia";
@@ -1399,7 +1411,10 @@ function render(){
     const s=state.refreshSummary;
     const funds=state.holdings.filter(h=>h.assetType==="fund");
     const navDated=funds.filter(h=>validPositive(h.currentPrice)&&!!verifiedNavDate(h.navDate)).length;
-    const fundText=funds.length?" · NAV-päivä "+navDated+"/"+funds.length:"";
+    const yearlessNav=funds.filter(h=>validPositive(h.currentPrice)&&/^\d{1,2}\.\d{1,2}\.$/.test(String(h.navDate||"").trim())).length;
+    const fundText=!funds.length?"":yearlessNav===funds.length
+      ?" · "+yearlessNav+" rahaston NAV-pvm ilman vuotta"
+      :" · NAV-päivä "+navDated+"/"+funds.length+(yearlessNav?" · "+yearlessNav+" ilman vuotta":"");
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} osakkeet${fundText}`;
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
@@ -1421,8 +1436,12 @@ function render(){
     const element=$(id);if(element)element.dataset.valuationQuality=quality.status;
   }
   if(valuationEstimate){
-    const estimate='<div class="statusBox muted" style="grid-column:1/-1">≈ Viitteellinen laskelma. '+esc(quality.reason)+'.</div>';
-    for(const id of ["accountSummary","portfolioAnalysisResult","riskSummary","portfolioPulse","targetMap"]){
+    // The dashboard already has one expandable source explanation. Avoid a
+    // second warning-sized tile over the account summaries for routine NAV.
+    const estimate='<div class="statusBox muted" style="grid-column:1/-1">≈ Arvioon perustuvat luvut · '+esc(quality.reason)+'.</div>';
+    for(const id of yearlessOnly
+      ? ["portfolioAnalysisResult","riskSummary","targetMap"]
+      : ["accountSummary","portfolioAnalysisResult","riskSummary","portfolioPulse","targetMap"]){
       $(id).insertAdjacentHTML("afterbegin",estimate);
     }
   }
