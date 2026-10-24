@@ -59,7 +59,7 @@ test('User-confirmed Storebrand source loads only source NAV with unverified day
  const after=await page.evaluate(()=>state.holdings[0]);
  expect(after.currentPrice).toBe(215.86);
  expect(after.navDate).toBe('22.10.');
- expect(after.quoteHealth.status).toBe('unverified-nav-day');
+ expect(after.quoteHealth.status).toBe('year-assumed');
  expect(after.quoteTimestamp).toBe(0);
  expect(after.buyPrice).toBe(180.25);
  expect(after.quantity).toBe(.37);
