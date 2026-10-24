@@ -858,13 +858,44 @@ function verifiedNavDate(raw){
     dt.getUTCDate()!==d||ms>Date.now()+24*60*60*1000)return "";
   return [y,String(m).padStart(2,"0"),String(d).padStart(2,"0")].join("-");
 }
-// A partial date shown by a broker is useful context, not a verified NAV date.
+// Normal fund cadence: broker DD.MM. means the latest such calendar day not
+// in the future (normally current year, previous year around New Year).
+// Never replace the stored raw source date with the inferred full date.
+const FUND_NAV_MAX_AGE_DAYS=7;
+function fundNavDateInfo(raw,now=Date.now()){
+  const p=zonedDateParts(now,"Europe/Helsinki");
+  const today=Date.UTC(+p.year,+p.month-1,+p.day,12);
+  const full=verifiedNavDate(raw);
+  if(full){
+    const ms=Date.parse(full+"T12:00:00Z");
+    return {date:full,assumedYear:false,days:Math.max(0,Math.round((today-ms)/86400000))};
+  }
+  const m=String(raw||"").trim().match(/^(\d{1,2})\.(\d{1,2})\.$/);
+  if(!m)return null;
+  const day=+m[1],month=+m[2];
+  const valid=year=>{
+    const ms=Date.UTC(year,month-1,day,12),d=new Date(ms);
+    return d.getUTCFullYear()===year&&d.getUTCMonth()===month-1&&
+      d.getUTCDate()===day?ms:null;
+  };
+  let ms=valid(+p.year);
+  if(ms===null||ms>today)ms=valid(+p.year-1);
+  if(ms===null||ms>today)return null;
+  const d=new Date(ms);
+  return {date:[d.getUTCFullYear(),String(d.getUTCMonth()+1).padStart(2,"0"),
+    String(d.getUTCDate()).padStart(2,"0")].join("-"),
+    assumedYear:true,days:Math.round((today-ms)/86400000)};
+}
+function freshFundNav(h){
+  const info=fundNavDateInfo(h.navDate);
+  return !!info&&info.days<=FUND_NAV_MAX_AGE_DAYS;
+}
 function fundNavDateBadge(h){
-  const complete=verifiedNavDate(h.navDate);
-  if(complete)return "NAV "+complete.slice(8,10)+"."+complete.slice(5,7)+"."+complete.slice(0,4);
-  const reported=String(h.navDate||"").trim();
-  if(/^\d{1,2}\.\d{1,2}\.$/.test(reported))return "Lähteen pvm "+reported;
-  return "NAV-päivä vahvistamatta";
+  const info=fundNavDateInfo(h.navDate);
+  if(!info)return "NAV-päivä puuttuu";
+  const d=info.date;
+  return "NAV "+d.slice(8,10)+"."+d.slice(5,7)+"."+d.slice(0,4)+
+    (info.assumedYear?" (vuosi päätelty)":"");
 }
 function displayedPriceIssueLabel(h,issue){
   return h.assetType==="fund"&&issue?.label==="NAV-PÄIVÄ PUUTTUU"
@@ -882,19 +913,16 @@ function priceIssue(h){
     return {label:h.currentPrice||h.manualPrice?"VANHA HINTA":"HINTA PUUTTUU",
       reason:"Viimeisin haku epäonnistui: "+String(health.reason||"tietoa ei saatu"),level:"bad"};
   if(h.assetType==="fund"){
-    const day=verifiedNavDate(h.navDate);
-    if(!day && (h.currentPrice||h.manualPrice))
+    const info=fundNavDateInfo(h.navDate);
+    if(!info && (h.currentPrice||h.manualPrice))
       return {label:"NAV-PÄIVÄ PUUTTUU",
-        reason:/^\d{1,2}\.\d{1,2}\.$/.test(String(h.navDate||"").trim())
-          ?"Lähde ilmoittaa NAV-päiväksi "+String(h.navDate).trim()+" ilman vuotta. Hinta on saatavilla, mutta päivämäärää ei voi vahvistaa kokonaan."
-          :"NAV-hinnalle ei ole lähteessä täyttä arvostuspäivää. Hinta voidaan näyttää arviona, ei vahvistettuna päivähintana.",
-        level:"warn"};
-    if(!day)
+        reason:"Rahaston NAV-päivä puuttuu tai on virheellinen. Tarkista lähde.",level:"warn"};
+    if(!info)
       return {label:"NAV EI SAATAVILLA",reason:"Rahasto-osuuden hintaa ja arvostuspäivää ei ole vahvistettu.",level:"bad"};
-    const days=(Date.now()-Date.parse(day+"T12:00:00Z"))/86400000;
-    if(days>5)
-      return {label:"VANHA NAV",reason:"Viimeinen vahvistettu arvostuspäivä "+day+
-        ". Uudemman NAV:n saatavuus tarkistettava.",level:days>14?"bad":"warn"};
+    if(info.days>FUND_NAV_MAX_AGE_DAYS)
+      return {label:"VANHA NAV",reason:fundNavDateBadge(h)+" on "+info.days+
+        " kalenteripäivää vanha (raja "+FUND_NAV_MAX_AGE_DAYS+" päivää). Tarkista päivitys.",
+        level:info.days>14?"bad":"warn"};
   }
   if(h.assetType!=="fund"&&h.currentPrice&&(!validQuoteTime(h.quoteTimestamp)||
      Date.now()-Number(h.quoteTimestamp)>96*60*60*1000||quoteIsStaleWhileOpen(h)))
@@ -918,9 +946,9 @@ function holdingValuationQuality(h,p,fx){
   if(h.assetType==="fund"){
     const key=String(h.fundQuoteKey||h.symbol||"").trim();
     if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return unavailable("NAV-lähde on ristiriidassa instrumentin tai osuuslajin kanssa");
-    const day=verifiedNavDate(h.navDate);
-    if(!day)reasons.push("NAV-päivä tai vuosi on vahvistamatta");
-    else if(Date.now()-Date.parse(day+"T12:00:00Z")>5*86400000)reasons.push("NAV on vanhentunut");
+    const info=fundNavDateInfo(h.navDate);
+    if(!info)reasons.push("NAV-päivä puuttuu");
+    else if(info.days>FUND_NAV_MAX_AGE_DAYS)reasons.push("NAV on yli viikon vanha");
     if(!fundBindingMatches(h,key))reasons.push("NAV-lähteen identiteetti on vahvistamatta");
   }else if(!validQuoteTime(h.quoteTimestamp)||Date.now()-Number(h.quoteTimestamp)>96*3600000||quoteIsStaleWhileOpen(h))reasons.push("kurssin ajantasaisuus on vahvistamatta");
   if(!validPositive(h.currentPrice))reasons.push("hinta on syötetty käsin");
@@ -1122,7 +1150,7 @@ function portfolioStructure(rows,valuationIncomplete=false){
     groupTypes.set(type,(groupTypes.get(type)||0)+r.val);
   }
   const missingNav=included.filter(r=>r.h.assetType==="fund"&&
-    !verifiedNavDate(r.h.navDate)).length;
+    !freshFundNav(r.h)).length;
   const oldFx=included.filter(r=>r.h.fxRateStatus==="stale").length;
   const priceProblems=included.filter(r=>r.h.quoteHealth?.status==="failed"||
     r.h.assetType!=="fund"&&r.h.quoteTimestamp&&
@@ -1182,7 +1210,7 @@ function renderPortfolioAnalysis(rows,valuationIncomplete){
    (report.repeats.length?'<div class="labDecision">Sama tunnistettu instrumentti usealla omistusrivillä: '+
     report.repeats.map(x=>esc(x.symbol)+' ('+x.positions+' riviä)').join(', ')+
     '. Myös niiden yhteispaino on huomioitu keskittymissä. Rivien lukumäärä ei todista eri tilejä.</div>':'')+
-   '<div class="labNote">Tietojen laatu: '+caution.missingNav+' rahastolta puuttuu vahvistettu NAV-päivä, '+
+   '<div class="labNote">Tietojen laatu: '+caution.missingNav+' rahastolta puuttuu enintään viikon ikäinen NAV-päivä, '+
     caution.oldFx+' valuuttakurssia vanhentunut, '+caution.priceProblems+' osakkeella hintahuomautus, '+
     caution.unknownAccounts+' omistusrivillä tilityyppi tarkistamatta. Näissä tapauksissa johtopäätökset ovat alustavia.</div>'+
    '<div class="labNote">Toimiala-, maa- ja rahastojen läpivalaisuanalyysi: ei vielä luotettavaa lähdedataa. Niitä ei päätellä tickeristä tai rahaston nimestä.</div>';
@@ -1394,9 +1422,7 @@ function render(){
   // expandable source details. Missing/contradictory data stays prominent.
   const yearlessOnly=valuationEstimate&&rows.some(r=>n(r.h.quantity)>0)&&
     rows.filter(r=>n(r.h.quantity)>0&&r.quality.status==="indicative").every(r=>
-      r.h.assetType==="fund"&&
-      /^\d{1,2}\.\d{1,2}\.$/.test(String(r.h.navDate||"").trim())&&
-      r.quality.reason==="NAV-päivä tai vuosi on vahvistamatta");
+      r.h.assetType==="fund"&&freshFundNav(r.h)&&fundNavDateInfo(r.h.navDate)?.assumedYear);
   notice.className="statusBox"+(valuationIncomplete?" statusBad":" muted")+
     ((!valuationIncomplete&&!valuationEstimate)||yearlessOnly?" hidden":"");
   notice.textContent=valuationIncomplete
@@ -1410,11 +1436,8 @@ function render(){
   if(state.refreshSummary){
     const s=state.refreshSummary;
     const funds=state.holdings.filter(h=>h.assetType==="fund");
-    const navDated=funds.filter(h=>validPositive(h.currentPrice)&&!!verifiedNavDate(h.navDate)).length;
-    const yearlessNav=funds.filter(h=>validPositive(h.currentPrice)&&/^\d{1,2}\.\d{1,2}\.$/.test(String(h.navDate||"").trim())).length;
-    const fundText=!funds.length?"":yearlessNav===funds.length
-      ?" · "+yearlessNav+" rahaston NAV-pvm ilman vuotta"
-      :" · NAV-päivä "+navDated+"/"+funds.length+(yearlessNav?" · "+yearlessNav+" ilman vuotta":"");
+    const freshNav=funds.filter(h=>validPositive(h.currentPrice)&&freshFundNav(h)).length;
+    const fundText=funds.length?" · NAV ≤7 pv "+freshNav+"/"+funds.length:"";
     $("quoteAge").textContent=`${s.updated}/${s.marketTracked} osakkeet${fundText}`;
   }else{
     $("quoteAge").textContent=state.quoteUpdatedAt?ago(state.quoteUpdatedAt):"Ei päivitetty";
@@ -2368,23 +2391,26 @@ async function runMarketRefresh(showErrors=false){
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
         if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
           throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
-        const navDay=verifiedNavDate(q.nav_date);
-        const previousDay=verifiedNavDate(h.navDate);
-        // Never overwrite a price with a verified valuation date using a
-        // later-fetching but UNDATED quote. Fetch time is not NAV day.
-        if(previousDay&&!navDay)
+        const navInfo=fundNavDateInfo(q.nav_date);
+        const previousInfo=fundNavDateInfo(h.navDate);
+        const previousVerified=verifiedNavDate(h.navDate);
+        if(previousVerified&&!navInfo)
           throw new Error("Uuden NAV:n arvostuspäivä puuttuu; aiempi vahvistettu hinta säilyy");
-        // A source page can expose an older NAV than one previously accepted.
-        // If the dates are reliable, never silently roll a holding backwards.
-        if(navDay&&previousDay&&navDay<previousDay)
-          throw new Error("Lähteen NAV-päivä "+navDay+" on aiempaa "+previousDay+" vanhempi");
+        // An assumed-year observation must not erase same-day verified evidence.
+        if(previousVerified&&navInfo?.assumedYear&&navInfo.date<=previousVerified)
+          throw new Error("Aiempi varmennettu NAV-päivä säilyy; uusi lähde ei ilmoita uudempaa päivää");
+        if(navInfo&&previousInfo&&navInfo.date<previousInfo.date)
+          throw new Error("Lähteen NAV-päivä "+navInfo.date+" on aiempaa "+previousInfo.date+" vanhempi");
         h.quoteIdentity={status:fundBindingMatches(h,fundKey)?"catalog-compatible":"unverified-source",sourceKey:fundKey};
         h.currentPrice=Number(q.price);
         h.navDate=q.nav_date||"";
-        h.quoteTimestamp=navDay?Date.parse(navDay+"T12:00:00Z"):0;
-        h.quoteHealth={status:navDay?"ok":"unverified-nav-day",
+        // Keep raw NAV date; inferred year is an operational freshness rule,
+        // not a verified market timestamp.
+        h.quoteTimestamp=navInfo&&!navInfo.assumedYear?Date.parse(navInfo.date+"T12:00:00Z"):0;
+        h.quoteHealth={status:navInfo?(navInfo.assumedYear?"year-assumed":"ok"):"unverified-nav-day",
           provider:q.provider||"Rahastosivu",checkedAt:Date.now(),
-          reason:navDay?"":"Arvostuspäivä puuttuu tai ei sisällä vuotta"};
+          reason:navInfo?.assumedYear?"NAV-vuosi päätelty lähteen DD.MM.-päivästä":
+            navInfo?"":"Arvostuspäivä puuttuu"};
         h.dayChangePct=0;
         h.quoteSource="FUND_NAV";
         h.quoteProvider=q.provider||"Fund page";

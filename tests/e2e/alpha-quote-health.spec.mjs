@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 
 const KEY='osakevahti.single.v1';
+const navAgo=days=>{const d=new Date(Date.now()-days*86400000);return d.getUTCDate()+'.'+(d.getUTCMonth()+1)+'.'};
 const fund={id:'fake-fund',symbol:'SYNTH_FUND',name:'Fictional Index Fund',
   assetType:'fund',quantity:5,buyPrice:8.4,currency:'EUR',
   currentPrice:9.5,navDate:'',account:'Test',accountType:'FUND'};
@@ -140,33 +141,35 @@ test('unknown new fund NAV date never overwrites a previously verified NAV amoun
 
 test('six fetched fund prices with no verified dates show compact amber summary, not six red alerts',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(staleNav=>{
     state.holdings=Array.from({length:6},(_,i)=>({
       id:'synthetic-'+i,symbol:'SYNTH_FUND_'+i,name:'Fictional Fund '+(i+1),
       assetType:'fund',quantity:5,buyPrice:10,currentPrice:11,
-      navDate:i===0?'16.10.':'',quoteSource:'FUND_NAV',
+      navDate:i===0?staleNav:'',quoteSource:'FUND_NAV',
       quoteProvider:'Fictional provider',currency:'EUR',
       account:'Test',accountType:'FUND',
       quoteHealth:{status:'unverified-nav-day',provider:'Fictional provider'}
     }));
     state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:6,fundsTracked:6};
     render();
-  });
+  },navAgo(8));
   const box=page.locator('#priceHealthNotice');
   await expect(box).toBeVisible();
-  await expect(box).toHaveAttribute('data-level','info');
+  await expect(box).toHaveAttribute('data-level','warn');
   await expect(box).not.toHaveAttribute('open','');
-  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 vanhaa NAVia');
   await expect(page.locator('#priceHealthSummary')).toContainText('5 rahastolta puuttuu tarkka NAV-päivä');
-  await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 0/6');
+  await expect(page.locator('#quoteAge')).toContainText('NAV ≤7 pv 0/6');
   await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(6);
   await page.locator('#priceHealthSummary').click();
   await expect(box).toHaveAttribute('open','');
-  await expect(page.locator('#priceHealthItems')).toContainText('16.10.');
+  await expect(page.locator('#priceHealthItems')).toContainText(navAgo(8));
   await expect(page.locator('#priceHealthItems')).toContainText('Fictional provider');
-  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(0);
+  // Eight-day NAV is intentionally marked on the individual holding.
+  await expect(page.locator('#holdings .sourceBadge')).toHaveCount(1);
+  await expect(page.locator('#holdings .sourceBadge')).toContainText('VANHA NAV');
   await page.locator('#detailsToggle').click();
-  await expect(page.locator('#holdings .item').first()).toContainText('Lähteen pvm 16.10.');
+  await expect(page.locator('#holdings .item').first()).toContainText('vuosi päätelty');
   await expect(page.locator('#holdings .item').first()).toContainText('Lähde: Fictional provider');
 });
 test('real failed price source escalates to red while benign uncertainty stays amber',async({page})=>{
@@ -185,7 +188,8 @@ test('reported day/month is neutral source metadata, never a fabricated verified
   await setup(page);
   await page.evaluate(()=>{
     const h=state.holdings[0];
-    h.navDate='16.10.';
+    const d=new Date(Date.now()-2*86400000);
+    h.navDate=d.getUTCDate()+'.'+(d.getUTCMonth()+1)+'.';
     h.quoteSource='FUND_NAV';
     state.showDetails=true;
     render();
@@ -194,29 +198,30 @@ test('reported day/month is neutral source metadata, never a fabricated verified
   await expect(card).toHaveCount(1);
   const badges=card.locator('.sourceBadge');
   await expect(badges).toHaveCount(0);
-  await expect(card).toContainText('Lähteen pvm 16.10.');
+  await expect(card).toContainText('vuosi päätelty');
   await expect(card).toContainText('Lähde: Fictional provider');
   await expect(card).not.toContainText('vuosi?');
-  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
-  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#priceHealthNotice')).toBeHidden();
+  // An unknown synthetic provider remains indicative despite recent NAV.
+  await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
   await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
   const result=await page.evaluate(()=>({date:verifiedNavDate(state.holdings[0].navDate),
     seen:state.holdings[0].navDate,qty:state.holdings[0].quantity}));
-  expect(result).toEqual({date:'',seen:'16.10.',qty:5});
+  expect(result).toEqual({date:'',seen:navAgo(2),qty:5});
 });
 test('expanded portfolio shows exactly one item per stored holding even after repeated renders',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(todayNav=>{
     const base=state.holdings[0];
     state.holdings=Array.from({length:13},(_,i)=>({
       ...base,id:'fictional-row-'+i,
       symbol:'FAKE_'+i,name:'Fictional Holding '+i,
       quantity:i+1,currentPrice:10.5,
-      navDate:'16.10.',quoteSource:'FUND_NAV'
+      navDate:todayNav,quoteSource:'FUND_NAV'
     }));
     state.showDetails=true;
     render();render();render();
-  });
+  },navAgo(2));
   await expect(page.locator('#holdingCount')).toHaveText('(13)');
   await expect(page.locator('#holdings > .item')).toHaveCount(13);
   await expect(page.locator('#holdings > .item .sourceBadge')).toHaveCount(0);
@@ -252,31 +257,29 @@ test('verified NAV source date is shown once in details and holdings remain inta
 
 test('seven real catalog source labels with yearless NAV show one calm explanation, never red',async({page})=>{
   await setup(page);
-  await page.evaluate(()=>{
+  await page.evaluate(freshNav=>{
     const options=[...document.querySelector('#fundPriceSource').options].filter(o=>o.value);
     state.holdings=options.map((option,i)=>({
       id:'synthetic-catalog-'+i,symbol:option.value,fundQuoteKey:option.value,
       name:option.textContent.trim(),assetType:'fund',quantity:2,
       buyPrice:30,currentPrice:51.75,currency:'EUR',
       instrument:{currency:'EUR',...(option.dataset.shareClass?{shareClass:option.dataset.shareClass}:{})},
-      navDate:'22.10.',quoteTimestamp:0,quoteSource:'FUND_NAV',
+      navDate:freshNav,quoteTimestamp:0,quoteSource:'FUND_NAV',
       quoteProvider:'Synthetic public fund page',
       quoteHealth:{status:'unverified-nav-day',provider:'Synthetic public fund page'},
       account:'Synthetic AOT',accountType:'AOT',broker:'Synthetic',accountDetailsConfirmed:true
     }));
     state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:7,fundsTracked:7};
     render();
-  });
+  },navAgo(2));
   const before=await page.evaluate(()=>JSON.stringify(state.holdings));
-  await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
+  await expect(page.locator('#portfolioValue')).not.toHaveText(/^≈ /);
   await expect(page.locator('#valuationWarning')).toBeHidden();
-  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
-  await expect(page.locator('#priceHealthSummary')).toContainText('7 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
-  await expect(page.locator('#quoteAge')).toContainText('7 rahaston NAV-pvm ilman vuotta');
+  await expect(page.locator('#priceHealthNotice')).toBeHidden();
+  await expect(page.locator('#quoteAge')).toContainText('NAV ≤7 pv 7/7');
   await expect(page.locator('#accountSummary .statusBox')).toHaveCount(0);
-  await page.locator('#priceHealthSummary').click();
-  await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(7);
-  await expect(page.locator('#priceHealthItems')).toContainText('22.10.');
+  await page.locator('#detailsToggle').click();
+  await expect(page.locator('#holdings')).toContainText('vuosi päätelty');
   await page.evaluate(()=>{render();render()});
   expect(await page.evaluate(()=>JSON.stringify(state.holdings))).toEqual(before);
 });
@@ -291,4 +294,40 @@ test('an actually missing price still produces a red valuation error, not the ca
   await expect(page.locator('#valuationWarning')).toBeVisible();
   await expect(page.locator('#valuationWarning')).toHaveClass(/statusBad/);
   await expect(page.locator('#valuationWarning')).toContainText('puutteellinen');
+});
+
+test('DD.MM. year inference and seven-day cutoff handle New Year, future and malformed dates',async({page})=>{
+  await page.goto('/index.html');
+  const values=await page.evaluate(()=>{
+    const at=(raw,iso)=>fundNavDateInfo(raw,Date.parse(iso));
+    return {
+      two:at('22.10.','2026-10-24T12:00:00Z'),
+      week:at('17.10.','2026-10-24T12:00:00Z'),
+      stale:at('16.10.','2026-10-24T12:00:00Z'),
+      newYear:at('31.12.','2027-01-02T12:00:00Z'),
+      invalid:at('31.11.','2026-11-30T12:00:00Z'),
+      leap:at('29.02.','2026-10-24T12:00:00Z')
+    };
+  });
+  expect(values.two).toMatchObject({date:'2026-10-22',days:2,assumedYear:true});
+  expect(values.week).toMatchObject({date:'2026-10-17',days:7,assumedYear:true});
+  expect(values.stale).toMatchObject({date:'2026-10-16',days:8,assumedYear:true});
+  expect(values.newYear).toMatchObject({date:'2026-12-31',days:2,assumedYear:true});
+  expect(values.invalid).toBeNull();
+  expect(values.leap).toBeNull();
+});
+test('eight-day NAV is a warning; fresh day-only NAV never fabricates a timestamp',async({page})=>{
+  await setup(page);
+  const result=await page.evaluate(()=>{
+    const h=state.holdings[0];
+    const d=new Date(Date.now()-8*86400000);
+    h.navDate=d.getUTCDate()+'.'+(d.getUTCMonth()+1)+'.';
+    h.quoteHealth={status:'year-assumed'};
+    render();
+    return {issue:priceIssue(h),quality:holdingValuationQuality(h,h.currentPrice,1)};
+  });
+  expect(result.issue.label).toBe('VANHA NAV');
+  expect(result.quality.status).toBe('indicative');
+  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','warn');
+  await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
 });
