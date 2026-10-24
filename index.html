@@ -456,7 +456,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <select id="fundPriceSource">
       <option value="">— Ei yhdistettyä hintalähdettä —</option>
       <option value="NORDEA_POHJOISMAAT_SELECT_A">Nordea Pohjoismaat Indeksi Select A</option>
-      <option value="HANDELSBANKEN_USA_INDEKSI">Handelsbanken USA Indeksi</option>
+      <!-- Existing FUND_PAGES URL identifies this legacy label as USA Index A1 EUR. -->
+      <option value="HANDELSBANKEN_USA_INDEKSI" data-source-name="Handelsbanken USA Index A1 EUR" data-share-class="A1">Handelsbanken USA Indeksi</option>
       <option value="NORDNET_EUROOPPA_INDEKSI">Nordnet Eurooppa Indeksi</option>
       <option value="NORDNET_KEHITTYVAT_MARKKINAT_INDEKSI">Nordnet Kehittyvät Markkinat Indeksi</option>
       <option value="NORDNET_MAAILMA_INDEKSI_125">Nordnet Maailma Indeksi 125</option>
@@ -613,6 +614,7 @@ function ensureInstrumentIdentity(h,source="migration"){
   const exchange=String(old.exchange||h.exchange||"").trim();
   const explicitIdentity=!!(isin || mic || exchange);
   h.instrument={
+    ...old, // Preserve recorded class/source metadata through legacy migration.
     schemaVersion:INSTRUMENT_SCHEMA_VERSION,
     companyName:String(old.companyName||h.name||"").trim(),
     isin,
@@ -747,6 +749,47 @@ function quotedCurrencyMatches(quote,holding){
   return !!holding.currency&&String(quote.currency).trim().toUpperCase()===String(holding.currency).trim().toUpperCase();
 }
 function opt(v){if(v===""||v==null)return null;const x=n(v);return x>0?x:null}
+// Identity comparison retains every word, class letter and number. It never
+// treats shared name tokens or a matching feed key as instrument proof.
+function exactFundName(value,currency=""){
+  const text=String(value||"").normalize("NFKC").toLocaleLowerCase("en")
+    .replace(/[.,:;()\[\]{}\-–—]/g," ").trim().replace(/\s+/g," ");
+  const suffix=" "+String(currency).toLowerCase();
+  return currency&&text.endsWith(suffix)?text.slice(0,-suffix.length):text;
+}
+function fundSourceIdentity(key){
+  const option=[...$("fundPriceSource").options].find(o=>o.value===key&&key);
+  return option?{name:option.textContent.trim(),currency:"EUR",aliases:option.dataset.sourceName?[option.dataset.sourceName]:[],shareClass:option.dataset.shareClass||""}:null;
+}
+function fundSourceNameMatches(name,currency,source){
+  return !!source&&[source.name,...source.aliases].some(candidate=>exactFundName(name,currency)===exactFundName(candidate,source.currency));
+}
+function fundSourceClass(source){
+  return source?.shareClass||String(source?.name||"").match(/\s([A-Z][A-Z0-9]{0,2})(?:\s+EUR)?$/)?.[1]||"";
+}
+function fundBindingMatches(h,key){
+  const source=fundSourceIdentity(key);
+  const explicitClass=h.instrument?.shareClass||h.shareClass;
+  return fundSourceNameMatches(h.name,h.currency,source)&&h.currency===source.currency&&
+    (!h.instrument?.currency||normalizedIdText(h.instrument.currency)===normalizedIdText(h.currency))&&
+    (!explicitClass||normalizedIdText(explicitClass)===normalizedIdText(fundSourceClass(source)));
+}
+function fundQuoteIdentityMatches(q,h,key){
+  if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return false;
+  const metadata=[q,q.instrument].filter(x=>x&&typeof x==="object");
+  for(const m of metadata){
+    if(m.currency&&!quotedCurrencyMatches(m,h))return false;
+    for(const field of ["name","companyName","longname"])
+      if(m[field]&&exactFundName(m[field],h.currency)!==exactFundName(h.name,h.currency)&&!(fundBindingMatches(h,key)&&fundSourceNameMatches(m[field],h.currency,fundSourceIdentity(key))))return false;
+    if(m.isin&&normalizedIdText(m.isin)!==normalizedIdText(h.instrument?.isin||h.isin))return false;
+    for(const field of ["symbol","fundQuoteKey","sourceKey"])
+      if(m[field]&&String(m[field])!==key)return false;
+    const shareClass=m.shareClass||m.share_class;
+    const namedClass=fundSourceClass(fundSourceIdentity(key));
+    if(shareClass&&normalizedIdText(shareClass)!==normalizedIdText(h.instrument?.shareClass||h.shareClass||namedClass))return false;
+  }
+  return true;
+}
 function money(v,c="EUR"){return new Intl.NumberFormat("fi-FI",{style:"currency",currency:c,maximumFractionDigits:2}).format(n(v))}
 function sPct(v){v=n(v);return (v>0?"+":"")+v.toFixed(2)+" %"}
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;")}
@@ -2015,18 +2058,12 @@ function saveHolding(){
     alert("Valittu NAV-lähde on euromääräinen. Vahvista rahaston valuutaksi EUR tai jätä NAV-lähde yhdistämättä.");
     return;
   }
+  if(fundEdit&&selectedFundSource&&!fundBindingMatches({name:$("name").value.trim(),currency:$("currency").value},selectedFundSource)){
+    alert("Rahaston koko nimi, osuuslaji tai valuutta ei vastaa NAV-lähdettä. Jätä epävarma lähde yhdistämättä.");
+    return;
+  }
   if(fundEdit&&selectedFundSource!==originalFundSource){
     const selectedLabel=$("fundPriceSource").selectedOptions[0]?.textContent||"Ei hintalähdettä";
-    if(selectedFundSource){
-      const expected=cleanNameToken(selectedLabel),actual=cleanNameToken($("name").value.trim());
-      const expectedTerms=new Set(meaningfulNameTokens(selectedLabel));
-      const actualTerms=new Set(meaningfulNameTokens($("name").value.trim()));
-      let overlap=0;for(const term of actualTerms)if(expectedTerms.has(term))overlap++;
-      if(expected!==actual&&(!expected.includes(actual)&&!actual.includes(expected))&&overlap<2){
-        alert("Rahaston nimi ei vastaa valittua NAV-lähdettä. Älä yhdistä eri rahastojen kursseja.");
-        return;
-      }
-    }
     if(!window.confirm("VAHVISTA RAHASTON HINTALÄHDE\\n\\n"+
       String(old.name||"Rahasto")+" → "+selectedLabel+
       "\\n\\nVäärän rahaston NAV vääristäisi salkun arvoa. Tarkista, että rahasto-osuus ja valuutta vastaavat juuri tätä lähdettä."))return;
@@ -2272,6 +2309,7 @@ async function runMarketRefresh(showErrors=false){
         const q=marketData?.fund_quotes?.[fundKey];
         if(!q||!validPositive(q.price)||!quotedCurrencyMatches(q,h))
           throw new Error(`NAV puuttuu tai on virheellinen: ${h.name||h.symbol}`);
+        if(!fundQuoteIdentityMatches(q,h,fundKey))throw new Error("NAV-lähteen instrumentti, osuuslaji tai valuutta on ristiriidassa. Tarkista omistuksen nimi ja hintalähde; aiempi NAV säilytettiin.");
         const navTimestamp=quoteTime(q.timestamp,marketData?.generated_at);
         if(q.timestamp!=null&&q.timestamp!==""&&q.timestamp!==0&&!navTimestamp)
           throw new Error(`NAV-aikaleima on virheellinen: ${h.symbol}`);
@@ -2285,6 +2323,7 @@ async function runMarketRefresh(showErrors=false){
         // If the dates are reliable, never silently roll a holding backwards.
         if(navDay&&previousDay&&navDay<previousDay)
           throw new Error("Lähteen NAV-päivä "+navDay+" on aiempaa "+previousDay+" vanhempi");
+        h.quoteIdentity={status:fundBindingMatches(h,fundKey)?"catalog-compatible":"unverified-source",sourceKey:fundKey};
         h.currentPrice=Number(q.price);
         h.navDate=q.nav_date||"";
         h.quoteTimestamp=navDay?Date.parse(navDay+"T12:00:00Z"):0;
