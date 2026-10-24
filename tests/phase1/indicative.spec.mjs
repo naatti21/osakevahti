@@ -15,3 +15,35 @@ for(const mode of ['missing-price','contradictory-source','missing-fx'])test('un
  const h=mode==='missing-fx'?{...stocks[0],currency:'USD',fxRate:undefined}:mode==='contradictory-source'?{...funds[0],name:'Storebrand Japan B EUR',symbol:'STOREBRAND_JAPAN_A_EUR'}:{...funds[0],currentPrice:undefined};await setup(page,{holdings:[h]});
  await expect(page.locator('#portfolioValue')).toHaveText('—');await expect(page.locator('#portfolioValue')).toHaveAttribute('data-valuation-quality','unavailable');await page.locator('#whatIfBox').evaluate(e=>e.open=true);await expect(page.locator('#whatIfHolding')).toBeDisabled();await page.locator('[data-view="riskView"]').click();await expect(page.locator('#risks')).toBeEmpty();
 });
+
+test('day-month NAV alone never creates a red main-screen alarm or duplicate banners',async({page})=>{
+ await setup(page,{holdings:funds,quotes:Object.fromEntries(funds.map(h=>[h.symbol,quote({nav_date:'22.10.'})]))});
+ const before=await stored(page);
+ await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
+ await expect(page.locator('#portfolioValue')).toHaveAttribute('data-valuation-quality','indicative');
+ await expect(page.locator('#valuationWarning')).toBeHidden();
+ await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
+ await expect(page.locator('#priceHealthSummary')).toContainText('2 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+ await expect(page.locator('#priceHealthSummary')).not.toContainText('hintavirhe');
+ await expect(page.locator('#quoteAge')).toContainText('2 rahaston NAV-pvm ilman vuotta');
+ await expect(page.locator('#accountSummary')).not.toContainText('Viitteellinen laskelma');
+ await page.locator('#priceHealthSummary').click();
+ await expect(page.locator('#priceHealthItems')).toContainText('22.10.');
+ await expect(page.locator('#priceHealthItems')).toContainText('ilman vuotta');
+ expect(await stored(page)).toEqual(before);
+});
+test('real unavailability still has visible red warning, unlike benign NAV source dates',async({page})=>{
+ await setup(page,{holdings:[{...funds[0],currentPrice:undefined,navDate:''}]});
+ await expect(page.locator('#portfolioValue')).toHaveText('—');
+ await expect(page.locator('#valuationWarning')).toBeVisible();
+ await expect(page.locator('#valuationWarning')).toHaveClass(/statusBad/);
+ await expect(page.locator('#valuationWarning')).toContainText('puutteellinen');
+});
+test('mixed yearless and other uncertain quotes retain a neutral but visible estimate note',async({page})=>{
+ const stale={...stocks[0],quoteTimestamp:Date.parse('2026-10-01T12:00:00Z')};
+ await setup(page,{holdings:[...funds,stale],quotes:Object.fromEntries(funds.map(h=>[h.symbol,quote({nav_date:'22.10.'})]))});
+ await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
+ await expect(page.locator('#valuationWarning')).toBeVisible();
+ await expect(page.locator('#valuationWarning')).toHaveClass(/muted/);
+ await expect(page.locator('#valuationWarning')).not.toHaveClass(/statusBad/);
+});

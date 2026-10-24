@@ -156,7 +156,8 @@ test('six fetched fund prices with no verified dates show compact amber summary,
   await expect(box).toBeVisible();
   await expect(box).toHaveAttribute('data-level','info');
   await expect(box).not.toHaveAttribute('open','');
-  await expect(page.locator('#priceHealthSummary')).toContainText('NAV-päivä tarkistamatta 6 rahastolla');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#priceHealthSummary')).toContainText('5 rahastolta puuttuu tarkka NAV-päivä');
   await expect(page.locator('#quoteAge')).toContainText('NAV-päivä 0/6');
   await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(6);
   await page.locator('#priceHealthSummary').click();
@@ -197,7 +198,7 @@ test('reported day/month is neutral source metadata, never a fabricated verified
   await expect(card).toContainText('Lähde: Fictional provider');
   await expect(card).not.toContainText('vuosi?');
   await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
-  await expect(page.locator('#priceHealthSummary')).toContainText('NAV-päivä tarkistamatta');
+  await expect(page.locator('#priceHealthSummary')).toContainText('1 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
   await expect(page.locator('#priceHealthNotice')).not.toHaveAttribute('open','');
   const result=await page.evaluate(()=>({date:verifiedNavDate(state.holdings[0].navDate),
     seen:state.holdings[0].navDate,qty:state.holdings[0].quantity}));
@@ -247,4 +248,47 @@ test('verified NAV source date is shown once in details and holdings remain inta
   await page.evaluate(()=>{render();render()});
   expect(await page.evaluate(()=>JSON.stringify(state.holdings))).toBe(before);
   await expect(page.locator('#holdings .item')).toHaveCount(1);
+});
+
+test('seven real catalog source labels with yearless NAV show one calm explanation, never red',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    const options=[...document.querySelector('#fundPriceSource').options].filter(o=>o.value);
+    state.holdings=options.map((option,i)=>({
+      id:'synthetic-catalog-'+i,symbol:option.value,fundQuoteKey:option.value,
+      name:option.textContent.trim(),assetType:'fund',quantity:2,
+      buyPrice:30,currentPrice:51.75,currency:'EUR',
+      instrument:{currency:'EUR',...(option.dataset.shareClass?{shareClass:option.dataset.shareClass}:{})},
+      navDate:'22.10.',quoteTimestamp:0,quoteSource:'FUND_NAV',
+      quoteProvider:'Synthetic public fund page',
+      quoteHealth:{status:'unverified-nav-day',provider:'Synthetic public fund page'},
+      account:'Synthetic AOT',accountType:'AOT',broker:'Synthetic',accountDetailsConfirmed:true
+    }));
+    state.refreshSummary={updated:7,marketTracked:7,fundsUpdated:7,fundsTracked:7};
+    render();
+  });
+  const before=await page.evaluate(()=>JSON.stringify(state.holdings));
+  await expect(page.locator('#portfolioValue')).toHaveText(/^≈ /);
+  await expect(page.locator('#valuationWarning')).toBeHidden();
+  await expect(page.locator('#priceHealthNotice')).toHaveAttribute('data-level','info');
+  await expect(page.locator('#priceHealthSummary')).toContainText('7 rahaston NAV-lähde ilmoittaa päivän ilman vuotta');
+  await expect(page.locator('#quoteAge')).toContainText('7 rahaston NAV-pvm ilman vuotta');
+  await expect(page.locator('#accountSummary .statusBox')).toHaveCount(0);
+  await page.locator('#priceHealthSummary').click();
+  await expect(page.locator('#priceHealthItems .priceHealthEntry')).toHaveCount(7);
+  await expect(page.locator('#priceHealthItems')).toContainText('22.10.');
+  await page.evaluate(()=>{render();render()});
+  expect(await page.evaluate(()=>JSON.stringify(state.holdings))).toEqual(before);
+});
+test('an actually missing price still produces a red valuation error, not the calm NAV treatment',async({page})=>{
+  await setup(page);
+  await page.evaluate(()=>{
+    state.holdings[0].currentPrice=undefined;
+    state.holdings[0].manualPrice=undefined;
+    render();
+  });
+  await expect(page.locator('#portfolioValue')).toHaveText('—');
+  await expect(page.locator('#valuationWarning')).toBeVisible();
+  await expect(page.locator('#valuationWarning')).toHaveClass(/statusBad/);
+  await expect(page.locator('#valuationWarning')).toContainText('puutteellinen');
 });
