@@ -1,0 +1,39 @@
+name: Alpha EODHD source qualification (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'scripts/market-data/eodhd-probe.mjs'
+      - 'scripts/market-data/provider-access-probe.mjs'
+      - 'tests/market-data/eodhd-probe.test.mjs'
+      - '.github/workflows/alpha-eodhd-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  provider-demo-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout read-only probe files
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify price and dividend contracts with synthetic data
+        run: node --test tests/market-data/eodhd-probe.test.mjs
+      - name: Check real EODHD public demo EOD and dividend endpoints
+        run: node scripts/market-data/eodhd-probe.mjs --demo
+      - name: Inspect Nasdaq portal and EODHD demo CORS (no data CSV download)
+        run: node scripts/market-data/provider-access-probe.mjs
+      - name: Release boundary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Research only, NO DEPLOY"
+            echo "Demo ticker AAPL.US cannot prove Helsinki XHEL coverage."
+            echo "Instrument ISIN/MIC identity and public redistribution rights remain unverified."
+            echo "No provider token, user's financial data, Alpha static assets, or production changes used."
+          } >> "$GITHUB_STEP_SUMMARY"
