@@ -2679,6 +2679,20 @@ function resolverQueryForHolding(h){
   const i=h.instrument||{};
   return String(i.isin||h.name||i.companyName||i.listingTicker||h.symbol||"").trim().slice(0,120);
 }
+// Yahoo search is fuzzy. An arbitrary search hit must never be an offered holding
+// identity just because it is an equity or shares the same currency.
+function relevantImportCandidate(h,c){
+  const i=h.instrument||{};
+  const wanted=normalizedIdText(i.listingTicker||h.symbol);
+  const matched=normalizedIdText(c.symbol);
+  const fromName=String(h.name||i.companyName||"").trim();
+  const resultName=String(c.longname||c.shortname||"").trim();
+  // Keep alternate listings of the *same issuer* visible for review even if
+  // their currencies differ; the existing identity gate blocks unsafe selection.
+  if(sourceIsinCandidateConflict(h,c))return false;
+  if(wanted&&matched&&wanted===matched)return true;
+  return !!(fromName&&resultName&&nameSimilarity(fromName,resultName)>=0.5);
+}
 function scoreInstrumentCandidate(h,candidate){
   const i=h.instrument||{};
   const sourceTicker=normalizedIdText(i.listingTicker||h.symbol);
@@ -2808,7 +2822,7 @@ async function resolveImportedHolding(h){
   // A candidate whose verified ISIN contradicts the source must not be picked,
   // even manually. A missing candidate ISIN is NOT verification of the source.
   const conflictingSourceIsin=(found.candidates||[]).some(c=>sourceIsinCandidateConflict(h,c));
-  const ranked=(found.candidates||[]).filter(c=>!sourceIsinCandidateConflict(h,c)).map(c=>{
+  const ranked=(found.candidates||[]).filter(c=>relevantImportCandidate(h,c)).map(c=>{
     const s=scoreInstrumentCandidate(h,c);
     return {...c,_score:s.score,_reasons:s.reasons};
   }).sort((a,b)=>b._score-a._score).slice(0,5);
@@ -3474,7 +3488,7 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
   const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
   const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
-  const isDocumentNoise=text=>/^\s*(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings(?:\s+summary)?|positions(?:\s+summary)?)\b/i.test(text);
+  const isDocumentNoise=text=>/^\s*(?:näytä\s+lähteet|enemm[aä]n|katso\s+lisää|näytä\s+lisää|show\s+sources|show\s+more|more|sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings(?:\s+summary)?|positions(?:\s+summary)?)\b/i.test(text);
   const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||isDocumentNoise(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
