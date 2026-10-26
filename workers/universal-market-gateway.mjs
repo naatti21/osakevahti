@@ -197,8 +197,14 @@ const handler=createUniversalGateway({
 });
 const freeReferences=createFreeReferenceGateway();
 export default {
-  async fetch(request) {
+  async fetch(request,env={}) {
     const free=await freeReferences(request);
-    return free||handler(request);
+    if(free)return free;
+    // Yahoo's undocumented endpoints and their usage rights have NOT been
+    // qualified. Explicit environment opt-in is required even for staging.
+    // Never turn on an experimental provider by merely deploying a branch.
+    if(env.ALLOW_EXPERIMENTAL_YAHOO!=="true")
+      return responseJSON({error:"quote_source_not_qualified"},503);
+    return handler(request);
   }
 };
