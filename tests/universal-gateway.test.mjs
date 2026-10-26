@@ -2,6 +2,7 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import {createUniversalGateway} from "../workers/universal-market-gateway.mjs";
 import {yahooAdapter} from "../workers/providers/yahoo-experimental.mjs";
+import {createFundNavAdapter,createAssetTypeProvider,validIsin} from "../workers/providers/fund-nav-contract.mjs";
 
 const ORIGIN="https://osakevahti-alpha-naatti21.pages.dev";
 const instrument={ticker:"WHATEVER.HE",currency:"EUR",type:"stock"};
@@ -150,4 +151,70 @@ test("invalid search and unknown URL are reported without leaking portfolio data
   assert.equal((await get("/v1/search?q=%3Cscript%3E")).status,400);
   assert.equal((await get("/random/path")).status,404);
   assert.equal((await get("/v1/search?q=x")).status,400);
+});
+
+
+test("fund NAV provider accepts ISIN-only holding with verified day, no invented ticker",async()=>{
+  const fundIsin="IE00B03HD191";
+  assert.equal(validIsin(fundIsin),true);
+  const source={id:"issuer-test",
+    search:async()=>[{isin:fundIsin,shareClass:"ACC",currency:"EUR",name:"Fictional issuer share class"}],
+    getNav:async({isin})=>{
+      assert.equal(isin,fundIsin);
+      return {isin,shareClass:"ACC",currency:"EUR",price:18.75,
+        navDate:"2026-10-23",sourceKind:"issuer",provider:"Issuer Test",
+        fetched_at:now};
+    }};
+  const navProvider=createFundNavAdapter({source,now:()=>now});
+  const marketProvider={id:"market-test",
+    search:async()=>[],
+    quote:async()=>{throw Error("must not use market chart for fund");}};
+  const composite=createAssetTypeProvider({market:marketProvider,funds:navProvider});
+  const handle=createUniversalGateway({provider:composite});
+  const res=await post({instruments:[{isin:fundIsin,shareClass:"ACC",
+    ticker:"",currency:"EUR",type:"fund"}]},handle);
+  const body=await res.json();
+  assert.equal(res.status,200);
+  assert.equal(body.results[0].status,"candidate");
+  assert.equal(body.results[0].nav_date,"2026-10-23");
+  assert.equal(body.results[0].quote_at,null);
+  assert.equal(body.results[0].instrument.isin,fundIsin);
+  assert.equal(body.results[0].identityVerified,false);
+});
+
+test("fund provider rejects different share class, ISIN and undated NAV",async()=>{
+  const isin="IE00B03HD191";
+  let observation={isin,shareClass:"ACC",currency:"EUR",price:7.5,
+    navDate:"2026-10-23",sourceKind:"issuer",provider:"Issuer"};
+  const source={id:"nav",getNav:async()=>observation};
+  const nav=createFundNavAdapter({source,now:()=>now});
+  const request={type:"fund",isin,shareClass:"ACC",currency:"EUR"};
+  observation={...observation,shareClass:"DIST"};
+  assert.equal((await nav.quote(request)).reason,"share_class_not_verified");
+  observation={...observation,shareClass:"ACC",isin:"IE00B03HD192"};
+  assert.equal((await nav.quote(request)).reason,"isin_mismatch");
+  observation={...observation,isin,navDate:""};
+  assert.equal((await nav.quote(request)).reason,"nav_day_not_verified");
+});
+
+test("isolated vendor failure does not create synthetic fund NAV",async()=>{
+  const source={id:"unreachable",getNav:async()=>{throw Error("vendor down")}};
+  const nav=createFundNavAdapter({source});
+  const mixed=createAssetTypeProvider({market:fakeProvider,funds:nav});
+  const appFn=createUniversalGateway({provider:mixed});
+  const r=await post({instruments:[{isin:"IE00B03HD191",currency:"EUR",
+    ticker:"",type:"fund"}]},appFn);
+  const result=(await r.json()).results[0];
+  assert.equal(result.status,"unavailable");
+  assert.equal(result.price,undefined);
+  assert.equal(result.nav_date,undefined);
+});
+
+test("CORS OPTIONS preflight returns an empty 204 response",async()=>{
+  const response=await app(new Request("https://example.workers.dev/v1/quotes",{
+    method:"OPTIONS",headers:{Origin:ORIGIN}
+  }));
+  assert.equal(response.status,204);
+  assert.equal(await response.text(),"");
+  assert.equal(response.headers.get("access-control-allow-origin"),ORIGIN);
 });
