@@ -84,7 +84,8 @@ test("Frankfurter v2 matches pair, date and positive reference rate",async()=>{
   assert.equal(out.rate,0.86);
   assert.equal(out.status,"dated_reference");
   assert.equal(out.intraday,false);
-  assert.equal(urls[0],"https://api.frankfurter.dev/v2/rate/usd/eur");
+  assert.equal(urls[0],"https://api.frankfurter.dev/v2/rate/usd/eur?providers=ecb");
+  assert.equal(out.authority,"ECB");
 });
 
 test("Frankfurter rejects mismatched, undated, invalid and negative FX observations",async()=>{

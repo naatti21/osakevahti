@@ -45,7 +45,7 @@ export const ZERO_COST_SOURCES=Object.freeze([
     reason:"Identity candidates only; cannot create a stock quote or NAV."
   },
   {
-    id:"frankfurter",role:"fx",lineage:"central-bank-reference",
+    id:"frankfurter",role:"fx",lineage:"ecb-reference",
     assets:["fx"],geography:"supported currencies",
     terms:"documented-public-free",quoteEvidence:"dated-daily-reference",
     access:"public",quota:"fair-use",

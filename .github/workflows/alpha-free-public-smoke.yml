@@ -1,0 +1,34 @@
+name: Alpha free public data smoke (advisory)
+
+on:
+  pull_request:
+    paths:
+      - 'workers/providers/free-foundation.mjs'
+      - 'workers/free-reference-gateway.mjs'
+      - 'scripts/market-data/free-public-smoke.mjs'
+      - '.github/workflows/alpha-free-public-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keyless-real-apis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Probe public OpenFIGI mapping and Frankfurter daily FX
+        run: node scripts/market-data/free-public-smoke.mjs
+      - name: Advisory scope
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Diagnostic only; not a release green light"
+            echo "These results cannot prove licensed security pricing or ISIN-verified NAV coverage."
+            echo "No paid vendor, API key, or private portfolio data was used."
+          } >> "$GITHUB_STEP_SUMMARY"
