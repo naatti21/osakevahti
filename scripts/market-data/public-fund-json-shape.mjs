@@ -63,6 +63,10 @@ try{
     }
     report.classObjectKeys=Object.keys(j.find(x=>x?.class&&typeof x.class==="object")?.class||{}).slice(0,15);
     report.isinFormatValidCount=j.filter(x=>/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(x?.ISIN||""))).length;
+    report.dateFormatMasks=[...new Set(j.map(x=>String(x?.closePriceDate||"").slice(0,35)
+      .replace(/[0-9]/g,"#").replace(/[A-Za-z]/g,"A")))].slice(0,12);
+    report.priceFormatMasks=[...new Set(j.map(x=>String(x?.closePrice||"").slice(0,30)
+      .replace(/[0-9]/g,"#")))].slice(0,12);
     report.priceTypeHistogram=Object.fromEntries(
       [...new Set(j.map(x=>typeof x?.closePrice))].map(type=>[type,j.filter(x=>typeof x?.closePrice===type).length])
     );
