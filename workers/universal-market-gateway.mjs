@@ -81,7 +81,12 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
     if(origin&&origin!==allowedOrigin)
       return responseJSON({error:"forbidden_origin"},403,allowedOrigin);
     const url=new URL(request.url),path=url.pathname,method=request.method;
-    if(method==="OPTIONS")return responseJSON({},204,allowedOrigin);
+    if(method==="OPTIONS")return new Response(null,{status:204,headers:{
+      "Access-Control-Allow-Origin":allowedOrigin,
+      "Access-Control-Allow-Methods":"GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers":"Content-Type",
+      "Vary":"Origin","Cache-Control":"no-store"
+    }});
     if(method==="GET"&&path==="/v1/search") {
       const q=String(url.searchParams.get("q")||"").trim();
       if(q.length<2||q.length>80||/[<>{}\r\n]/.test(q))
@@ -121,9 +126,42 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
         const identity=instruments[i];
         try{
           const quote=await provider.quote(identity);
-          results.push({index:i,requested:{
+          const output={index:i,requested:{
               ticker:identity.ticker,type:identity.type,currency:identity.currency
-            },...quote});
+            }};
+          if(quote?.status!=="candidate"){
+            results.push({...output,status:"unavailable",
+              reason:String(quote?.reason||"source_unavailable").slice(0,100)});
+            continue;
+          }
+          const symbol=uc(quote.instrument?.providerSymbol);
+          const currency=uc(quote.currency);
+          const price=Number(quote.price);
+          const event=quote.quote_at;
+          const timestamp=event===null?null:Number(event);
+          const nav=quote.nav_date;
+          const validTime=timestamp===null||
+            (Number.isFinite(timestamp)&&timestamp>=946684800000&&timestamp<=Date.now()+300000);
+          const navValid=typeof nav==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(nav)&&
+            !Number.isNaN(Date.parse(nav+"T12:00:00Z"))&&
+            Date.parse(nav+"T12:00:00Z")<=Date.now()+86400000;
+          if(symbol!==identity.ticker||currency!==identity.currency||
+             !Number.isFinite(price)||price<=0||!validTime||
+             (identity.type==="fund"&&!navValid)){
+            results.push({...output,status:"rejected",reason:"quote_identity_or_time_invalid"});
+            continue;
+          }
+          results.push({...output,status:"candidate",price,currency,
+            provider:String(quote.provider||provider.id).slice(0,80),
+            quote_at:timestamp,
+            fetched_at:Number.isFinite(Number(quote.fetched_at))?
+              Number(quote.fetched_at):null,
+            nav_date:identity.type==="fund"?nav:null,
+            instrument:{providerSymbol:symbol,currency,isin:quote.instrument?.isin||null,
+              mic:quote.instrument?.mic||null,
+              shareClass:quote.instrument?.shareClass||null,
+              identityStatus:quote.instrument?.identityStatus||"unverified"},
+            identityVerified:false});
         }catch(err){
           results.push({index:i,status:"unavailable",reason:"upstream_failure",
             provider:provider.id});
