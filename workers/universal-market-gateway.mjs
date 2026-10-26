@@ -34,7 +34,7 @@ function checkedInstrument(raw){
   const ticker=uc(raw.providerSymbol||raw.ticker);
   const currency=uc(raw.currency);
   const type=String(raw.type||"").toLowerCase();
-  if(!/^[A-Z0-9][A-Z0-9.^=:_/-]{0,47}$/.test(ticker))return null;
+  if(!/^[A-Z0-9^][A-Z0-9.^=_-]{0,47}$/.test(ticker))return null;
   if(!/^[A-Z]{3}$/.test(currency)||!TYPES.has(type))return null;
   if(raw.isin && !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(uc(raw.isin)))return null;
   if(raw.mic && !/^[A-Z0-9]{4}$/.test(uc(raw.mic)))return null;
