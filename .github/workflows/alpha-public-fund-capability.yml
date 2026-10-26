@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/market-data/public-fund-page-capability.mjs'
+      - 'scripts/market-data/public-fund-json-shape.mjs'
       - '.github/workflows/alpha-public-fund-capability.yml'
   workflow_dispatch:
 
@@ -21,6 +22,8 @@ jobs:
           node-version: '22'
       - name: One GET to public site and robots.txt
         run: node scripts/market-data/public-fund-page-capability.mjs
+      - name: Inspect ordinary public JSON response schema without price values
+        run: node scripts/market-data/public-fund-json-shape.mjs
       - name: Qualification limits
         if: always()
         run: |
