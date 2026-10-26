@@ -185,7 +185,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 </head>
 <body>
 <header class="top">
-  <div><div class="eyebrow">ALPHA · v2.17.8</div><h1>Osakevahti Alpha</h1></div>
+  <div><div class="eyebrow">ALPHA · v2.17.9</div><h1>Osakevahti Alpha</h1></div>
   <button id="refreshBtn" title="Päivitä">↻</button>
 </header>
 
@@ -411,7 +411,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <summary>Huolto</summary>
     <div class="detailsBody">
       <button id="resetBtn" class="danger">Tyhjennä kaikki paikallinen data</button>
-      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.8 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
+      <p class="muted small" style="margin:12px 0 0">Osakevahti Alpha · v2.17.9 · pikanäkymä näyttää aina viimeisimmän kurssin, myös markkinoiden ollessa kiinni. Tarkemmat luvut voi avata erikseen.</p>
     </div>
   </details>
 </section>
@@ -451,6 +451,12 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div class="grid2"><div><label class="txt" for="brokerSelect">Palveluntarjoaja / pankki</label><select id="brokerSelect"><option value="">Valitse palveluntarjoaja</option><option value="Nordea">Nordea</option><option value="Nordnet">Nordnet</option><option value="OTHER">Muu / ei tiedossa</option></select></div><div id="brokerOtherBox" class="hidden"><label class="txt" for="brokerOther">Muun palveluntarjoajan nimi (valinnainen)</label><input id="brokerOther" maxlength="80" placeholder="Esim. OP – tai jätä tyhjäksi"></div></div>
   <label class="txt" for="accountLabel">Tilin tai salkun oma nimi (valinnainen)</label><input id="accountLabel" maxlength="80" placeholder="Esim. pitkäaikainen salkku"><p class="muted small">Erottaa useita saman palvelun tilejä. Älä kirjoita tilinumeroa tai henkilötietoja.</p>
   <div id="accountFormHint" class="statusBox muted hidden"></div>
+  <div id="fundIsinEditor" class="hidden">
+    <label class="txt" for="fundIsin">Rahaston ISIN (varalähteen tunnistus)</label>
+    <input id="fundIsin" type="text" maxlength="12" autocomplete="off" autocapitalize="characters"
+      placeholder="Esim. FI0000000000">
+    <p class="muted small">Täsmälleen 12 merkin ISIN, tarkistetaan tarkistenumerolla. Älä arvaa tunnusta. Rahastoraportin julkista NAV-varalähdettä käytetään vain, kun päivämäärä puuttuu tai ensisijainen lähde ei tuota kelvollista arvoa.</p>
+  </div>
   <div id="fundPriceSourceSection" class="hidden">
     <label class="txt" for="fundPriceSource">Rahaston NAV-hintalähde</label>
     <select id="fundPriceSource">
@@ -904,7 +910,8 @@ function displayedPriceIssueLabel(h,issue){
 function priceIssue(h){
   if(!supportedHoldingCurrency(h.currency))return {label:"VALUUTTA VAHVISTAMATTA",reason:"Historiallisen omistuksen valuutta puuttuu tai on virheellinen. Avaa omistus ja vahvista valuutta; tietoja ei poisteta eikä valuuttaa arvata.",level:"warn"};
   const health=h.quoteHealth||{};
-  if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()){
+  if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()&&
+     !(h.quoteSource==="FUND_NAV"&&h.quoteHealth?.status==="fallback"&&verifiedNavDate(h.navDate))){
     return {label:"HINTALÄHDE PUUTTUU",
       reason:"Rahaston NAV-hintalähdettä ei ole yhdistetty. Avaa rahaston muokkaus ja valitse oikea hintalähde. Salkun kokonaisarvo on tältä osin puutteellinen.",
       level:"warn"};
@@ -928,8 +935,12 @@ function priceIssue(h){
      Date.now()-Number(h.quoteTimestamp)>96*60*60*1000||quoteIsStaleWhileOpen(h)))
     return {label:"VANHA KURSSI",reason:"Kurssin todellinen tapahtuma-aika on vanhentunut tai puuttuu.",level:"bad"};
   if(health.status==="fallback")
-    return {label:"VARASYÖTE",reason:"Hinta saatiin varasyötteestä ("+String(health.provider||"tuntematon")+
-      "). Eri hakureitit voivat käyttää samaa alkuperäistä hinnantoimittajaa.",level:"info"};
+    return h.assetType==="fund"
+      ?{label:"VARA-NAV",reason:"Rahaston "+fundNavDateBadge(h)+
+        " saatiin julkisesta ISIN-varalähteestä ("+String(health.provider||"tuntematon")+
+        "). Tämä on julkaistu arvostuspäivä, ei päivänsisäinen kurssi.",level:"info"}
+      :{label:"VARASYÖTE",reason:"Hinta saatiin varasyötteestä ("+String(health.provider||"tuntematon")+
+        "). Eri hakureitit voivat käyttää samaa alkuperäistä hinnantoimittajaa.",level:"info"};
   if(!validPositive(h.currentPrice)&&validPositive(h.manualPrice))
     return {label:"KÄSIN SYÖTETTY",reason:"Automaattista hintatietoa ei ole vahvistettu.",level:"info"};
   return null;
@@ -1010,7 +1021,9 @@ function dataState(h){
     if(h.quoteSource==="FUND_NAV"){
       const issue=priceIssue(h);
       return issue?{label:issue.label,cls:issue.level==="bad"?"stale":"manual"}:
-        {label:"NAV "+verifiedNavDate(h.navDate),cls:"broker"};
+        h.quoteHealth?.status==="fallback"
+          ?{label:"VARA-NAV "+verifiedNavDate(h.navDate),cls:"manual"}
+          :{label:"NAV "+verifiedNavDate(h.navDate),cls:"broker"};
     }
     if(!validQuoteTime(h.quoteTimestamp)) return {label:"AIKA PUUTTUU",cls:"stale"};
     const ageMinutes=Math.max(0,(Date.now()-n(h.quoteTimestamp))/60000);
@@ -2024,6 +2037,8 @@ function openDlg(id=null){
   $("providerSymbolSection").classList.toggle("hidden",fundEdit);
   $("fundEditInfo").classList.toggle("hidden",!fundEdit);
   $("fundPriceSourceSection").classList.toggle("hidden",!fundEdit);
+  $("fundIsinEditor").classList.toggle("hidden",!fundEdit);
+  $("fundIsin").value="";
   $("fundPriceSource").value="";
   $("symbol").required=!fundEdit;
   $("name").required=fundEdit;
@@ -2044,6 +2059,7 @@ function openDlg(id=null){
     setBrokerSelect("brokerSelect","brokerOther","brokerOtherBox",h.broker);
     $("accountLabel").value=h.accountLabel||"";
     if(h.assetType==="fund"){
+      $("fundIsin").value=normalizedIdText(h.instrument?.isin||h.isin);
       const key=String(h.fundQuoteKey||h.symbol||"");
       $("fundPriceSource").value=[...$("fundPriceSource").options].some(o=>o.value===key)?key:"";
     }
@@ -2124,6 +2140,15 @@ function saveHolding(){
   if(!fundEdit&&!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
   if(!fundEdit&&rawProvider&&!valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
   if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
+  const editedFundIsin=fundEdit?normalizedIdText($("fundIsin").value):"";
+  const oldFundIsin=fundEdit?normalizedIdText(old.instrument?.isin||old.isin):"";
+  if(fundEdit&&editedFundIsin&&!validImportIsin(editedFundIsin)){
+    alert("Rahaston ISIN on virheellinen. Tarkista kaikki 12 merkkiä ja tarkistenumero.");return;
+  }
+  if(fundEdit&&editedFundIsin!==oldFundIsin &&
+     !window.confirm("Vahvista rahaston ISIN-tunnuksen muutos: "+
+       (oldFundIsin||"puuttuu")+" → "+(editedFundIsin||"tyhjä")+
+       ". Väärä ISIN voi tuoda toisen osuuslajin arvon."))return;
   const symbolChanged=!fundEdit&&!!old.symbol&&normalizedIdText(old.symbol)!==rawSymbol;
   const selectedFundSource=fundEdit?String($("fundPriceSource").value||""):"";
   const knownFundKeys=new Set([...$("fundPriceSource").options].map(o=>o.value).filter(Boolean));
@@ -2198,6 +2223,12 @@ function saveHolding(){
     };
   }else{
     const ident=ensureInstrumentIdentity(h,old.instrument?.source||"manual");
+    if(fundEdit && editedFundIsin!==oldFundIsin){
+      ident.isin=editedFundIsin;
+      h.isin=editedFundIsin;
+      // Stale source assumptions cannot survive a changed fund identifier.
+      h.quoteIdentity={status:"unverified-source",reason:"isin_changed"};
+    }
     ident.companyName=h.name;
     ident.currency=h.currency;
     if(!fundEdit){
@@ -2316,6 +2347,7 @@ async function loadWorkerData(force=false,retries=2){
 }
 
 let refreshMarketInFlight=null;
+let alphaPublicNavReader=null;
 // Coalesce explicit and automatic refreshes. Never race two writes to the same
 // holding / FX state; keep the UI spinner tied to a single completion.
 function refreshMarket(showErrors=false){
@@ -2477,6 +2509,42 @@ async function runMarketRefresh(showErrors=false){
         reason:String(err?.message||err||"hintaa ei saatu").slice(0,180)};
       if(h.assetType==="fund")fundFail++;else stockFail++;
       if(!firstError) firstError=`${h.symbol}: ${err.message||err}`;
+    }
+  }
+
+  // Free ISIN-based backup: a single public JSON snapshot, never per-holding
+  // requests. Source is used only when a primary NAV is failed, yearless,
+  // missing or >7 days old. No holdings/account/cost data leaves this device.
+  if(funds.length){
+    try{
+      const navModule=await import("./engine/public-nav-backup.mjs");
+      const pending=funds.filter(h=>navModule.shouldTryFundBackup(h));
+      if(pending.length){
+        alphaPublicNavReader??=navModule.createFundBackup();
+        for(const h of pending){
+          const previousStatus=h.quoteHealth?.status;
+          const candidate=await alphaPublicNavReader.lookup(h);
+          if(candidate.status!=="candidate")continue;
+          const previousVerified=verifiedNavDate(h.navDate);
+          if(previousVerified&&candidate.navDate<previousVerified)continue;
+          h.currentPrice=candidate.price;
+          h.navDate=candidate.navDate;
+          h.quoteTimestamp=Date.parse(candidate.navDate+"T12:00:00Z");
+          h.quoteSource="FUND_NAV";
+          h.quoteProvider=candidate.source;
+          h.quoteRealtime=false;
+          h.dayChangePct=0;
+          h.quoteIdentity={status:"exact-isin-public-backup",isin:candidate.isin};
+          h.quoteHealth={status:"fallback",checkedAt:Date.now(),
+            provider:candidate.source,
+            reason:"Päivätty NAV julkisesta ISIN-varalähteestä · "+candidate.navDate};
+          if(previousStatus==="failed"){fundFail=Math.max(0,fundFail-1);fundOk++}
+          else if(previousStatus==="unlinked"){fundUnlinked=Math.max(0,fundUnlinked-1);fundOk++}
+        }
+      }
+    }catch(err){
+      // Any unavailable source leaves the primary value and portfolio untouched.
+      console.info("Julkinen NAV-varalähde ei käytettävissä:",String(err?.message||err));
     }
   }
 
