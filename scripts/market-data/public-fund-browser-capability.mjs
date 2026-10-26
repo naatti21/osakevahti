@@ -7,6 +7,7 @@
 import {chromium} from "@playwright/test";
 
 const seen=new Set();
+const dataRoutes=new Set();
 const pageURL="https://www.rahastoraportti.fi/";
 let browser=null;
 try {
@@ -15,6 +16,11 @@ try {
   page.on("response",response=>{
     try{
       const url=new URL(response.url());
+      const kind=response.request().resourceType();
+      if(["xhr","fetch"].includes(kind)&&url.protocol==="https:"&&dataRoutes.size<16){
+        const safePath=url.pathname.replace(/[a-f0-9]{16,}/gi,"[opaque]").slice(0,120);
+        dataRoutes.add(url.hostname+safePath+" ["+response.status()+"]");
+      }
       const type=(response.headers()["content-type"]||"").toLowerCase();
       if((type.includes("application/json")||type.includes("application/graphql")) &&
          url.protocol==="https:" &&
@@ -42,7 +48,8 @@ try {
   });
   process.stdout.write(JSON.stringify({
     probe:"single-public-browser-render",...result,
-    observedPublicJsonPaths:[...seen]
+    observedPublicJsonPaths:[...seen],
+    observedPublicFetchPaths:[...dataRoutes]
   },null,2)+"\n");
 } catch(err) {
   process.stdout.write(JSON.stringify({probe:"single-public-browser-render",
