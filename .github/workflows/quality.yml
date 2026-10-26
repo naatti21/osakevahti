@@ -32,6 +32,9 @@ jobs:
       - name: Verify pinned Engine and source-evidence cases
         run: npm run test:engine
 
+      - name: Verify universal market core and privacy invariants
+        run: npm run test:market-core
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
