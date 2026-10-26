@@ -34,7 +34,7 @@ test('Alpha PWA identity is distinct from production and visible on screen',asyn
   assert.match(html,/<title>Osakevahti Alpha<\/title>/);
   assert.match(html,/<h1>Osakevahti Alpha<\/h1>/);
   assert.match(html,/ALPHA · v2.17.9/);
-  assert.match(html,/Osakevahti Alpha · v2\.17\.8/);
+  assert.match(html,/Osakevahti Alpha · v2\.17\.9/);
   assert.match(html,/rel="manifest" href="\.\/manifest.webmanifest"/);
 });
 
@@ -47,7 +47,7 @@ test('Alpha deployment headers discourage indexing and do not copy user data',as
   const sw=await readFile(join(root,'sw.js'),'utf8');
   assert.match(sw,/startsWith\("osakevahti-shell-"\)/);
   assert.match(sw,/if \(res\.ok\)/);
-  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.8-alpha-public-nav1"/);
+  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-public-nav1"/);
   assert.ok(!(await readdir(root)).some(f=>/\.(json|zip|env|bak)$/i.test(f)));
 });
 
