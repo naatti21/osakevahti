@@ -41,6 +41,9 @@ jobs:
       - name: Test read-only quote preview and local-portfolio privacy
         run: npm run test:gateway-preview
 
+      - name: Verify zero-cost market source policy and public adapters
+        run: npm run test:free-sources
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
