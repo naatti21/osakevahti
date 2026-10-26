@@ -47,6 +47,9 @@ jobs:
       - name: Verify free ISIN identity and FX gateway interfaces
         run: npm run test:free-gateway
 
+      - name: Verify exact-class public fund backup and NAV sanity guards
+        run: npm run test:public-fund-fallback
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
