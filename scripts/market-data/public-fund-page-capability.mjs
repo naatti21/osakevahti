@@ -38,6 +38,11 @@ async function probe(url) {
       serverRenderedTable:/<table(?:\s|>)/i.test(body),
       robotsContainsRelevantRules:new URL(url).pathname.endsWith("robots.txt")?
         /disallow:|allow:/i.test(body):null,
+      robotsRules:new URL(url).pathname.endsWith("robots.txt")?
+        body.split(/\r?\n/).map(x=>x.trim()).filter(x=>/^(user-agent|allow|disallow|crawl-delay)\s*:/i.test(x)).slice(0,12):null,
+      publicBundlePaths:new URL(url).pathname==="/"?
+        [...body.matchAll(/<script\b[^>]*?src=["\x27]([^"\x27]+)["\x27]/ig)]
+          .map(m=>{try{return new URL(m[1],url).pathname}catch{return ""}}).filter(Boolean).slice(0,8):null,
       usablePlainTable:/<table(?:\s|>)/i.test(body)&&
         !/enable javascript to run this app/i.test(body)
     };
