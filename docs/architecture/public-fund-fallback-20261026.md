@@ -29,3 +29,20 @@ Osakevahdin yksityiskäytössä käytetään ensisijaisesti ilmaisia kurssi- ja 
 - Ei julkaistua Alphan versiota, Cloudflare Workeria, main-haaraa tai nykyistä localStorage-salkkua muuttavia tiedostoja.
 
 **Sitova rajoite:** 0 €/kk. Ei massapoimintaa, välityspalvelun turvarajoitusten kiertämistä, tiheää pollailua eikä tekaistuja NAV-päiviä.
+
+## Tekninen läpimurto: julkinen ISIN-tarkka JSON
+
+26.10.2026 GitHubin yksi normaalin selaimen avaava testi vahvisti, että Rahastoraportin julkinen käyttöliittymä näyttää yli 2000 riviä ja lataa tietonsa onnistuneesti yhden julkisen taustatiedoston kautta.
+
+Palvelun julkisen selaimen käyttämä URL:
+https://rahastoraportti-backend.app.sijoitustutkimus.fi/FUND_CLOSING_PRICES_JSON/Fund_ClosingPrices_LATEST.json
+
+Yhden GET-tarkistuksen vastaus: HTTP 200, noin 1,32 MB, JSON-taulukossa 2065 tietuetta. Jokaisessa tietueessa on ISIN, closePrice, closePriceDate ja fundCode; valuutta puuttuu kymmenestä tietueesta. Arvostuspäivät ovat kahdeksannumeroisia YYYYMMDD-merkkijonoja ja hinnat desimaalimerkkijonoja. Julkaistu selain käyttää samaa taustatiedostoa. Robots.txt: User-agent: * / tyhjä Disallow.
+
+Uusi workers/providers/rahastoraportti-public.mjs lukee koko tämän julkisen listan tarvittaessa enintään kerran 24 tunnissa **yhden Worker-prosessin** näkökulmasta ja palauttaa vain pyydetyn ISINin päivätyn NAV-arvon. Se ei tunne rahastojen nimiä etukäteen, eikä lataa useita rahastokohtaisia sivuja. Koneellisesti virheellinen ISIN, puuttuva valuutta, epäkelpo/vanha päivämäärä, nollahinta tai kaksois-ISIN torjutaan. Virheissä estetään välitön uudelleenyritys.
+
+Integraatio: Cloudflare-yhteensopiva yleinen gateway voi aktivoida varalähteen erikseen asetuksella ALLOW_PUBLIC_FUND_BACKUP=true. Tämä ei automaattisesti kytke kokeellista Yahoo-osakereittiä. Vastauksessa on sourceKind=public-web-publication ja requiresManualReview=true; käyttäjän salkkua ei päivitetä automaattisesti.
+
+**Rajoitukset:** Tämä on julkisen verkkosivun käyttämä taustatiedosto, ei dokumentoitu erillinen yleiskäyttöinen tai uudelleenjakeluun lisensoitu API. Yksityiskäyttö, pieni kyselytahti ja julkinen saatavuus vähentävät käytännön haittaa, eivät yksin osoita kaikkia käyttöoikeuksia. Cloudflare Workerin muistin välimuisti ei ole globaalisti jaettu eikä siksi teknisesti takaa täsmälleen yhtä ulkoista hakua vuorokaudessa kaikkien prosessien yli. Mitään rahastotietoa ei julkaista uudelleen kokonaisena listana.
+
+**Ei vielä tuotannossa:** Tämä PR on DRAFT-kehityshaara eikä nykyisen Alpha-PWA:n uusi versio. Edellyttää toteutettujen CI-testien hyväksyntää, eristettyä live-adapteritestiä, käyttäjän lähdevalintaa/varahintojen näyttötapaa ja mobiili-PWA-regressioita.
