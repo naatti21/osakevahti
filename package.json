@@ -12,7 +12,9 @@
     "test:market-gateway": "node --test tests/universal-gateway.test.mjs",
     "test:gateway-preview": "node --test tests/gateway-preview.test.mjs",
     "test:free-sources": "node --test tests/free-source-battery.test.mjs",
-    "test:free-gateway": "node --test tests/free-reference-gateway.test.mjs"
+    "test:free-gateway": "node --test tests/free-reference-gateway.test.mjs",
+    "test:public-fund-fallback": "node --test tests/public-fund-fallback.test.mjs",
+    "test:public-fund-json": "node --test tests/public-fund-json-adapter.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",

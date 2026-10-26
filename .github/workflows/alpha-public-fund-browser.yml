@@ -1,0 +1,35 @@
+name: Alpha public fund browser capability (one shot)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/market-data/public-fund-browser-capability.mjs'
+      - '.github/workflows/alpha-public-fund-browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  one-public-browser-view:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned QA browser dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install Chromium browser
+        run: npx playwright install --with-deps chromium
+      - name: One public-site render, report only capabilities
+        run: node scripts/market-data/public-fund-browser-capability.mjs
+      - name: Result is advisory, not automatic NAV permission
+        if: always()
+        run: |
+          {
+            echo '### Read-only personal-source capability research'
+            echo 'A rendered public table does not prove publisher consent or ISIN identity.'
+            echo 'No portfolio data, fund prices, page HTML or site credentials are exported.'
+          } >> "$GITHUB_STEP_SUMMARY"
