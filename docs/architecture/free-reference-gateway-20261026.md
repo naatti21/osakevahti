@@ -16,7 +16,7 @@ OpenFIGI: https://www.openfigi.com/api/documentation
 Avaimeton tunnistekartoitus, 25 mapping-kutsua/min ja 10 työtä/kutsu. Ei markkinahintaa. Eri listauspaikkojen ja rahastojen tulokset voivat olla epäselviä ja vaativat käyttäjän vahvistuksen.
 
 Frankfurter: https://frankfurter.dev/
-Maksuton, avaimeton v2/rate-palvelu. **Päivittäin** päivittyvä usean virallisen lähteen viitekurssi; ei pörssin intraday-hinta. Päivä, pari ja kurssin positiivisuus tarkistetaan. Palvelun oletusarvoinen sekoitettu kurssi ei ole sama kuin erityisesti valittu EKP-kurssi.
+Maksuton, avaimeton v2/rate-palvelu. **Päivittäin** päivittyvä kurssi; ei pörssin intraday-hinta. Sovitin pyytää nyt eksplisiittisesti providers=ecb, jotta lähtö on EKP:n viitekurssi eikä oletuksena eri lähteistä laskettu yhdistelmä. Päivä, pari ja kurssin positiivisuus tarkistetaan. Jos EKP ei julkaise kyseistä paria, palvelu ilmoittaa ei saatavilla; siihen ei keksitä vaihtokurssia.
 
 Rahastoraportti: https://www.rahastoraportti.fi/aboutTheService
 Palveluntarjoaja sanoo tarjoavansa yleisölle maksutta lähes kaikkien Suomessa markkinoitujen rahastojen päivittäisiä hintoja, jotka rahastoyhtiöt toimittavat ja jotka julkaistaan verkkosivulla tunnin välein. Tämä on hyvä **tiedon todennuspaikka**. Sen erillinen automaattinen datasyöte on kuitenkin palveluntarjoajille ja datajulkaisijoille suunnattu palvelu. Automaattisen käytön lisenssi ja ISIN-/osuussarjan todentaminen ovat avoimia. Älä rakenna sen yksittäisten sivurivien luvattomaan massapoimintaan. Nimiosuman perusteella rahastoa ei hyväksytä.
