@@ -44,6 +44,9 @@ jobs:
       - name: Verify zero-cost market source policy and public adapters
         run: npm run test:free-sources
 
+      - name: Verify free ISIN identity and FX gateway interfaces
+        run: npm run test:free-gateway
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
