@@ -38,6 +38,9 @@ jobs:
       - name: Test generic gateway privacy, identity and quote contracts
         run: npm run test:market-gateway
 
+      - name: Test read-only quote preview and local-portfolio privacy
+        run: npm run test:gateway-preview
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
