@@ -10,7 +10,7 @@ async function run(){
   const fx=frankfurterFreeFx({timeoutMs:12000,now:()=>now});
   try{
     const r=await fx.rate("USD","EUR");
-    if(r.status!=="dated_reference"||r.date>"2026-10-26"||
+    if(r.status!=="dated_reference"||Date.parse(r.date+"T12:00:00Z")>now+86400000||
        !Number.isFinite(r.rate)||r.rate<=0)
       throw Error("FX contract mismatch");
     report.fx={status:"ok",date:r.date,source:r.provider,ratePositive:true};
