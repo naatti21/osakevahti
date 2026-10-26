@@ -77,7 +77,9 @@ export function frankfurterFreeFx({fetchImpl=fetch,timeoutMs=8000,now=()=>Date.n
       if(!CUR.test(a)||!CUR.test(b))throw Error("invalid_currency");
       if(a===b)return {base:a,quote:b,rate:1,date:null,
         status:"identity",provider:"identity",sourceKind:"no_fx_conversion"};
-      const data=await get("https://api.frankfurter.dev/v2/rate/"+a.toLowerCase()+"/"+b.toLowerCase());
+      // Pin the ECB instead of Frankfurter v2's blended multi-provider rate.
+      // This keeps EUR portfolio FX provenance comparable across refreshes.
+      const data=await get("https://api.frankfurter.dev/v2/rate/"+a.toLowerCase()+"/"+b.toLowerCase()+"?providers=ecb");
       if(clean(data.base)!==a||clean(data.quote)!==b)
         return {status:"rejected",reason:"fx_pair_mismatch"};
       const rate=data.rate;
@@ -86,8 +88,8 @@ export function frankfurterFreeFx({fetchImpl=fetch,timeoutMs=8000,now=()=>Date.n
       if(!validDay(data.date,now()))
         return {status:"rejected",reason:"fx_reference_date_missing"};
       return {status:"dated_reference",base:a,quote:b,
-        rate,date:data.date,provider:"Frankfurter",
-        lineage:"central-bank-reference",
+        rate,date:data.date,provider:"Frankfurter",authority:"ECB",
+        lineage:"ecb-reference",
         sourceKind:"daily-central-bank-reference",intraday:false};
     }
   };
