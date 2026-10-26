@@ -51,6 +51,31 @@ try {
     observedPublicJsonPaths:[...seen],
     observedPublicFetchPaths:[...dataRoutes]
   },null,2)+"\n");
+  // Only test browser CORS from the actual Alpha origin, never expose data.
+  const corsPage=await browser.newPage();
+  for(const origin of [
+    "https://osakevahti-alpha-naatti21.pages.dev/",
+    "https://example.com/"
+  ]){
+    const verdict={origin:new URL(origin).hostname};
+    try {
+      await corsPage.goto(origin,{waitUntil:"domcontentloaded",timeout:12000});
+      const out=await corsPage.evaluate(async()=>{
+        const url="https://rahastoraportti-backend.app.sijoitustutkimus.fi/FUND_CLOSING_PRICES_JSON/Fund_ClosingPrices_LATEST.json";
+        try{
+          const resp=await fetch(url,{mode:"cors",cache:"no-store"});
+          if(!resp.ok)return {status:resp.status,ok:false};
+          const raw=await resp.text();
+          const data=JSON.parse(raw);
+          return {status:resp.status,ok:Array.isArray(data)&&data.length>500,
+            count:Array.isArray(data)?data.length:null};
+        }catch(e){return {ok:false,error:String(e?.name||"cors_or_network")};}
+      });
+      Object.assign(verdict,out);
+    }catch(e){verdict.error="origin_not_available";}
+    process.stdout.write(JSON.stringify({probe:"cross-origin-public-nav-access",...verdict})+"\n");
+  }
+  await corsPage.close();
 } catch(err) {
   process.stdout.write(JSON.stringify({probe:"single-public-browser-render",
     status:"failed",reason:String(err?.name||"browser_error")})+"\n");
