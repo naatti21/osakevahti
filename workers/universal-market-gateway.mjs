@@ -10,6 +10,7 @@
  * All observations are CANDIDATES until the local app has an approved source binding.
  */
 import {yahooAdapter} from "./providers/yahoo-experimental.mjs";
+import {createAssetTypeProvider} from "./providers/fund-nav-contract.mjs";
 
 const ALPHA_ORIGIN="https://osakevahti-alpha-naatti21.pages.dev";
 const TYPES=new Set(["stock","etf","index","fund","other"]);
@@ -34,9 +35,11 @@ function checkedInstrument(raw){
   const ticker=uc(raw.providerSymbol||raw.ticker);
   const currency=uc(raw.currency);
   const type=String(raw.type||"").toLowerCase();
-  if(!/^[A-Z0-9^][A-Z0-9.^=_-]{0,47}$/.test(ticker))return null;
   if(!/^[A-Z]{3}$/.test(currency)||!TYPES.has(type))return null;
-  if(raw.isin && !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(uc(raw.isin)))return null;
+  if(ticker&&!/^[A-Z0-9^][A-Z0-9.^=_-]{0,47}$/.test(ticker))return null;
+  if(type!=="fund"&&!ticker)return null;
+  if(raw.isin&&!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(uc(raw.isin)))return null;
+  if(type==="fund"&&!ticker&&!raw.isin)return null;
   if(raw.mic && !/^[A-Z0-9]{4}$/.test(uc(raw.mic)))return null;
   if(raw.shareClass && !isText(raw.shareClass,20))return null;
   if(raw.name && !isText(raw.name,160))return null;
@@ -145,7 +148,11 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
           const navValid=typeof nav==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(nav)&&
             !Number.isNaN(Date.parse(nav+"T12:00:00Z"))&&
             Date.parse(nav+"T12:00:00Z")<=Date.now()+86400000;
-          if(symbol!==identity.ticker||currency!==identity.currency||
+          const exactIsin=identity.type!=="fund"||
+            (identity.isin&&uc(quote.instrument?.isin)===identity.isin);
+          if((identity.type!=="fund"&&symbol!==identity.ticker)||
+             (identity.type==="fund"&&identity.ticker&&symbol!==identity.ticker)||
+             !exactIsin||currency!==identity.currency||
              !Number.isFinite(price)||price<=0||!validTime||
              (identity.type==="fund"&&!navValid)){
             results.push({...output,status:"rejected",reason:"quote_identity_or_time_invalid"});
@@ -175,5 +182,7 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
 }
 
 // Cloudflare-compatible Worker entrypoint, with NO user-specific storage.
-const handler=createUniversalGateway({provider:yahooAdapter()});
+const handler=createUniversalGateway({
+  provider:createAssetTypeProvider({market:yahooAdapter()})
+});
 export default {fetch(request){return handler(request)}};
