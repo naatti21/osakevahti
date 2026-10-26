@@ -935,8 +935,12 @@ function priceIssue(h){
      Date.now()-Number(h.quoteTimestamp)>96*60*60*1000||quoteIsStaleWhileOpen(h)))
     return {label:"VANHA KURSSI",reason:"Kurssin todellinen tapahtuma-aika on vanhentunut tai puuttuu.",level:"bad"};
   if(health.status==="fallback")
-    return {label:"VARASYÖTE",reason:"Hinta saatiin varasyötteestä ("+String(health.provider||"tuntematon")+
-      "). Eri hakureitit voivat käyttää samaa alkuperäistä hinnantoimittajaa.",level:"info"};
+    return h.assetType==="fund"
+      ?{label:"VARA-NAV",reason:"Rahaston "+fundNavDateBadge(h)+
+        " saatiin julkisesta ISIN-varalähteestä ("+String(health.provider||"tuntematon")+
+        "). Tämä on julkaistu arvostuspäivä, ei päivänsisäinen kurssi.",level:"info"}
+      :{label:"VARASYÖTE",reason:"Hinta saatiin varasyötteestä ("+String(health.provider||"tuntematon")+
+        "). Eri hakureitit voivat käyttää samaa alkuperäistä hinnantoimittajaa.",level:"info"};
   if(!validPositive(h.currentPrice)&&validPositive(h.manualPrice))
     return {label:"KÄSIN SYÖTETTY",reason:"Automaattista hintatietoa ei ole vahvistettu.",level:"info"};
   return null;
