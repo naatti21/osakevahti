@@ -11,6 +11,7 @@
  */
 import {yahooAdapter} from "./providers/yahoo-experimental.mjs";
 import {createAssetTypeProvider} from "./providers/fund-nav-contract.mjs";
+import {createFreeReferenceGateway} from "./free-reference-gateway.mjs";
 
 const ALPHA_ORIGIN="https://osakevahti-alpha-naatti21.pages.dev";
 const TYPES=new Set(["stock","etf","index","fund","other"]);
@@ -194,4 +195,10 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
 const handler=createUniversalGateway({
   provider:createAssetTypeProvider({market:yahooAdapter()})
 });
-export default {fetch(request){return handler(request)}};
+const freeReferences=createFreeReferenceGateway();
+export default {
+  async fetch(request) {
+    const free=await freeReferences(request);
+    return free||handler(request);
+  }
+};
