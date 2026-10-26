@@ -35,3 +35,12 @@ Known older GitHub Pages static SYMBOLS/FUND_PAGES lists and deployed Cloudflare
 ## Tests
 
 tests/universal-gateway.test.mjs covers arbitrary ticker, private-field rejection, candidate-only status, exact provider symbol/currency, full-date NAV requirement, upstream failure, event vs fetch time, bounded search and batch, origin restriction. npm run test:market-gateway is in Quality gate. All external fetches are mocked; passing does NOT establish live provider availability.
+
+## 26.10.2026: lähdekelpoisuuden rajat
+
+- EODHD Fundamentals -dokumentaatio kuvaa US mutual funds -tietoja, joissa on ISIN, NAV ja Update_Date. Se EI todista Pohjoismaisten rahastojen tai täsmä-ISINien kattavuutta: https://eodhd.com/financial-apis/stock-etfs-fundamental-data-feeds
+- EODHD:n Euroopan EUFUND-virtuaalipörssistä on vuodelta 2019 kuvaus noin 2000 rahastosta. Tarkkaa nykykattavuutta tai NAV-päiväyksiä ei ole vahvistettu: https://eodhd.com/financial-apis-blog/new-european-funds-data
+- EODHD:n julkisessa hinnastossa free starter 20 API-kutsua/päivä henkilökohtaiseen käyttöön. Fund Fundamentals -suunnitelma noin 59,99 USD/kk; henkilökohtaisen API-tilauksen tiedon julkinen uudelleenjakelu ei ole oletusarvoisesti sallittua: https://eodhd.com/
+- FundFacts API kertoo kattavansa eurooppalaisten ISIN-rahastojen NAV-historioita ja dokumentteja, mutta nämä ovat palveluntarjoajan omia väitteitä; lisenssi, dataoikeudet, hinta ja käyttäjän rahastojen kattavuus on testattava: https://fundfactsapi.com/answers/best-api-for-ucits-and-european-fund-data
+- Uusi workers/providers/fund-nav-contract.mjs hyväksyy minkä tahansa toimittajan vain jos sama oikea ISIN, valuutta, osuuslaji sekä todella päivätty NAV täsmäävät. Liitettyä lisensoitua live-toimittajaa ei vielä ole. Tämä on nimenomaan yleinen ratkaisu, ei nimikohtainen lista.
+- engine/gateway-preview.mjs tekee vain lukuun tarkoitettuja dynaamisia instrumenttipyyntöjä. Se ei päivitä salkkuarvoja ilman myöhemmin rakennettavaa lähdesidonnan vahvistusvaihetta.
