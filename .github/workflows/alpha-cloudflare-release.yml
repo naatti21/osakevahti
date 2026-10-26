@@ -1,0 +1,130 @@
+name: Alpha Cloudflare Pages release (zero-cost)
+
+on:
+  push:
+    branches:
+      - 'deploy/osakevahti-alpha-20261013'
+    paths:
+      - 'index.html'
+      - 'sw.js'
+      - 'engine/**'
+      - 'manifest.webmanifest'
+      - 'icon-192.png'
+      - 'icon-512.png'
+      - 'scripts/build-alpha-pages.mjs'
+      - '.github/workflows/alpha-cloudflare-release.yml'
+  pull_request:
+    branches:
+      - 'deploy/osakevahti-alpha-20261013'
+    paths:
+      - '.github/workflows/alpha-cloudflare-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alpha-cloudflare-release
+  cancel-in-progress: false
+
+jobs:
+  release-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build strictly allowlisted Alpha assets
+        run: |
+          node scripts/build-alpha-pages.mjs
+          node --test tests/alpha-pages-package.test.mjs
+          npm run test:alpha-public-nav
+      - name: Create self-contained ZIP for direct upload fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist-alpha
+          zip -qr ../osakevahti-alpha-v2.17.9-pages.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osakevahti-alpha-v2.17.9-pages
+          path: osakevahti-alpha-v2.17.9-pages.zip
+          if-no-files-found: error
+          retention-days: 30
+  optional-cloudflare-deploy:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: release-package
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: alpha
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check configured credentials (never print values)
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "available=yes" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare deployment credentials available."
+          else
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            echo "CLOUDFLARE_DEPLOY_NOT_CONFIGURED: cannot deploy to Pages without a connected token/account."
+            echo "The ZIP package is available from this workflow run for manual Direct Upload."
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.credentials.outputs.available == 'yes'
+        with:
+          name: osakevahti-alpha-v2.17.9-pages
+      - name: Inspect exact Pages project and production branch
+        if: steps.credentials.outputs.available == 'yes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(curl --fail --silent --show-error --retry 2 \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/osakevahti-alpha-naatti21")"
+          project="$(jq -r '.result.name // empty' <<< "$payload")"
+          branch="$(jq -r '.result.production_branch // empty' <<< "$payload")"
+          if [[ "$project" != "osakevahti-alpha-naatti21" || -z "$branch" ]]; then
+            echo "Pages project not accessible or production branch not confirmed." >&2
+            exit 1
+          fi
+          echo "Confirmed Pages project: $project, production branch: $branch"
+          printf 'PRODUCTION_BRANCH=%s\n' "$branch" >> "$GITHUB_ENV"
+      - name: Deploy same tested ZIP to production branch
+        if: steps.credentials.outputs.available == 'yes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-alpha
+          unzip -q osakevahti-alpha-v2.17.9-pages.zip -d dist-alpha
+          npx --yes wrangler@4 pages deploy dist-alpha \
+            --project-name=osakevahti-alpha-naatti21 \
+            --branch="$PRODUCTION_BRANCH" \
+            --commit-dirty=true
+      - name: Confirm public Alpha release
+        if: steps.credentials.outputs.available == 'yes'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const base="https://osakevahti-alpha-naatti21.pages.dev";
+          const items=[["/","ALPHA · v2.17.9"],["/sw.js","osakevahti-shell-v2.17.9-alpha-public-nav1"],["/engine/public-nav-backup.mjs","createFundBackup"]];
+          let success=false;
+          for(let n=0;n<8;n++){
+            const found=await Promise.all(items.map(async ([path,needle])=>{
+              try{
+                const res=await fetch(base+path+"?check="+Date.now(),{headers:{"Cache-Control":"no-cache"}});
+                return res.ok&&(await res.text()).includes(needle);
+              }catch{return false}
+            }));
+            if(found.every(Boolean)){success=true;break}
+            await new Promise(r=>setTimeout(r,5000));
+          }
+          if(!success){console.error("Alpha CDN version not confirmed after deploy");process.exitCode=1}
+          else console.log("ALPHA_V2179_CLOUDFLARE_LIVE_VERIFIED");
+          NODE
