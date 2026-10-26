@@ -218,3 +218,35 @@ test("CORS OPTIONS preflight returns an empty 204 response",async()=>{
   assert.equal(await response.text(),"");
   assert.equal(response.headers.get("access-control-allow-origin"),ORIGIN);
 });
+
+
+test("malformed or future NAV cannot pass gateway validation even from a provider",async()=>{
+  const isin="IE00B03HD191";
+  const invalidDates=["2026-02-30","2035-10-23","22.10.","not-a-date"];
+  for(const date of invalidDates){
+    const source={id:"test",search:async()=>[],
+      getNav:async()=>({isin,shareClass:"ACC",currency:"EUR",price:10,
+        navDate:date,sourceKind:"issuer",provider:"Test"})};
+    const market=createAssetTypeProvider({
+      market:fakeProvider,funds:createFundNavAdapter({source,now:()=>now})
+    });
+    const handle=createUniversalGateway({provider:market});
+    const res=await post({instruments:[{type:"fund",currency:"EUR",
+      ticker:"",isin,shareClass:"ACC"}]},handle);
+    assert.notEqual((await res.json()).results[0].status,"candidate");
+  }
+});
+
+test("missing stock trade timestamp never becomes the time of the HTTP request",async()=>{
+  const p={...fakeProvider,quote:async i=>({
+    ...candidate,quote_at:null,fetched_at:now,
+    instrument:{providerSymbol:i.ticker,currency:i.currency}
+  })};
+  const handle=createUniversalGateway({provider:p});
+  const r=await post({instruments:[instrument]},handle);
+  const result=(await r.json()).results[0];
+  assert.equal(result.status,"candidate");
+  assert.equal(result.quote_at,null);
+  assert.equal(result.fetched_at,now);
+  assert.equal(result.identityVerified,false);
+});
