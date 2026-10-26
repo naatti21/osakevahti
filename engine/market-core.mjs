@@ -112,9 +112,12 @@ export function candidateDecision(request,candidate) {
     return {status:"reject",reason:"share_class_conflict"};
   if(i.mic && candidateMic && i.mic!==candidateMic)
     return {status:"reject",reason:"listing_conflict"};
-  if(i.isin && candidateIsin===i.isin && (!i.mic||!candidateMic||i.mic===candidateMic) &&
-    (!i.shareClass||!candidateClass||i.shareClass===candidateClass))
-    return {status:"match",reason:"isin_with_no_conflicting_metadata"};
+  // ISIN alone identifies the security, but never assume missing currency,
+  // venue or explicit share-class evidence on an automatic source binding.
+  if(i.isin && candidateIsin===i.isin && candidateCurrency===i.currency &&
+    (!i.mic||candidateMic===i.mic) &&
+    (!i.shareClass||candidateClass===i.shareClass))
+    return {status:"match",reason:"exact_isin_and_required_metadata"};
   if(i.type!=="fund" && desiredSymbol && candidateSymbol===desiredSymbol &&
     i.mic && candidateMic===i.mic && i.currency && candidateCurrency===i.currency)
     return {status:"match",reason:"exact_listing_and_currency"};
