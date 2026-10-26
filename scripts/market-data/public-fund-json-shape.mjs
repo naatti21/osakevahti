@@ -1,3 +1,5 @@
+import {fundJsonRow,indexPublicFundJson} from "../../workers/providers/rahastoraportti-public.mjs";
+
 /**
  * ONE read-only GET of the JSON URL actually fetched by the public website.
  * Output schema metadata only. No instrument names, NAV prices, secret headers,
@@ -63,6 +65,12 @@ try{
     }
     report.classObjectKeys=Object.keys(j.find(x=>x?.class&&typeof x.class==="object")?.class||{}).slice(0,15);
     report.isinFormatValidCount=j.filter(x=>/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(x?.ISIN||""))).length;
+    const now=Date.now();
+    report.liveAdapterValidatedRecords=j.filter(x=>!!fundJsonRow(x,now)).length;
+    const indexed=indexPublicFundJson(j,now);
+    report.liveAdapterUniqueIsins=indexed.index?.size||0;
+    report.liveAdapterAmbiguousIsins=[...(indexed.index||new Map()).values()].filter(x=>x===null).length;
+    report.liveAdapterStatus=report.liveAdapterValidatedRecords>500?"format-compatible":"format-incompatible";
     report.dateFormatMasks=[...new Set(j.map(x=>String(x?.closePriceDate||"").slice(0,35)
       .replace(/[0-9]/g,"#").replace(/[A-Za-z]/g,"A")))].slice(0,12);
     report.priceFormatMasks=[...new Set(j.map(x=>String(x?.closePrice||"").slice(0,30)
