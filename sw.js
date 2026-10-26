@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.8-alpha-manual-fund-review1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-manual-fund-review1";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL = [
   "./engine/numbers.mjs",
   "./engine/csv.mjs",
   "./engine/holdings.mjs",
+  "./engine/public-nav-backup.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
