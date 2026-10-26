@@ -141,19 +141,26 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
           const currency=uc(quote.currency);
           const price=Number(quote.price);
           const event=quote.quote_at;
-          const timestamp=event===null?null:Number(event);
+          const timestamp=event==null||event===""?null:Number(event);
           const nav=quote.nav_date;
           const validTime=timestamp===null||
             (Number.isFinite(timestamp)&&timestamp>=946684800000&&timestamp<=Date.now()+300000);
-          const navValid=typeof nav==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(nav)&&
-            !Number.isNaN(Date.parse(nav+"T12:00:00Z"))&&
-            Date.parse(nav+"T12:00:00Z")<=Date.now()+86400000;
+          const navDay=typeof nav==="string"?nav.match(/^(\d{4})-(\d{2})-(\d{2})$/):null;
+          const navMs=navDay?Date.UTC(+navDay[1],+navDay[2]-1,+navDay[3],12):null;
+          const navDate=navMs===null?null:new Date(navMs);
+          const navValid=!!navDate&&+navDay[1]>=2000&&
+            navDate.getUTCFullYear()===+navDay[1]&&
+            navDate.getUTCMonth()===+navDay[2]-1&&
+            navDate.getUTCDate()===+navDay[3]&&navMs<=Date.now()+86400000;
+          const fundKind=quote.sourceKind;
+          const funded=identity.type!=="fund"||
+            ["issuer","broker","licensed-feed"].includes(fundKind);
           const exactIsin=identity.type!=="fund"||
             (identity.isin&&uc(quote.instrument?.isin)===identity.isin);
           if((identity.type!=="fund"&&symbol!==identity.ticker)||
              (identity.type==="fund"&&identity.ticker&&symbol!==identity.ticker)||
              !exactIsin||currency!==identity.currency||
-             !Number.isFinite(price)||price<=0||!validTime||
+             !Number.isFinite(price)||price<=0||!validTime||!funded||
              (identity.type==="fund"&&!navValid)){
             results.push({...output,status:"rejected",reason:"quote_identity_or_time_invalid"});
             continue;
@@ -161,9 +168,11 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
           results.push({...output,status:"candidate",price,currency,
             provider:String(quote.provider||provider.id).slice(0,80),
             quote_at:timestamp,
-            fetched_at:Number.isFinite(Number(quote.fetched_at))?
+            fetched_at:quote.fetched_at!=null&&quote.fetched_at!==""&&
+              Number.isFinite(Number(quote.fetched_at))?
               Number(quote.fetched_at):null,
             nav_date:identity.type==="fund"?nav:null,
+            sourceKind:identity.type==="fund"?fundKind:null,
             instrument:{providerSymbol:symbol,currency,isin:quote.instrument?.isin||null,
               mic:quote.instrument?.mic||null,
               shareClass:quote.instrument?.shareClass||null,
