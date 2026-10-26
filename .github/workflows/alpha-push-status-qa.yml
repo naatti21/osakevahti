@@ -1,0 +1,24 @@
+name: Alpha deployment action status (read-only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/alpha-push-status-qa.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-alpha-workflow-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Print latest Alpha deploy workflow run IDs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/alpha-cloudflare-release.yml/runs?branch=deploy%2Fosakevahti-alpha-20261013&per_page=5" \
+            --jq '.workflow_runs[] | {id,head_sha,event,status,conclusion,html_url}'
