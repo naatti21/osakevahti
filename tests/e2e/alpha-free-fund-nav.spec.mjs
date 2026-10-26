@@ -67,7 +67,8 @@ test("ISIN public NAV backup updates only fund quote, preserves ownership and so
   });
   expect(result).toMatchObject({quantity:11,buyPrice:8.2,
     account:"Test Fund Account",navDate:day,price:10.4,health:"fallback",
-    isin:FUND_ISIN,fundSource:"SYNTH_FUND",issue:null,cache:true});
+    isin:FUND_ISIN,fundSource:"SYNTH_FUND",
+    issue:{label:"VARA-NAV",level:"info"},cache:true});
   expect(result.source).toContain("Rahastoraportti");
   expect(count()).toBe(1);
   await expect(page.locator("#holdings")).toContainText("VARA-NAV");
