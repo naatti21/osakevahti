@@ -119,6 +119,9 @@ export function createRahastoraporttiPublicSource({
       if(!data.index.has(key))return null;
       const r=data.index.get(key);
       if(!r)throw Error("fund_isin_ambiguous");
+      // Never use this as a fresh fallback when the public NAV itself is old.
+      const navMs=Date.parse(r.navDate+"T12:00:00Z");
+      if(!Number.isFinite(navMs)||now()-navMs>7*DAY_MS)return null;
       return {
         isin:key,currency:r.currency,price:r.price,navDate:r.navDate,
         provider:"Rahastoraportti public price list",
