@@ -10,7 +10,8 @@
  * All observations are CANDIDATES until the local app has an approved source binding.
  */
 import {yahooAdapter} from "./providers/yahoo-experimental.mjs";
-import {createAssetTypeProvider} from "./providers/fund-nav-contract.mjs";
+import {createAssetTypeProvider,createFundNavAdapter} from "./providers/fund-nav-contract.mjs";
+import {createRahastoraporttiPublicSource} from "./providers/rahastoraportti-public.mjs";
 import {createFreeReferenceGateway} from "./free-reference-gateway.mjs";
 
 const ALPHA_ORIGIN="https://osakevahti-alpha-naatti21.pages.dev";
@@ -155,7 +156,7 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
             navDate.getUTCDate()===+navDay[3]&&navMs<=Date.now()+86400000;
           const fundKind=quote.sourceKind;
           const funded=identity.type!=="fund"||
-            ["issuer","broker","licensed-feed"].includes(fundKind);
+            ["issuer","broker","licensed-feed","public-web-publication"].includes(fundKind);
           const exactIsin=identity.type!=="fund"||
             (identity.isin&&uc(quote.instrument?.isin)===identity.isin);
           if((identity.type!=="fund"&&symbol!==identity.ticker)||
@@ -174,6 +175,8 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
               Number(quote.fetched_at):null,
             nav_date:identity.type==="fund"?nav:null,
             sourceKind:identity.type==="fund"?fundKind:null,
+            requiresManualReview:quote.requiresManualReview===true||fundKind==="public-web-publication",
+            automaticPortfolioWriteAllowed:false,
             instrument:{providerSymbol:symbol,currency,isin:quote.instrument?.isin||null,
               mic:quote.instrument?.mic||null,
               shareClass:quote.instrument?.shareClass||null,
@@ -195,6 +198,14 @@ export function createUniversalGateway({provider,allowedOrigin=ALPHA_ORIGIN}={})
 const handler=createUniversalGateway({
   provider:createAssetTypeProvider({market:yahooAdapter()})
 });
+// Public website-linked source, once a day and only when explicitly enabled.
+const publicFundHandler=createUniversalGateway({
+  provider:createAssetTypeProvider({
+    market:{id:"disabled-stock",async search(){return []},
+      async quote(){return {status:"unavailable",reason:"quote_source_not_qualified"}}},
+    funds:createFundNavAdapter({source:createRahastoraporttiPublicSource()})
+  })
+});
 const freeReferences=createFreeReferenceGateway();
 export default {
   async fetch(request,env={}) {
@@ -203,6 +214,8 @@ export default {
     // Yahoo's undocumented endpoints and their usage rights have NOT been
     // qualified. Explicit environment opt-in is required even for staging.
     // Never turn on an experimental provider by merely deploying a branch.
+    if(env.ALLOW_PUBLIC_FUND_BACKUP==="true")
+      return publicFundHandler(request);
     if(env.ALLOW_EXPERIMENTAL_YAHOO!=="true")
       return responseJSON({error:"quote_source_not_qualified"},503);
     return handler(request);
