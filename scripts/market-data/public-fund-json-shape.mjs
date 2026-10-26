@@ -45,6 +45,28 @@ try{
     return shape;
   };
   report.available=true;report.bytes=size;report.shape=describe(j);
+  if(Array.isArray(j)){
+    report.fieldsPresent={
+      ISIN:j.filter(x=>typeof x?.ISIN==="string"&&x.ISIN.length>0).length,
+      closePrice:j.filter(x=>x?.closePrice!=null&&String(x.closePrice).trim()!=="").length,
+      closePriceDate:j.filter(x=>x?.closePriceDate!=null&&String(x.closePriceDate).trim()!=="").length,
+      currency:j.filter(x=>x?.currency!=null&&String(x.currency).trim()!=="").length,
+    };
+    report.dateFormats={};
+    for(const item of j){
+      const value=String(item?.closePriceDate||"").trim();
+      const format=/^\d{2}\.\d{2}\.\d{4}$/.test(value)?"DD.MM.YYYY":
+        /^\d{4}-\d{2}-\d{2}$/.test(value)?"YYYY-MM-DD":
+        /^\d{4}-\d{2}-\d{2}T/.test(value)?"ISO_TIME":
+        !value?"missing":"other";
+      report.dateFormats[format]=(report.dateFormats[format]||0)+1;
+    }
+    report.classObjectKeys=Object.keys(j.find(x=>x?.class&&typeof x.class==="object")?.class||{}).slice(0,15);
+    report.isinFormatValidCount=j.filter(x=>/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(x?.ISIN||""))).length;
+    report.priceTypeHistogram=Object.fromEntries(
+      [...new Set(j.map(x=>typeof x?.closePrice))].map(type=>[type,j.filter(x=>typeof x?.closePrice===type).length])
+    );
+  }
   // Never output/source raw data, values or names from the downloaded report.
 }catch(err){
   report.error=String(err?.message||err||"source_failure").slice(0,100);
