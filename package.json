@@ -8,7 +8,8 @@
     "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1",
     "test:qa-import": "node tests/import-qa/qa8-guards.mjs",
     "test:engine": "node --test tests/alpha-import-engine.test.mjs",
-    "test:market-core": "node --test tests/market-core.test.mjs tests/market-router.test.mjs"
+    "test:market-core": "node --test tests/market-core.test.mjs tests/market-router.test.mjs",
+    "test:market-gateway": "node --test tests/universal-gateway.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",
