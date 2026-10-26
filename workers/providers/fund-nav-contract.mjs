@@ -8,7 +8,7 @@
  */
 const upper=v=>String(v??"").trim().toUpperCase();
 const DAY=/^(\d{4})-(\d{2})-(\d{2})$/;
-const KINDS=new Set(["issuer","broker","licensed-feed"]);
+const KINDS=new Set(["issuer","broker","licensed-feed","public-web-publication"]);
 function validDate(raw,now){
   const s=String(raw??"").trim(),m=s.match(DAY);
   if(!m)return false;
@@ -35,7 +35,9 @@ export function validateNavQuote(raw,expected,now=Date.now()){
     return stop("isin_mismatch");
   if(!/^[A-Z]{3}$/.test(upper(raw.currency))||
     upper(raw.currency)!==upper(expected.currency))return stop("currency_mismatch");
-  if(expected.shareClass && upper(raw.shareClass)!==upper(expected.shareClass))
+  // Exact verified ISIN distinguishes the share class; a missing optional
+  // label is not a conflict. A CONFLICTING declared class is always rejected.
+  if(expected.shareClass && raw.shareClass && upper(raw.shareClass)!==upper(expected.shareClass))
     return stop("share_class_not_verified");
   if(!KINDS.has(String(raw.sourceKind||""))||!String(raw.provider||"").trim())
     return stop("source_not_qualified");
@@ -51,7 +53,9 @@ export function validateNavQuote(raw,expected,now=Date.now()){
       mic:upper(raw.mic)||null,
       shareClass:upper(raw.shareClass)||null,
       identityStatus:"issuer-or-qualified-provider-isin"},
-    sourceKind:raw.sourceKind};
+    sourceKind:raw.sourceKind,
+    requiresManualReview:raw.sourceKind==="public-web-publication"||raw.requiresManualReview===true,
+    identityEvidence:raw.identityEvidence||"exact_isin"};
 }
 
 export function createFundNavAdapter({source,now=()=>Date.now()}={}){
