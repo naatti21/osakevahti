@@ -1,0 +1,31 @@
+name: Alpha public fund website capability (one shot)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/market-data/public-fund-page-capability.mjs'
+      - '.github/workflows/alpha-public-fund-capability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-personal-data-capability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: One GET to public site and robots.txt
+        run: node scripts/market-data/public-fund-page-capability.mjs
+      - name: Qualification limits
+        if: always()
+        run: |
+          {
+            echo '### Public page capability only'
+            echo 'Never implies NAV coverage, permission to automate, or an accessible priced-data API.'
+            echo 'No credentials, portfolio values, fund symbol, price or raw public table was saved.'
+          } >> "$GITHUB_STEP_SUMMARY"
