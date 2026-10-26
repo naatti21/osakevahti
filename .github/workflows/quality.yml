@@ -50,6 +50,9 @@ jobs:
       - name: Verify exact-class public fund backup and NAV sanity guards
         run: npm run test:public-fund-fallback
 
+      - name: Verify exact ISIN public NAV JSON fallback contract
+        run: npm run test:public-fund-json
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
