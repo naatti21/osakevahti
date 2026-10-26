@@ -1,0 +1,53 @@
+name: Alpha CDN v2.17.9 live verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/alpha-live-v2179-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-cdn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Inspect deployed Alpha files without secrets or portfolio data
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const base="https://osakevahti-alpha-naatti21.pages.dev";
+          const endpoints=[
+            {path:"/index.html",expected:["ALPHA · v2.17.9","Osakevahti Alpha"]},
+            {path:"/engine/public-nav-backup.mjs",expected:["createFundBackup","FUND_BACKUP_STORAGE_KEY"]},
+            {path:"/sw.js",expected:["osakevahti-shell-v2.17.9-alpha-public-nav1"]}
+          ];
+          const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+          let allGood=false;
+          for(let attempt=1;attempt<=9;attempt++){
+            let successes=0;
+            for(const e of endpoints){
+              try{
+                const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),9000);
+                const r=await fetch(base+e.path+"?smoke="+Date.now(),{
+                  redirect:"error",headers:{"Cache-Control":"no-cache"},
+                  signal:ctrl.signal});
+                const body=await r.text();
+                clearTimeout(timer);
+                const ok=r.ok&&e.expected.every(s=>body.includes(s));
+                successes+=Number(ok);
+                console.log(JSON.stringify({attempt,path:e.path,status:r.status,
+                  verified:ok,bytes:body.length}));
+              }catch(err){
+                console.log(JSON.stringify({attempt,path:e.path,
+                  verified:false,error:String(err?.message||err).slice(0,90)}));
+              }
+            }
+            if(successes===endpoints.length){allGood=true;break}
+            if(attempt<9)await sleep(9000);
+          }
+          if(!allGood){console.error("ALPHA_LIVE_VERSION_NOT_VERIFIED");process.exitCode=1;}
+          else console.log("ALPHA_V2179_LIVE_VERIFIED");
+          NODE
