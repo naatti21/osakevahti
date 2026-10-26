@@ -35,6 +35,9 @@ jobs:
       - name: Verify universal market core and privacy invariants
         run: npm run test:market-core
 
+      - name: Test generic gateway privacy, identity and quote contracts
+        run: npm run test:market-gateway
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
