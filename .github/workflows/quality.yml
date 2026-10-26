@@ -32,6 +32,9 @@ jobs:
       - name: Verify pinned Engine and source-evidence cases
         run: npm run test:engine
 
+      - name: Verify Alpha public NAV ISIN fallback and privacy
+        run: npm run test:alpha-public-nav
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
