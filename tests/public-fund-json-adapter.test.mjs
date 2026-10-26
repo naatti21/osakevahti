@@ -122,3 +122,16 @@ test("released Worker never activates fund backup without a deliberate environme
   assert.equal(r.status,503);
   assert.equal((await r.json()).error,"quote_source_not_qualified");
 });
+
+
+test("old public NAV is withheld instead of presented as a current fallback",async()=>{
+  const t=sourceFake([item({closePriceDate:"20260930"})]);
+  const src=createRahastoraporttiPublicSource({fetchImpl:t.fetchImpl,now:()=>at});
+  assert.equal(await src.getNav({isin}),null);
+});
+
+test("a newer no-currency or undated record never passes exact ISIN lookup",async()=>{
+  const t=sourceFake([item({currency:""})]);
+  const src=createRahastoraporttiPublicSource({fetchImpl:t.fetchImpl,now:()=>at});
+  await assert.rejects(src.getNav({isin}),/public_fund_invalid_schema/);
+});
