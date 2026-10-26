@@ -6,7 +6,7 @@
  * This is one provider plugin, not a list of approved instruments. It can fail
  * with 403/429 or change response format. Do not silently invent data.
  */
-const SYMBOL=/^[A-Z0-9][A-Z0-9.^=:_/-]{0,47}$/i;
+const SYMBOL=/^[A-Z0-9^][A-Z0-9.^=_-]{0,47}$/i;
 const ISIN=/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 const CUR=/^[A-Z]{3}$/;
 const QTYPE=new Set(["EQUITY","ETF","MUTUALFUND","INDEX"]);
