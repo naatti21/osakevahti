@@ -1,6 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {createFreeReferenceGateway} from "../workers/free-reference-gateway.mjs";
+import defaultWorker from "../workers/universal-market-gateway.mjs";
 
 const ORIGIN="https://osakevahti-alpha-naatti21.pages.dev";
 const now=Date.parse("2026-10-26T13:00:00Z");
@@ -144,4 +145,17 @@ test("OPTIONS preflight and unsupported paths preserve routing semantics",async(
   assert.equal(preflight.headers.get("Access-Control-Allow-Origin"),ORIGIN);
   assert.equal(await preflight.text(),"");
   assert.equal(await get("/v1/not-free",handle),null);
+});
+
+
+test("undeclared experimental market feed remains off even if Worker is deployed",async()=>{
+  const r=await defaultWorker.fetch(new Request("https://gateway.example/v1/quotes",{
+    method:"POST",
+    headers:{"Origin":ORIGIN,"Content-Type":"application/json"},
+    body:JSON.stringify({instruments:[{
+      ticker:"UNKNOWN.HE",currency:"EUR",type:"stock"
+    }]})
+  }),{});
+  assert.equal(r.status,503);
+  assert.equal((await r.json()).error,"quote_source_not_qualified");
 });
