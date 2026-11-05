@@ -47,8 +47,8 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 }
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
-    !sw.includes('if (res.ok)') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-manual-fund-review1";')) {
+    !sw.includes('cache.addAll(SHELL)') || sw.includes('cache.put(') ||
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 

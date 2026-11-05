@@ -8,8 +8,8 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CURRENT_CACHE = 'osakevahti-shell-v2.17.9-alpha-manual-fund-review1';
-const LEGACY_CACHE = 'osakevahti-shell-v2.17.6-alpha';
+const CURRENT_CACHE = 'osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1';
+const LEGACY_CACHE = 'osakevahti-shell-v2.17.9-alpha-manual-fund-review1';
 const FAILED_CACHE = 'osakevahti-shell-qa-broken-v2';
 const OTHER_CACHE = 'visual-academy-qa-shell-v1';
 
@@ -30,9 +30,9 @@ async function controlledServer() {
   expect(sw).toContain(initial);
   expect(sw).toContain(safe);
 
-  // Alpha v1 shipped the same SW logic except for its actual old cache name.
-  const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";')
-    .replace(/^  "\.\/(?:alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup|manual-fund)\.mjs)",?\n/gm,'');
+  // Frozen worker from base 2078ff2: exercise the real old runtime cache writes.
+  const legacy = (await readFile('tests/fixtures/pwa/alpha-before-lifecycle.js','utf8'))
+    .replace('osakevahti-shell-v2.17.9-alpha-manual-fund-review1',LEGACY_CACHE);
   const broken = sw.replace(initial, 'const CACHE = "' + FAILED_CACHE + '";')
     .replace('cache.addAll(SHELL)', 'cache.addAll([...SHELL, "./qa-does-not-exist-upgrade.txt"])');
   let version = 'old';
@@ -93,10 +93,10 @@ async function controlledServer() {
 async function installed(page, origin) {
   await page.goto(origin + '/index.html');
   await expect(page.locator('#dailyMoves')).toBeVisible();
-  await page.waitForFunction(async cacheName => {
+  await expect.poll(()=>page.evaluate(async cacheName => {
     const keys = await caches.keys();
     return !!navigator.serviceWorker?.controller && keys.includes(cacheName);
-  }, LEGACY_CACHE, {timeout: 30_000});
+  }, LEGACY_CACHE), {timeout: 30_000}).toBe(true);
   expect(await page.locator('meta[name="qa-installed-build"]').getAttribute('content')).toBe('v1');
 }
 
@@ -153,7 +153,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
       await registration.update();
     });
     // A successful new install must activate, take control and prune OLD OWN cache.
-    await page.waitForFunction(async ({newName, oldName}) => {
+    await expect.poll(()=>page.evaluate(async ({newName, oldName}) => {
       const keys = await caches.keys();
       const reg = await navigator.serviceWorker.getRegistration();
       return keys.includes(newName) && !keys.includes(oldName)
@@ -161,7 +161,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
         // The old worker may still control this tab after a new worker
         // activates. Reloading too early can recreate the old cache.
         && navigator.serviceWorker.controller === reg.active;
-    }, {newName:CURRENT_CACHE, oldName:LEGACY_CACHE}, {timeout:30_000});
+    }, {newName:CURRENT_CACHE, oldName:LEGACY_CACHE}), {timeout:30_000}).toBe(true);
 
     await page.reload();
     await expect(page.locator('#dailyMoves')).toBeVisible();
@@ -171,7 +171,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     const cacheResult = await page.evaluate(async name => {
       const keys = await caches.keys();
       const resp = await caches.match('/visual-academy/launch');
-      const shell = await caches.open('osakevahti-shell-v2.17.9-alpha-manual-fund-review1');
+      const shell = await caches.open('osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1');
       const html = await shell.match('/index.html');
       return {keys, other:resp ? await resp.text() : null, shell:html ? await html.text() : null};
     }, OTHER_CACHE);

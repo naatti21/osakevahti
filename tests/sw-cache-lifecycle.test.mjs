@@ -7,10 +7,10 @@ const current=source.match(/const CACHE = "([^"]+)"/)[1];
 function harness(){
  const handlers={},stores=new Map(),waits=[];let release;
  const cache=()=>{const entries=new Map();return {async put(k,v){entries.set(typeof k==='string'?k:k.url,v)},async match(k){return entries.get(typeof k==='string'?k:k.url)}}};
- const caches={async open(k){if(!stores.has(k))stores.set(k,cache());return stores.get(k)},async keys(){return [...stores.keys()]},async delete(k){return stores.delete(k)},async match(k){for(const c of stores.values()){const r=await c.match(k);if(r)return r}}};
+ const caches={async open(k){if(!stores.has(k))stores.set(k,cache());return stores.get(k)},async keys(){return [...stores.keys()]},async delete(k){return stores.delete(k)},async match(k,options={}){const selected=options.cacheName?[stores.get(options.cacheName)].filter(Boolean):[...stores.values()];for(const c of selected){const r=await c.match(k);if(r)return r}}};
  const network=new Promise(resolve=>{release=resolve});
  const fetch=()=>network;
- vm.runInNewContext(source,{self:{location:{origin:'https://synthetic.test'},addEventListener:(n,f)=>handlers[n]=f},caches,fetch,URL,Response,console});
+ vm.runInNewContext(source,{self:{location:{origin:'https://synthetic.test',href:'https://synthetic.test/sw.js'},addEventListener:(n,f)=>handlers[n]=f},caches,fetch,URL,Response,console});
  return {stores,caches,release:(r)=>release(r),async start(mode,path){let response;handlers.fetch({request:{method:'GET',mode,url:'https://synthetic.test/'+path},respondWith:p=>response=p,waitUntil:p=>waits.push(p)});await Promise.resolve();return {response,waits}}};
 }
 for(const [mode,path] of [['navigate','index.html'],['cors','image-reader.js'],['cors','asset.js']])test('in-flight '+path+' cannot recreate a deleted old shell cache',async()=>{
@@ -21,5 +21,5 @@ test('new shell never reads an unrelated or older cache entry',async()=>{
  const pending=await h.start('cors','asset.js');await Promise.resolve();if(h.release)h.release(new Response('new'));const r=await pending.response;assert.equal(await r.text(),'new');
 });
 test('unavailable cache storage does not discard an online response',async()=>{
- const h=harness();h.caches.open=async()=>{throw new Error('Synthetic quota')};const p=await h.start('cors','asset.js');h.release(new Response('online'));assert.equal(await (await p.response).text(),'online');await Promise.all(p.waits);
+ const h=harness();h.caches.open=h.caches.match=async()=>{throw new Error('Synthetic quota')};const p=await h.start('cors','asset.js');h.release(new Response('online'));assert.equal(await (await p.response).text(),'online');await Promise.all(p.waits);
 });

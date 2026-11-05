@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-manual-fund-review1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1";
 const SHELL = [
   "./",
   "./index.html",
@@ -48,28 +48,25 @@ self.addEventListener("fetch", event => {
   }
 
   if (url.origin !== self.location.origin) return;
-  // Acquire the handle before awaiting network. A retired worker must not
-  // reopen its cache after a new worker has deleted it during activation.
-  const cacheReady = caches.open(CACHE).catch(() => null);
-  const read = key => cacheReady.then(cache => cache?.match(key));
-  const network = key => fetch(req).then(async res => {
-    if (res.ok) {
-      try { const cache = await cacheReady; if (cache) await cache.put(key, res.clone()); }
-      catch { /* Storage failure must not discard a valid online response. */ }
-    }
-    return res;
-  });
+  // The versioned shell is written ONLY by install/addAll. A retired worker
+  // can still finish a fetch after activate deletes its cache. match() never
+  // creates a namespace; open()/put() here could resurrect the retired shell.
+  // Online responses are returned, but become offline assets only after the
+  // next successfully installed worker version (never a mixed-version shell).
+  const read = key => caches.match(new URL(key.url || key, self.location.href).href,
+    {cacheName:CACHE}).catch(() => undefined);
+  const network = () => fetch(req);
   let response;
   if (req.mode === "navigate") {
-    response = network("./index.html").catch(async () =>
+    response = network().catch(async () =>
       (await read("./index.html")) || Response.error());
   } else if (url.pathname.endsWith("/image-reader.js")) {
-    response = network(req).catch(async () => (await read(req)) || Response.error());
+    response = network().catch(async () => (await read(req)) || Response.error());
   } else {
-    response = read(req).then(cached => cached || network(req));
+    response = read(req).then(cached => cached || network());
   }
   event.respondWith(response);
-  // Response completion includes cache writes; retain the worker until settled.
+  // Keep pending offline reads alive until the response settles.
   event.waitUntil(response.then(() => undefined, () => undefined));
 });
 
