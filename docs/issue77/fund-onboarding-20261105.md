@@ -41,7 +41,7 @@ Alphan erilliseen selaimen varalähteeseen lisättiin vastaava diagnostiikka ja 
 
 ## Todellinen testinäyttö
 
-Sovellus- ja testikoodi: **`adb6784453a02b42bbbb680bba49ff5427194d7b`**. Tätä seuraava raportointicommit muuttaa vain tätä dokumenttia. Node 22 / Playwright 1.57.0; paikallinen `/usr/bin/chromium` 154, ei fyysinen Android.
+Sovellus- ja testikoodi: **`adb6784453a02b42bbbb680bba49ff5427194d7b`**. Tätä seuraava raportointicommit muuttaa vain tätä dokumenttia. Node 24.19.0 (CI-konfiguraatio käyttää Node 22:ta) / Playwright 1.57.0; paikallinen `/usr/bin/chromium` 154, ei fyysinen Android.
 
 | Tarkistus | Tulos |
 |---|---|
