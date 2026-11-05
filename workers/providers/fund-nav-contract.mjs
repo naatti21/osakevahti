@@ -76,7 +76,9 @@ export function createFundNavAdapter({source,now=()=>Date.now()}={}){
         return {status:"unavailable",reason:"not_fund"};
       if(!validIsin(instrument.isin))
         return {status:"unavailable",reason:"fund_isin_required"};
-      const raw=await source.getNav({isin:upper(instrument.isin)});
+      const diagnostic=source.getNavResult?await source.getNavResult({isin:upper(instrument.isin)}):null;
+      if(diagnostic&&diagnostic.status!=="candidate")return {status:"unavailable",reason:diagnostic.status,diagnostics:diagnostic};
+      const raw=diagnostic?diagnostic.observation:await source.getNav({isin:upper(instrument.isin)});
       if(!raw)return {status:"unavailable",reason:"no_nav_for_isin"};
       // A provider may return the wrong share class or an old response:
       // validate metadata and the real source valuation date.

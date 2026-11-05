@@ -112,6 +112,30 @@ export function createRahastoraporttiPublicSource({
     id:"rahastoraportti-public-personal-backup",
     lineage:"sijoitustutkimus-public-fund-prices",
     sourceKind:"public-web-publication",
+    async getNavResult({isin}={}){
+      const key=upper(isin);
+      if(!key)return {status:"no_binding"};
+      if(!validIsin(key))return {status:"invalid_identity"};
+      let data,error;
+      try{data=await load()}catch(err){error=String(err.message||err);data=snapshot}
+      const r=data?.index.get(key);
+      const dates=data?[...data.index.values()].filter(Boolean).map(row=>row.navDate):[];
+      const feedNewestDate=dates.sort().at(-1)||null;
+      // Calendar days in the application's timezone, never elapsed 24h rounded
+      // around a synthetic noon timestamp.
+      const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit'}).format(now());
+      const age=date=>Math.max(0,Math.round((Date.parse(today)-Date.parse(date))/DAY_MS));
+      const observation=r?{isin:key,currency:r.currency,price:r.price,navDate:r.navDate,
+        provider:"Rahastoraportti public price list",sourceKind:"public-web-publication",
+        fetched_at:checkedAt,shareClass:null,fundCode:r.fundCode,
+        identityEvidence:"exact_public_ISIN",requiresManualReview:true}:null;
+      const diagnostics={observation,feedNewestDate,sourceFeedStale:feedNewestDate?age(feedNewestDate)>7:null,
+        ageDays:r?age(r.navDate):null,fetchedAt:checkedAt||null};
+      if(error)return {status:"upstream_failed",reason:error,...diagnostics};
+      if(!data.index.has(key))return {status:"not_found",...diagnostics};
+      if(!r)return {status:"invalid_identity",reason:"fund_isin_ambiguous",...diagnostics};
+      return {status:diagnostics.ageDays>7?"stale_nav":"candidate",...diagnostics};
+    },
     async getNav({isin}){
       const key=upper(isin);
       if(!validIsin(key))throw Error("fund_isin_invalid");

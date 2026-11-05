@@ -235,7 +235,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <div id="targetMap" class="planList"></div>
     </div>
   </details>
-  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button></div></div>
+  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button><button id="addFundBtn">+ Lisää rahasto</button></div></div>
   <button id="detailsToggle" class="detailToggle" type="button">Näytä tarkemmat luvut</button>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -424,6 +424,24 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <button class="nav" data-view="settingsView">Asetukset</button>
 </nav>
 
+<dialog id="newFundDialog" aria-labelledby="newFundTitle"><form id="newFundForm">
+<h2 id="newFundTitle">Lisää rahasto · käsin tarkistettu</h2>
+<p>Nimi ei varmista instrumentin identiteettiä. Tarkista osuuslaji ja valuutta omasta lähteestäsi. Automaattista hintalähdettä ei yhdistetä tässä polussa.</p>
+<label class="txt" for="newFundName">Rahaston koko nimi</label><input id="newFundName" type="text" required >
+<label class="txt" for="newFundClass">Osuuslaji (jos tiedossa)</label><input id="newFundClass" type="text" >
+<label class="txt" for="newFundBroker">Palveluntarjoaja</label><input id="newFundBroker" type="text" required >
+<label class="txt" for="newFundAccount">Tilin oma nimi (ei tilinumeroa)</label><input id="newFundAccount" type="text" required >
+<label class="txt" for="newFundQuantity">Nykyisten osuuksien kokonaismäärä</label><input id="newFundQuantity" type="number" step="any" min="0" required >
+<label class="txt" for="newFundCost">Keskihankintahinta / osuus</label><input id="newFundCost" type="number" step="any" min="0" required >
+<label class="txt" for="newFundNav">NAV / osuus · KÄSIN</label><input id="newFundNav" type="number" step="any" min="0" required >
+<label class="txt" for="newFundDate">NAV:n arvostuspäivä vuosineen</label><input id="newFundDate" type="date" required >
+<label class="txt" for="newFundSource">NAV-lähteen kuvaus</label><input id="newFundSource" type="text" required >
+<label class="txt" for="newFundCurrency">Omistuksen ja NAV:n valuutta</label><select id="newFundCurrency"><option>EUR</option><option>USD</option><option>SEK</option><option>NOK</option><option>GBP</option><option>CHF</option><option>JPY</option><option>CAD</option></select>
+<p>Arvo on suuntaa-antava (≈). Käsin syötettyä hintaa ei esitetä automaattisesti varmennettuna. Vieras valuutta edellyttää valuuttakurssia.</p>
+<label><input id="newFundConfirm" type="checkbox" required> Olen tarkistanut nimen, osuuslajin, valuutan, määrän ja NAV-lähteen. Haluan lisätä tämän omistuksen.</label>
+<p id="newFundError" role="alert"></p><div class="actions"><button type="button" id="newFundCancel">Peruuta</button><button type="submit">Vahvista ja lisää rahasto</button></div>
+</form></dialog>
+
 <dialog id="dlg">
 <form id="form">
   <div class="row"><h2 id="dlgTitle">Lisää omistus</h2><button type="button" id="closeDlg">×</button></div>
@@ -538,6 +556,29 @@ const $=id=>document.getElementById(id);
 
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{document.querySelectorAll(".nav").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");scrollTo(0,0)});
 $("addBtn").onclick=()=>openDlg();
+let manualFundEditingId=null;
+function openManualFund(h=null){
+ manualFundEditingId=h?.id||null;$("newFundForm").reset();$("newFundError").textContent="";
+ if(h){for(const [field,value] of Object.entries({Name:h.name,Class:h.instrument?.shareClass,Broker:h.broker,Account:h.accountLabel,Currency:h.currency,Quantity:h.quantity,Cost:h.buyPrice,Nav:h.manualPrice,Date:h.navDate,Source:h.quoteObservation?.sourceDescription}))$("newFund"+field).value=value??"";}
+ $("newFundConfirm").checked=false;$("newFundDialog").showModal();
+}
+$("addFundBtn").onclick=()=>openManualFund();
+$("newFundCancel").onclick=()=>$("newFundDialog").close();
+$("newFundForm").oninput=e=>{if(e.target.id!=="newFundConfirm")$("newFundConfirm").checked=false};
+let manualFundSaving=false;
+$("newFundForm").onsubmit=async e=>{
+  e.preventDefault();if(manualFundSaving)return;manualFundSaving=true;
+  try{
+    const {prepareManualFund}=await import("./engine/manual-fund.mjs");
+    const value=id=>$("newFund"+id).value;
+    const h=prepareManualFund({name:value("Name"),shareClass:value("Class"),broker:value("Broker"),accountLabel:value("Account"),currency:value("Currency"),quantity:value("Quantity"),buyPrice:value("Cost"),nav:value("Nav"),navDate:value("Date"),sourceDescription:value("Source"),confirmed:$("newFundConfirm").checked},state.holdings,{id:manualFundEditingId||uid(),supportedCurrency:supportedHoldingCurrency});
+    const candidate={...state,holdings:manualFundEditingId?state.holdings.map(old=>old.id===manualFundEditingId?{...old,...h}:old):[...state.holdings,h]};
+    // Persist first: a quota failure preserves both portfolio and review fields.
+    try{localStorage.setItem(KEY,JSON.stringify(candidate))}catch{throw Error("Tallennus epäonnistui. Omistuksia ei muutettu; tarkistus säilyy.")}
+    state=candidate;render();$("newFundDialog").close();
+  }catch(err){$("newFundError").textContent=err.message}finally{manualFundSaving=false}
+};
+
 $("importPortfolioBtn").onclick=()=>{
   const nav=[...document.querySelectorAll(".nav")].find(x=>x.dataset.view==="settingsView");
   if(nav)nav.click();
@@ -903,6 +944,7 @@ function displayedPriceIssueLabel(h,issue){
 }
 function priceIssue(h){
   if(!supportedHoldingCurrency(h.currency))return {label:"VALUUTTA VAHVISTAMATTA",reason:"Historiallisen omistuksen valuutta puuttuu tai on virheellinen. Avaa omistus ja vahvista valuutta; tietoja ei poisteta eikä valuuttaa arvata.",level:"warn"};
+  if(h.quoteSource==="MANUAL_NAV")return {label:"KÄSIN",reason:"Käsin syötetty NAV · "+String(h.navDate||"päivä puuttuu")+" · "+String(h.quoteProvider||"")+". Arvo on suuntaa-antava."+(fundNavDateInfo(h.navDate)?.days>7?" NAV on "+fundNavDateInfo(h.navDate).days+" kalenteripäivää vanha.":""),level:"warn"};
   const health=h.quoteHealth||{};
   if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()){
     return {label:"HINTALÄHDE PUUTTUU",
@@ -1006,6 +1048,7 @@ function renderPriceHealth(){
 }
 
 function dataState(h){
+  if(h.quoteSource==="MANUAL_NAV")return {label:"KÄSIN · NAV "+String(h.navDate||""),cls:"manual"};
   if(h.currentPrice){
     if(h.quoteSource==="FUND_NAV"){
       const issue=priceIssue(h);
@@ -2000,6 +2043,7 @@ function renderInsights(){
   });
 }
 function openDlg(id=null){
+  const manual=state.holdings.find(h=>h.id===id&&h.quoteSource==="MANUAL_NAV");if(manual){openManualFund(manual);return;}
   manualInstrumentChoice=null;
   alphaSearchSeq++;
   $("alphaInstrumentSearch").classList.add("hidden");
@@ -2377,6 +2421,7 @@ async function runMarketRefresh(showErrors=false){
 
     try{
       if(h.assetType==="fund"){
+        if(h.quoteSource==="MANUAL_NAV"){h.quoteHealth={status:"manual_nav",reason:"NAV päivitetään käsin"};continue;}
         const fundKey=String(h.fundQuoteKey||h.symbol||"").trim();
         if(!fundKey){
           h.quoteHealth={status:"unlinked",checkedAt:Date.now(),
@@ -3229,6 +3274,8 @@ async function importBackup(e){
   const f=e.target.files?.[0];if(!f)return;
   try{
     const parsed=JSON.parse(await f.text());
+    const {validateManualFundBackup}=await import("./engine/manual-fund.mjs");
+    for(const h of parsed.holdings||[])validateManualFundBackup(h);
     validateBackupForRestore(parsed,{allowMissingCurrency:true}); // Check all holdings before touching the user's portfolio.
     const candidate=clonePortfolioCandidate({...state,...parsed,apiKey:state.apiKey||""});
     // Only internal position IDs are generated. No financial identifier is guessed.
