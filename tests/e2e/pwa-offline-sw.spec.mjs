@@ -5,7 +5,7 @@ import {test,expect} from '@playwright/test';
 // Browser context OVERRIDES repository's serviceWorkers:'block' deliberately.
 test.use({serviceWorkers:'allow'});
 const KEY='osakevahti.single.v1';
-const SHELL_CACHE='osakevahti-shell-v2.17.9-alpha-manual-fund-review1';
+const SHELL_CACHE='osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1';
 const FIRST={id:'OFFLINE-SYNTHETIC-01',symbol:'MSFT',name:'Synthetic Microsoft',
   quantity:7.25,buyPrice:123.45,currency:'USD',account:'Nordea',
   accountType:'AOT',broker:'Nordea',accountDetailsConfirmed:true,
@@ -14,13 +14,13 @@ const FIRST={id:'OFFLINE-SYNTHETIC-01',symbol:'MSFT',name:'Synthetic Microsoft',
 async function install(page){
   await page.goto('/index.html');
   await expect(page.locator('#dailyMoves')).toBeVisible();
-  await page.waitForFunction(async()=>{
+  await expect.poll(()=>page.evaluate(async()=>{
     if(!navigator.serviceWorker?.controller)return false;
     const keys=await caches.keys();
-    return keys.includes('osakevahti-shell-v2.17.9-alpha-manual-fund-review1');
-  },undefined,{timeout:25_000});
+    return keys.includes('osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1');
+  }),{timeout:25_000}).toBe(true);
   const snapshots=await page.evaluate(async()=>{
-    const cache=await caches.open('osakevahti-shell-v2.17.9-alpha-manual-fund-review1');
+    const cache=await caches.open('osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1');
     return {controlled:!!navigator.serviceWorker.controller,
       index:!!(await cache.match('./index.html')),
       reader:!!(await cache.match('./image-reader.js')),

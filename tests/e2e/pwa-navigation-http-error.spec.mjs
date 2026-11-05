@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.9-alpha-manual-fund-review1';
+const CACHE = 'osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
@@ -92,11 +92,10 @@ for(const status of [503,404]){
     try{
       await page.goto(server.url+'/index.html');
       await expect(page.locator('#dailyMoves')).toBeVisible();
-      await page.waitForFunction(async name=>{
-        const cache=await caches.open(name);
-        const original=await cache.match('./index.html');
-        return navigator.serviceWorker.controller && original?.status===200;
-      },CACHE,{timeout:30000});
+      await expect.poll(()=>page.evaluate(async name=>{
+        const original=await caches.match('./index.html',{cacheName:name});
+        return !!navigator.serviceWorker.controller && original?.status===200;
+      },CACHE),{timeout:30000}).toBe(true);
       await page.evaluate(({key,holding})=>{
         const current=JSON.parse(localStorage.getItem(key)||'{}');
         current.holdings=[holding];
