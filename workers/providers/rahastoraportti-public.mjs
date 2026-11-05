@@ -137,26 +137,12 @@ export function createRahastoraporttiPublicSource({
       return {status:diagnostics.ageDays>7?"stale_nav":"candidate",...diagnostics};
     },
     async getNav({isin}){
-      const key=upper(isin);
-      if(!validIsin(key))throw Error("fund_isin_invalid");
-      const data=await load();
-      if(!data.index.has(key))return null;
-      const r=data.index.get(key);
-      if(!r)throw Error("fund_isin_ambiguous");
-      // Never use this as a fresh fallback when the public NAV itself is old.
-      const navMs=Date.parse(r.navDate+"T12:00:00Z");
-      if(!Number.isFinite(navMs)||now()-navMs>7*DAY_MS)return null;
-      return {
-        isin:key,currency:r.currency,price:r.price,navDate:r.navDate,
-        provider:"Rahastoraportti public price list",
-        sourceKind:"public-web-publication",
-        fetched_at:checkedAt,
-        // Source displays ISIN and class separately; do not guess class letter.
-        shareClass:null,
-        fundCode:r.fundCode,
-        identityEvidence:"exact_public_ISIN",
-        requiresManualReview:true
-      };
+      // Compatibility API: callers needing failure detail use getNavResult.
+      // Both paths share the same calendar-day freshness decision.
+      const result=await this.getNavResult({isin});
+      if(result.status==="candidate")return result.observation;
+      if(result.status==="stale_nav"||result.status==="not_found")return null;
+      throw Error(result.reason||"fund_isin_invalid");
     },
     async search(query){
       const q=text(query).toLocaleLowerCase("fi");

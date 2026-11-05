@@ -14,6 +14,10 @@ const DAY=86400000;
 const TTL=DAY;
 const MAX_BYTES=6500000;
 const MAX_AGE_DAYS=7;
+function calendarAge(day,now){
+  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  return Math.max(0,Math.round((Date.parse(today)-Date.parse(day))/DAY));
+}
 const up=v=>String(v??"").trim().toUpperCase();
 function validIsin(s) {
   if(!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(s))return false;
@@ -76,8 +80,8 @@ export function assessFundBackup(holding,entry,now=Date.now()){
   const navDate=isoDay(entry.navDate,now);
   if(!navDate)return {status:"rejected",reason:"invalid_nav_day"};
   const navMs=Date.parse(navDate+"T12:00:00Z");
-  const age=Math.max(0,Math.round((now-navMs)/DAY));
-  if(age>MAX_AGE_DAYS)return {status:"unavailable",reason:"public_nav_outdated"};
+  const age=calendarAge(navDate,now);
+  if(age>MAX_AGE_DAYS)return {status:"unavailable",reason:"public_nav_outdated",diagnosticStatus:"stale_nav",ageDays:age,navDate};
   if(!Number.isFinite(entry.price)||entry.price<=0)
     return {status:"rejected",reason:"invalid_price"};
   const oldDay=String(holding?.navDate||"").trim();
@@ -94,11 +98,11 @@ export function assessFundBackup(holding,entry,now=Date.now()){
     sourceKind:"public-web-publication"};
 }
 export function shouldTryFundBackup(holding,now=Date.now()){
-  if(holding?.assetType!=="fund")return false;
+  if(holding?.assetType!=="fund"||holding.quoteSource==="MANUAL_NAV")return false;
   const isin=up(holding?.instrument?.isin||holding?.isin);
   if(!validIsin(isin))return false;
   const info=isoDay(holding.navDate,now);
-  const days=info?Math.max(0,Math.round((now-Date.parse(info+"T12:00:00Z"))/DAY)):Infinity;
+  const days=info?calendarAge(info,now):Infinity;
   if(holding?.quoteHealth?.status==="failed"||holding?.quoteHealth?.status==="unlinked")
     return true;
   return days>MAX_AGE_DAYS||!info; // incl. yearless NAV source day
@@ -164,13 +168,17 @@ export function createFundBackup({
       return {status:"unavailable",reason:"not_fund"};
     const isin=up(holding.instrument?.isin||holding.isin);
     if(!validIsin(isin))
-      return {status:"unavailable",reason:"isin_missing_or_invalid"};
+      return {status:"unavailable",reason:"isin_missing_or_invalid",diagnosticStatus:isin?"invalid_identity":"no_binding"};
     try{
       const data=await fetchOnce();
-      return {...assessFundBackup(holding,data.entries[isin],now()),
+      const assessment=assessFundBackup(holding,data.entries[isin],now());
+      const feedNewestDate=Object.values(data.entries).map(row=>row.navDate).filter(Boolean).sort().at(-1)||null;
+      return {...assessment,
+        diagnosticStatus:assessment.diagnosticStatus||(assessment.status==="candidate"?"candidate":assessment.reason==="isin_not_in_public_feed"?"not_found":"invalid_identity"),
+        feedNewestDate,sourceFeedStale:feedNewestDate?calendarAge(feedNewestDate,now())>MAX_AGE_DAYS:null,
         fetchedAt:data.fetchedAt,sourceCount:data.accepted};
     }catch(err){
-      return {status:"unavailable",reason:String(err?.message||"public_nav_unreachable")};
+      return {status:"unavailable",diagnosticStatus:"upstream_failed",reason:String(err?.message||"public_nav_unreachable")};
     }
   }
   return {lookup,state:()=>({cached:!!readCache(),fetchedAt:session?.fetchedAt||0})};

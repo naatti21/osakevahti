@@ -10,7 +10,7 @@ const oldNordnet={id:'legacy',symbol:'NORDNET_EUROOPPA_INDEKSI',
  currency:'EUR',account:'Nordnet / Rahastotili',accountType:'FUND',
  broker:'Nordnet',accountDetailsConfirmed:true,assetType:'fund',currentPrice:185.0,
  navDate:'22.10.',quoteSource:'FUND_NAV',quoteProvider:'Nordnet fund page'};
-async function seed(page,holdings,confirm=true){
+async function seed(page,holdings,confirm=true,now=Date.now()){
  await page.addInitScript(({holdings,confirm})=>{
   if(!localStorage.getItem('osakevahti.single.v1'))localStorage.setItem('osakevahti.single.v1',JSON.stringify({
    baseCurrency:'EUR',apiKey:'',holdings,news:[],quoteUpdatedAt:null,riskBudgetPct:1.25,showDetails:false
@@ -22,13 +22,13 @@ async function seed(page,holdings,confirm=true){
   if(u.hostname==='127.0.0.1'||u.hostname==='localhost')return route.continue();
   if(u.hostname==='naatti21.github.io'&&u.pathname.endsWith('/market-data.json'))
    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-    generated_at:new Date().toISOString(),quotes:{},
+    generated_at:new Date(now).toISOString(),quotes:{},
     fund_quotes:{STOREBRAND_JAPAN_A_EUR:{price:215.86,nav_date:'22.10.',
-      currency:'EUR',timestamp:Date.now(),provider:'Nordnet fund page'}},fund_errors:{}
+      currency:'EUR',timestamp:now,provider:'Nordnet fund page'}},fund_errors:{}
    })});
   if(u.hostname==='osakevahti-market-ed59.teemu-natunen84.workers.dev')
    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
-    generated_at:new Date().toISOString(),assets:{},health:{failed:0}
+    generated_at:new Date(now).toISOString(),assets:{},health:{failed:0}
    })});
   return route.fulfill({status:404,body:'not supplied in unit test'});
  });
@@ -47,7 +47,10 @@ test('New unlinked fund has a helpful amber missing source notice, not a false n
  expect(stateNow.incomplete).toBe(true);
 });
 test('User-confirmed Storebrand source loads only source NAV with unverified day and preserves purchase cost',async({page})=>{
- await seed(page,[storebrand]);
+ // The fixture is 22 October; test its recent-date behavior deterministically.
+ // Stale 8/14-day observations are covered separately, never hidden as fresh.
+ await page.clock.setFixedTime(new Date('2026-10-23T12:00:00Z'));
+ await seed(page,[storebrand],true,Date.parse('2026-10-23T12:00:00Z'));
  await page.locator('#holdings .item').click();
  await expect(page.locator('#fundPriceSourceSection')).toBeVisible();
  await page.locator('#fundPriceSource').selectOption('STOREBRAND_JAPAN_A_EUR');

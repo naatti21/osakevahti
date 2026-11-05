@@ -56,6 +56,9 @@ jobs:
       - name: Verify Alpha public NAV ISIN fallback and privacy
         run: npm run test:alpha-public-nav
 
+      - name: Verify manual fund review and stale NAV diagnostics
+        run: npm run test:manual-fund
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 

@@ -18,6 +18,7 @@ const assetTypes = {
   'engine/acceptance.mjs': 'text/javascript; charset=utf-8',
   'engine/numbers.mjs': 'text/javascript; charset=utf-8',
   'engine/csv.mjs': 'text/javascript; charset=utf-8',
+  'engine/manual-fund.mjs': 'text/javascript; charset=utf-8',
   'engine/holdings.mjs': 'text/javascript; charset=utf-8',
   'engine/public-nav-backup.mjs': 'text/javascript; charset=utf-8',
   'manifest.webmanifest': 'application/manifest+json',

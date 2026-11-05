@@ -28,3 +28,12 @@ test('429/offline retain last observation while reporting upstream failure',asyn
  const off=createRahastoraporttiPublicSource({now:()=>now,fetchImpl:async()=>{throw Error('offline')}});
  assert.equal((await off.getNavResult({isin})).status,'upstream_failed');
 });
+
+test('Alpha browser backup also retains the fourteen-day reason and feed-wide date',async()=>{
+ const {createFundBackup}=await import('../engine/public-nav-backup.mjs');
+ const reader=createFundBackup({now:()=>now,storage:null,fetchImpl:async()=>new Response(JSON.stringify([row()]))});
+ const result=await reader.lookup({assetType:'fund',currency:'EUR',instrument:{isin}});
+ assert.equal(result.diagnosticStatus,'stale_nav');assert.equal(result.ageDays,14);
+ assert.equal(result.feedNewestDate,'2026-10-22');assert.equal(result.sourceFeedStale,true);
+ assert.equal(result.status,'unavailable');
+});

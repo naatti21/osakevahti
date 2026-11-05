@@ -32,7 +32,7 @@ async function controlledServer() {
 
   // Alpha v1 shipped the same SW logic except for its actual old cache name.
   const legacy = sw.replace(initial, 'const CACHE = "' + LEGACY_CACHE + '";')
-    .replace(/^  "\.\/(?:alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup)\.mjs)",?\n/gm,'');
+    .replace(/^  "\.\/(?:alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup|manual-fund)\.mjs)",?\n/gm,'');
   const broken = sw.replace(initial, 'const CACHE = "' + FAILED_CACHE + '";')
     .replace('cache.addAll(SHELL)', 'cache.addAll([...SHELL, "./qa-does-not-exist-upgrade.txt"])');
   let version = 'old';
@@ -69,7 +69,7 @@ async function controlledServer() {
     }
     try {
       const filename = pathname.slice(1);
-      if (!/^(image-reader\.js|alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup)\.mjs|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
+      if (!/^(image-reader\.js|alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup|manual-fund)\.mjs|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
         send(404, 'Not a shell resource'); return;
       }
       const contents = await readFile(filename);

@@ -235,7 +235,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <div id="targetMap" class="planList"></div>
     </div>
   </details>
-  <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button><button id="addFundBtn">+ Lisää rahasto</button></div></div>
+  <div class="section" style="flex-wrap:wrap;gap:8px"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button><button id="addFundBtn">+ Lisää rahasto</button></div></div>
   <button id="detailsToggle" class="detailToggle" type="button">Näytä tarkemmat luvut</button>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -951,6 +951,10 @@ function displayedPriceIssueLabel(h,issue){
 function priceIssue(h){
   if(!supportedHoldingCurrency(h.currency))return {label:"VALUUTTA VAHVISTAMATTA",reason:"Historiallisen omistuksen valuutta puuttuu tai on virheellinen. Avaa omistus ja vahvista valuutta; tietoja ei poisteta eikä valuuttaa arvata.",level:"warn"};
   if(h.quoteSource==="MANUAL_NAV")return {label:"KÄSIN",reason:"Käsin syötetty NAV · "+String(h.navDate||"päivä puuttuu")+" · "+String(h.quoteProvider||"")+". Arvo on suuntaa-antava."+(fundNavDateInfo(h.navDate)?.days>7?" NAV on "+fundNavDateInfo(h.navDate).days+" kalenteripäivää vanha.":""),level:"warn"};
+  if(h.navDiagnostic?.status==="stale_nav")return {label:"VANHA NAV",level:"warn",
+    reason:"Varalähteen NAV "+h.navDiagnostic.navDate+" on "+h.navDiagnostic.ageDays+" kalenteripäivää vanha. Aiempi havainto säilytetty."+
+      (h.navDiagnostic.sourceFeedStale?" Koko syötteen uusin päivä: "+h.navDiagnostic.feedNewestDate+" (source_feed_stale).":" Syötteessä on myös uudempia havaintoja.")};
+  if(h.navDiagnostic?.status&&h.navDiagnostic.status!=="candidate")return {label:"NAV-PÄIVITYS ESTYI",level:"warn",reason:h.navDiagnostic.status+": "+h.navDiagnostic.reason+". Aiempi havainto säilytetty."};
   const health=h.quoteHealth||{};
   if(h.assetType==="fund"&&!String(h.fundQuoteKey||h.symbol||"").trim()&&
      !(h.quoteSource==="FUND_NAV"&&h.quoteHealth?.status==="fallback"&&verifiedNavDate(h.navDate))){
@@ -2569,7 +2573,15 @@ async function runMarketRefresh(showErrors=false){
         for(const h of pending){
           const previousStatus=h.quoteHealth?.status;
           const candidate=await alphaPublicNavReader.lookup(h);
-          if(candidate.status!=="candidate")continue;
+          if(candidate.status!=="candidate"){
+            // Keep the previous observation; report why the backup did not update it.
+            h.navDiagnostic={status:candidate.diagnosticStatus||"upstream_failed",reason:candidate.reason,
+              navDate:candidate.navDate||null,ageDays:candidate.ageDays??null,
+              feedNewestDate:candidate.feedNewestDate||null,sourceFeedStale:candidate.sourceFeedStale??null,
+              fetchedAt:candidate.fetchedAt||null,checkedAt:Date.now()};
+            continue;
+          }
+          h.navDiagnostic=null;
           const previousVerified=verifiedNavDate(h.navDate);
           if(previousVerified&&candidate.navDate<previousVerified)continue;
           h.currentPrice=candidate.price;
@@ -3342,8 +3354,10 @@ async function importBackup(e){
   const f=e.target.files?.[0];if(!f)return;
   try{
     const parsed=JSON.parse(await f.text());
-    const {validateManualFundBackup}=await import("./engine/manual-fund.mjs");
-    for(const h of parsed.holdings||[])validateManualFundBackup(h);
+    if(Array.isArray(parsed.holdings)&&parsed.holdings.some(h=>h?.quoteSource==="MANUAL_NAV")){
+      const {validateManualFundBackup}=await import("./engine/manual-fund.mjs");
+      for(const h of parsed.holdings)validateManualFundBackup(h);
+    }
     validateBackupForRestore(parsed,{allowMissingCurrency:true}); // Check all holdings before touching the user's portfolio.
     const candidate=clonePortfolioCandidate({...state,...parsed,apiKey:state.apiKey||""});
     // Only internal position IDs are generated. No financial identifier is guessed.
