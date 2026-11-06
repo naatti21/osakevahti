@@ -61,34 +61,46 @@ searchForm.addEventListener("submit",async e=>{
   searchButton.disabled=true;
   nameResults.textContent="Haetaan julkisen NAV-listan nimistä…";
   try{
-    const rows=await svc.search(document.querySelector("#nameQuery").value,{limit:12});
+    const rows=await svc.search(document.querySelector("#nameQuery").value,{limit:100});
     nameResults.replaceChildren();
     if(!rows.length){
       nameResults.textContent="Ei nimiosumia. Kokeile rahaston nimen lyhyempää osaa tai tarkista nimi pankista.";
       return;
     }
     const intro=document.createElement("p");
-    intro.textContent=rows.length+" ehdokasta. Tarkista osuuslaji ja valuutta pankista ennen valintaa.";
+    intro.textContent=rows.length+" nimiehdokasta. Näytetään 12 kerrallaan; myös myöhemmät rahastot ovat avattavissa. Osuuslaji on varmistettava pankista.";
     nameResults.append(intro);
-    for(const c of rows){
-      const button=document.createElement("button");
-      button.type="button";
-      const title=document.createElement("strong");
-      title.textContent=c.name;
-      const details=document.createElement("small");
-      details.textContent=[c.isin,c.currency,
-        "Osuuslaji: "+(c.shareClass||"ei ilmoitettu"),
-        "NAV "+c.navDate].join(" · ");
-      button.append(title,details);
-      button.onclick=()=>{
-        document.querySelector("#isin").value=c.isin;
-        document.querySelector("#currency").value=c.currency;
-        result.textContent="Valittu nimiehdokas: "+c.name+" · "+c.isin+
-          ". Tämä ei vielä vahvista instrumenttia. Tarkista osuuslaji ja paina NAV-hakua.";
-        document.querySelector("#probe").scrollIntoView({behavior:"smooth",block:"start"});
-      };
-      nameResults.append(button);
-    }
+    let shown=0;
+    const more=document.createElement("button");
+    more.type="button";
+    more.id="showMoreFundNames";
+    const renderMore=()=>{
+      for(const c of rows.slice(shown,shown+12)){
+        const button=document.createElement("button");
+        button.type="button";
+        const title=document.createElement("strong");title.textContent=c.name;
+        const details=document.createElement("small");
+        details.textContent=[c.isin,c.currency,
+          "Osuuslaji: "+(c.shareClass?
+            c.shareClass+" (nimestä poimittu, tarkista)":"ei tiedossa"),
+          c.navDate?"NAV "+c.navDate:"NAV-päivää ei saatavilla"].join(" · ");
+        button.append(title,details);
+        button.onclick=()=>{
+          document.querySelector("#isin").value=c.isin;
+          document.querySelector("#currency").value=c.currency;
+          result.textContent="Valittu nimiehdokas: "+c.name+" · "+c.isin+
+            ". Tämä ei vielä vahvista instrumenttia. Tarkista osuuslaji ja paina NAV-hakua.";
+          document.querySelector("#probe").scrollIntoView({behavior:"smooth",block:"start"});
+        };
+        nameResults.insertBefore(button,more);
+      }
+      shown=Math.min(rows.length,shown+12);
+      more.textContent="Näytä lisää ("+(rows.length-shown)+" jäljellä)";
+      more.hidden=shown>=rows.length;
+    };
+    nameResults.append(more);
+    more.onclick=renderMore;
+    renderMore();
   }catch(err){
     nameResults.textContent="Nimihaku ei onnistunut: "+String(err?.message||err)+
       ". ISIN-haku tai manuaalinen NAV on edelleen mahdollinen.";
