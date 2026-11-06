@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: issue77-android-preview
+  group: issue77-android-preview-fast
   cancel-in-progress: true
 
 env:
