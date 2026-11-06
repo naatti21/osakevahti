@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.9-alpha-public-nav1';
+const CACHE = 'osakevahti-shell-v2.17.9-alpha-nav-confirm1';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
@@ -20,6 +20,7 @@ const assetTypes = {
   'engine/csv.mjs': 'text/javascript; charset=utf-8',
   'engine/holdings.mjs': 'text/javascript; charset=utf-8',
   'engine/public-nav-backup.mjs': 'text/javascript; charset=utf-8',
+  'engine/nav-consent.mjs': 'text/javascript; charset=utf-8',
   'manifest.webmanifest': 'application/manifest+json',
   'icon-192.png': 'image/png',
   'icon-512.png': 'image/png'
@@ -91,11 +92,11 @@ for(const status of [503,404]){
     try{
       await page.goto(server.url+'/index.html');
       await expect(page.locator('#dailyMoves')).toBeVisible();
-      await page.waitForFunction(async name=>{
+      await expect.poll(()=>page.evaluate(async name=>{
         const cache=await caches.open(name);
         const original=await cache.match('./index.html');
-        return navigator.serviceWorker.controller && original?.status===200;
-      },CACHE,{timeout:30000});
+        return !!navigator.serviceWorker.controller && original?.status===200;
+      },CACHE),{timeout:30000}).toBe(true);
       await page.evaluate(({key,holding})=>{
         const current=JSON.parse(localStorage.getItem(key)||'{}');
         current.holdings=[holding];
