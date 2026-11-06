@@ -1,7 +1,7 @@
 name: Alpha NAV confirmation integration gate (no deploy)
 on:
   push:
-    branches: ["feature/alpha-fund-nav-confirm-20261106"]
+    branches: ["feature/alpha-fund-nav-confirm-20261106", "fix/alpha-nav-full-qa-20261106"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,6 +39,10 @@ jobs:
         run: |
           npx playwright install chromium
           npx playwright test tests/e2e/alpha-nav-confirm.spec.mjs --workers=1 --retries=0
+      - name: Verify previous 9 PWA, date and backup regressions in focused browser suite
+        run: npx playwright test tests/e2e/alpha-fund-source-setup.spec.mjs tests/e2e/osakevahti.spec.mjs tests/e2e/pwa-offline-sw.spec.mjs tests/e2e/pwa-navigation-http-error.spec.mjs tests/e2e/pwa-upgrade-path.spec.mjs --workers=2 --retries=0
+      - name: Full original Alpha browser regression – zero retries
+        run: npx playwright test --workers=2 --retries=0
       - name: Upload failure evidence only
         if: failure()
         uses: actions/upload-artifact@v4
