@@ -615,6 +615,8 @@ function openManualFund(h=null){
  manualFundEditingId=h?.id||null;$("newFundForm").reset();$("newFundError").textContent="";
  if(h){for(const [field,value] of Object.entries({Name:h.name,Isin:h.instrument?.isin,Class:h.instrument?.shareClass,Broker:h.broker,Account:h.accountLabel,Currency:h.currency,Quantity:h.quantity,Cost:h.buyPrice,Nav:h.manualPrice,Date:h.quoteObservation?.navDate||h.navDate,Source:h.quoteObservation?.sourceDescription}))$("newFund"+field).value=value??"";}
  $("newFundAutoNav").checked=h?.experimentalAutoNav===true;
+ // Existing opt-in is visible immediately when editing, not hidden in details.
+ $("newFundExperimentalBox").open=h?.experimentalAutoNav===true;
  $("newFundAutoNavStatus").textContent=h?.experimentalAutoNav?
    "Kokeilu käytössä. "+(h.experimentalNavObservation?.navDate?
     "Viimeisin lähdehavainto "+h.experimentalNavObservation.navDate+".":
