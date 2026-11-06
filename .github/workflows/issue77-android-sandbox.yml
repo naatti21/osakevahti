@@ -1,0 +1,128 @@
+name: Issue 77 Android isolated QA preview
+
+on:
+  push:
+    branches: ["qa/issue77-android-sandbox-20261106"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: issue77-android-preview
+  cancel-in-progress: false
+
+env:
+  QA_GENERATION: v1
+  PREVIEW_BRANCH: issue77-android-sandbox
+  PROJECT: osakevahti-alpha-naatti21
+
+jobs:
+  build-test-and-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install test dependencies
+        run: |
+          npm install --no-audit --no-fund --package-lock=false
+          npx playwright install --with-deps chromium
+      - name: Run fund identity, import, and SW offline/upgrade regressions
+        run: |
+          node --test tests/*.test.mjs
+          node tests/import-qa/qa8-guards.mjs
+          npx playwright test tests/e2e/issue77-fund-identity.spec.mjs tests/e2e/issue77-manual-fund-flow.spec.mjs tests/e2e/pwa-offline-sw.spec.mjs tests/e2e/pwa-upgrade-path.spec.mjs tests/e2e/pwa-navigation-http-error.spec.mjs --workers=2 --retries=0
+      - name: Build allowlisted PWA and apply *output-only* QA branding
+        run: |
+          node scripts/build-alpha-pages.mjs
+          node --test tests/alpha-pages-package.test.mjs
+          node scripts/qa/issue77-sandbox-package.mjs
+          test -f dist-alpha/engine/fund-review.mjs
+          test -f dist-alpha/engine/isin.mjs
+          grep -q 'Osakevahti QA' dist-alpha/index.html
+          grep -q "issue77-qa-v1" dist-alpha/sw.js
+      - name: Archive separate-origin QA package (no user data)
+        run: |
+          cd dist-alpha
+          zip -qr ../osakevahti-issue77-qa-v1.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue77-android-qa-v1-static
+          path: osakevahti-issue77-qa-v1.zip
+          retention-days: 14
+          if-no-files-found: error
+      - name: Read-only public identity, FX and fund-feed probes (advisory)
+        continue-on-error: true
+        shell: bash
+        run: |
+          node scripts/market-data/free-public-smoke.mjs || true
+          node scripts/market-data/public-fund-json-shape.mjs || true
+          echo 'Diagnostic only. A public JSON response does not grant automated redistribution or prove share-class identity.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Check optional Cloudflare credentials without exposing them
+        id: creds
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          if [[ -n "$CF_TOKEN" && -n "$CF_ACCOUNT" ]]; then
+            echo 'enabled=yes' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=no' >> "$GITHUB_OUTPUT"
+            echo 'No deployment credentials: QA ZIP artifact only; no preview URL.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Verify target Pages production branch and refuse overlap
+        if: steps.creds.outputs.enabled == 'yes'
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --retry 2 --header "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects/$PROJECT")"
+          p="$(jq -r '.result.name // empty' <<< "$response")"
+          b="$(jq -r '.result.production_branch // empty' <<< "$response")"
+          if [[ "$p" != "$PROJECT" || -z "$b" || "$b" == "$PREVIEW_BRANCH" ]]; then
+            echo 'REFUSING: Pages project or production branch not safely qualified' >&2
+            exit 1
+          fi
+          echo "Verified target project $p, production branch $b. Preview branch $PREVIEW_BRANCH is separate."
+      - name: Deploy ONLY preview branch to separate hostname
+        if: steps.creds.outputs.enabled == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 pages deploy dist-alpha --project-name="$PROJECT" --branch="$PREVIEW_BRANCH" --commit-dirty=true
+      - name: Verify preview hostname, package watermark and SW revision
+        if: steps.creds.outputs.enabled == 'yes'
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const base='https://issue77-android-sandbox.osakevahti-alpha-naatti21.pages.dev';
+          const checks=[
+            ['/', 'Osakevahti QA – TESTI v1'],
+            ['/sw.js','osakevahti-shell-v2.17.9-issue77-qa-v1'],
+            ['/engine/fund-review.mjs','searchFundCandidates'],
+            ['/manifest.webmanifest','issue77-qa']
+          ];
+          let ok=false;
+          for(let k=0;k<10;k++){
+            try{
+              const results=await Promise.all(checks.map(async([path,needle])=>{
+                const response=await fetch(base+path+'?check='+Date.now(),{headers:{'Cache-Control':'no-cache'}});
+                return response.ok&&(await response.text()).includes(needle);
+              }));
+              if(results.every(Boolean)){ok=true;break;}
+            }catch{}
+            await new Promise(r=>setTimeout(r,3500));
+          }
+          if(!ok){console.error('QA preview hostname not fully verified; inspect Wrangler deployment URL.');process.exitCode=1;}
+          else console.log('QA_SANDBOX_LIVE_VERIFIED '+base);
+          NODE
+          echo "QA preview (no local-data overlap): https://issue77-android-sandbox.osakevahti-alpha-naatti21.pages.dev/" >> "$GITHUB_STEP_SUMMARY"
