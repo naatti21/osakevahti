@@ -436,7 +436,13 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 <button id="newFundWithoutIsin" type="button">Jatka nimellä ilman ISINiä</button>
 <label><input id="newFundIdentityConfirmed" type="checkbox">Tarkistin nimen, ISINin, osuuslajin ja valuutan omasta lähteestäni. Valinta ei ole riippumaton varmennus.</label>
 <label class="txt" for="newFundSourceMode">Hintalähteen valinta</label><select id="newFundSourceMode"><option value="manual">KÄSIN NAV · tarkistettu lähde ja päivä</option><option value="automatic" disabled>Automaattinen NAV · hyväksytty lähde puuttuu</option></select>
-<p id="newFundSourceStatus">Automaattisen lähteen kyvykkyyttä ja käyttöoikeutta ei ole hyväksytty. Käytä KÄSIN NAV -reittiä.</p>
+<p id="newFundSourceStatus">Hyväksyttyä yleistä NAV-lähdettä ei ole. KÄSIN NAV toimii aina varana.</p>
+<details id="newFundExperimentalBox"><summary>Kokeellinen automaattinen NAV (vapaaehtoinen)</summary>
+<p>Hae päivitetty rahaston NAV julkisesta Rahastoraportti-ISIN-syötteestä vain omaan testikäyttöön. Hinta ja päivä ovat viitteellisiä. Syötteen jatkuvan automaattikäytön ehtoja ei ole vahvistettu. Pankkia, tiliä, osuusmääriä tai hankintahintoja ei lähetetä.</p>
+<label><input type="checkbox" id="newFundAutoNav"> Haluan kokeilla tämän rahaston päivittäistä automaattista NAV-päivitystä (vain vahvistettu ISIN + osuuslaji + valuutta).</label>
+<button type="button" id="newFundAutoNavProbe">Testaa julkinen NAV-haku nyt · ei tallenna mitään</button>
+<p id="newFundAutoNavStatus" role="status">Kokeilu on oletuksena pois käytöstä. Manuaalinen NAV säilyy aina varalla.</p>
+</details>
 <label><input id="newFundSourceConfirmed" type="checkbox">Hyväksyn KÄSIN-hintalähteen tälle instrumentille. Tämä ei vielä lisää omistusta.</label>
 <label class="txt" for="newFundName">Rahaston koko nimi</label><input id="newFundName" type="text" required >
 <label class="txt" for="newFundClass">Osuuslaji (jos tiedossa)</label><input id="newFundClass" type="text" >
@@ -607,7 +613,13 @@ $("newFundSearch").onclick=async()=>{
 function openManualFund(h=null){
  cancelFundSearch();fundCandidate=null;$("newFundCandidates").replaceChildren();$("newFundEvidence").textContent="";$("newFundSearchStatus").textContent="Haku lähettää vain hakutekstin, ei salkkusi tietoja.";
  manualFundEditingId=h?.id||null;$("newFundForm").reset();$("newFundError").textContent="";
- if(h){for(const [field,value] of Object.entries({Name:h.name,Isin:h.instrument?.isin,Class:h.instrument?.shareClass,Broker:h.broker,Account:h.accountLabel,Currency:h.currency,Quantity:h.quantity,Cost:h.buyPrice,Nav:h.manualPrice,Date:h.navDate,Source:h.quoteObservation?.sourceDescription}))$("newFund"+field).value=value??"";}
+ if(h){for(const [field,value] of Object.entries({Name:h.name,Isin:h.instrument?.isin,Class:h.instrument?.shareClass,Broker:h.broker,Account:h.accountLabel,Currency:h.currency,Quantity:h.quantity,Cost:h.buyPrice,Nav:h.manualPrice,Date:h.quoteObservation?.navDate||h.navDate,Source:h.quoteObservation?.sourceDescription}))$("newFund"+field).value=value??"";}
+ $("newFundAutoNav").checked=h?.experimentalAutoNav===true;
+ $("newFundAutoNavStatus").textContent=h?.experimentalAutoNav?
+   "Kokeilu käytössä. "+(h.experimentalNavObservation?.navDate?
+    "Viimeisin lähdehavainto "+h.experimentalNavObservation.navDate+".":
+    "Lähteestä ei ole vielä hyväksyttyä havaintoa.")+" Manuaalinen NAV säilyy varalla.":
+   "Kokeilu on oletuksena pois käytöstä. Manuaalinen NAV säilyy aina varalla.";
  $("newFundConfirm").checked=false;$("newFundDialog").showModal();
 }
 $("addFundBtn").onclick=()=>openManualFund();
@@ -615,6 +627,24 @@ $("newFundCancel").onclick=()=>$("newFundDialog").close();
 $("newFundForm").oninput=e=>{
  if(e.target.id!=="newFundConfirm")$("newFundConfirm").checked=false;
  if(["newFundName","newFundClass","newFundCurrency","newFundIsin","newFundQuery"].includes(e.target.id)){cancelFundSearch();$("newFundIdentityConfirmed").checked=false;$("newFundSourceConfirmed").checked=false;}
+};
+$("newFundAutoNavProbe").onclick=async()=>{
+ const status=$("newFundAutoNavStatus"),id=normalizedIdText($("newFundIsin").value),ccy=$("newFundCurrency").value;
+ if(!validImportIsin(id)){status.textContent="Anna ensin oikean osuuslajin 12-merkkinen ISIN. Pelkkä tarkiste ei varmista identiteettiä.";return;}
+ status.textContent="Haetaan julkisesta syötteestä · vain ISIN / valuutta tarkistetaan laitteessa…";
+ const button=$("newFundAutoNavProbe");button.disabled=true;
+ try{
+   const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+   alphaPublicNavReader??=createFundBackup();
+   const result=await alphaPublicNavReader.lookup({assetType:"fund",instrument:{isin:id},
+     currency:ccy,navDate:"",currentPrice:0});
+   status.textContent=result.status==="candidate"?
+     "Löytyi: ≈ "+result.price+" "+ccy+" · NAV "+result.navDate+
+      " · viitehinta, ei ostopäivän hinta. Jos haluat automaattisen seurannan, valitse erillinen kokeiluruutu ja vahvista rahasto.":
+     "Hintaa ei hyväksytty: "+(result.reason||result.diagnosticStatus||result.status)+
+      ". KÄSIN NAV toimii tästä riippumatta.";
+ }catch(err){status.textContent="Kokeilu epäonnistui: "+String(err?.message||err);}
+ finally{button.disabled=false;}
 };
 let manualFundSaving=false;
 $("newFundForm").onsubmit=async e=>{
@@ -624,10 +654,27 @@ $("newFundForm").onsubmit=async e=>{
     const value=id=>$("newFund"+id).value;
     if(value("SourceMode")!=="manual")throw Error("Automaattista lähdettä ei ole hyväksytty.");
     const h=prepareManualFund({isin:value("Isin"),candidate:fundCandidate,identityConfirmed:$("newFundIdentityConfirmed").checked,sourceConfirmed:$("newFundSourceConfirmed").checked,name:value("Name"),shareClass:value("Class"),broker:value("Broker"),accountLabel:value("Account"),currency:value("Currency"),quantity:value("Quantity"),buyPrice:value("Cost"),nav:value("Nav"),navDate:value("Date"),sourceDescription:value("Source"),confirmed:$("newFundConfirm").checked},state.holdings,{id:manualFundEditingId||uid(),supportedCurrency:supportedHoldingCurrency});
-    const candidate={...state,holdings:manualFundEditingId?state.holdings.map(old=>old.id===manualFundEditingId?{...old,...h}:old):[...state.holdings,h]};
+    const wantsAuto=$("newFundAutoNav").checked;
+    if(wantsAuto){
+      // Explicit opt-in, not automatic provider approval; no auto match by name.
+      if(!h.instrument?.isin||!String(h.instrument?.shareClass||"").trim()||
+        h.instrument?.identification!=="user-confirmed"||h.sourceBinding?.mode!=="manual")
+        throw Error("Kokeellinen automaattinen NAV vaatii vahvistetun ISINin, osuuslajin ja valuutan.");
+      h.experimentalAutoNav=true;
+      const previous=state.holdings.find(old=>old.id===manualFundEditingId);
+      const sameManual=previous?.quoteObservation?.price===h.quoteObservation.price&&
+        previous?.quoteObservation?.navDate===h.quoteObservation.navDate&&
+        previous?.quoteObservation?.sourceDescription===h.quoteObservation.sourceDescription;
+      if(sameManual&&previous?.experimentalAutoNav===true&&
+        previous.instrument?.isin===h.instrument.isin&&previous.currency===h.currency&&
+        previous.instrument?.shareClass===h.instrument.shareClass&&previous.experimentalNavObservation)
+          h.experimentalNavObservation={...previous.experimentalNavObservation};
+    }
+    const candidate={...state,holdings:manualFundEditingId?state.holdings.map(old=>old.id===manualFundEditingId?h:old):[...state.holdings,h]};
     // Persist first: a quota failure preserves both portfolio and review fields.
     try{localStorage.setItem(KEY,JSON.stringify(candidate))}catch{throw Error("Tallennus epäonnistui. Omistuksia ei muutettu; tarkistus säilyy.")}
     state=candidate;render();$("newFundDialog").close();
+    if(wantsAuto)refreshMarket(false).catch(()=>{});
   }catch(err){$("newFundError").textContent=err.message}finally{manualFundSaving=false}
 };
 
@@ -994,9 +1041,49 @@ function displayedPriceIssueLabel(h,issue){
   return h.assetType==="fund"&&issue?.label==="NAV-PÄIVÄ PUUTTUU"
     ?fundNavDateBadge(h):issue?.label||"";
 }
+// QA-only personal NAV experiment. A checked box grants no independent
+// issuer identity: ISIN/share class/currency are still user-confirmed.
+// Keep the MANUAL_NAV source binding and original quoteObservation unchanged.
+function experimentalNavEnabled(h){
+ const i=h?.instrument||{},b=h?.sourceBinding,id=normalizedIdText(i.isin);
+ return h?.assetType==="fund"&&h.quoteSource==="MANUAL_NAV"&&
+  h.experimentalAutoNav===true&&validImportIsin(id)&&
+  i.identification==="user-confirmed"&&String(i.shareClass||"").trim().length>0&&
+  b?.mode==="manual"&&b.automatic===false&&b.isin===id&&b.currency===h.currency&&
+  String(b.shareClass||"").trim()===String(i.shareClass||"").trim()&&
+  h.quoteObservation?.sourceKind==="manual"&&h.quoteObservation.currency===h.currency&&
+  Number(h.quoteObservation.price)>0;
+}
+function usableExperimentalNav(h){
+ if(!experimentalNavEnabled(h))return null;
+ const v=h.experimentalNavObservation,id=normalizedIdText(h.instrument.isin);
+ if(v?.sourceId!=="rahastoraportti-public-experiment"||v.isin!==id||v.currency!==h.currency||
+    !Number.isFinite(v.price)||v.price<=0||!verifiedNavDate(v.navDate)||
+    v.navDate<String(h.quoteObservation.navDate||""))return null;
+ const info=fundNavDateInfo(v.navDate);
+ return info&&!info.assumedYear&&info.days>=0&&info.days<=FUND_NAV_MAX_AGE_DAYS?
+   {price:v.price,navDate:v.navDate,ageDays:info.days,source:"Rahastoraportti · kokeellinen"}:null;
+}
+function effectiveHoldingPrice(h){
+ const experimental=usableExperimentalNav(h);
+ return experimental?experimental.price:
+  validPositive(h.currentPrice)?Number(h.currentPrice):
+  validPositive(h.manualPrice)?Number(h.manualPrice):0;
+}
 function priceIssue(h){
   if(!supportedHoldingCurrency(h.currency))return {label:"VALUUTTA VAHVISTAMATTA",reason:"Historiallisen omistuksen valuutta puuttuu tai on virheellinen. Avaa omistus ja vahvista valuutta; tietoja ei poisteta eikä valuuttaa arvata.",level:"warn"};
-  if(h.quoteSource==="MANUAL_NAV")return {label:"KÄSIN",reason:"Käsin syötetty NAV · "+String(h.navDate||"päivä puuttuu")+" · "+String(h.quoteProvider||"")+". Arvo on suuntaa-antava."+(fundNavDateInfo(h.navDate)?.days>7?" NAV on "+fundNavDateInfo(h.navDate).days+" kalenteripäivää vanha.":""),level:"warn"};
+  if(h.quoteSource==="MANUAL_NAV"){
+    const experiment=usableExperimentalNav(h);
+    if(experiment)return {label:"KOKEILU-NAV",level:"info",reason:
+      "≈ Julkisesta ISIN-syötteestä luettu kokeellinen NAV "+experiment.navDate+
+      " · "+experiment.price+" "+h.currency+". Käyttöehdot ja osuuslajin identiteetti eivät ole riippumattomasti varmennettuja. Käsin syötetty NAV säilyy varalla."};
+    const diagnostic=h.experimentalAutoNav&&h.experimentalNavDiagnostic?.reason?
+      " Automaattisen haun tila: "+h.experimentalNavDiagnostic.reason+".":"";
+    return {label:h.experimentalAutoNav?"KÄSIN · AUTO PUUTTUU":"KÄSIN",
+      reason:"Käsin syötetty NAV · "+String(h.navDate||"päivä puuttuu")+" · "+
+       String(h.quoteProvider||"")+". Arvo on suuntaa-antava."+
+       (fundNavDateInfo(h.navDate)?.days>7?" NAV on "+fundNavDateInfo(h.navDate).days+" kalenteripäivää vanha.":"")+diagnostic,level:"warn"};
+  }
   if(h.navDiagnostic?.status==="stale_nav")return {label:"VANHA NAV",level:"warn",
     reason:"Varalähteen NAV "+h.navDiagnostic.navDate+" on "+h.navDiagnostic.ageDays+" kalenteripäivää vanha. Aiempi havainto säilytetty."+
       (h.navDiagnostic.sourceFeedStale?" Koko syötteen uusin päivä: "+h.navDiagnostic.feedNewestDate+" (source_feed_stale).":" Syötteessä on myös uudempia havaintoja.")};
@@ -1109,7 +1196,9 @@ function renderPriceHealth(){
 }
 
 function dataState(h){
-  if(h.quoteSource==="MANUAL_NAV")return {label:"KÄSIN · NAV "+String(h.navDate||""),cls:"manual"};
+  if(h.quoteSource==="MANUAL_NAV"){const exp=usableExperimentalNav(h);
+    return exp?{label:"≈ KOKEILU-NAV "+exp.navDate,cls:"manual"}:
+      {label:"KÄSIN · NAV "+String(h.navDate||""),cls:"manual"};}
   if(h.currentPrice){
     if(h.quoteSource==="FUND_NAV"){
       const issue=priceIssue(h);
@@ -1165,7 +1254,7 @@ function latestSessionLabel(h){
 function openQuickInfo(symbol){
   const h=(state.holdings||[]).find(x=>(x.symbol||"").toUpperCase()===String(symbol||"").toUpperCase());
   if(!h) return;
-  const p=n(h.currentPrice||h.manualPrice);
+  const p=effectiveHoldingPrice(h);
   const hasQuote=!!h.quoteTimestamp;
   const sessionCurrent=hasCurrentTradingDayQuote(h);
   const change=n(h.dayChangePct);
@@ -1391,8 +1480,7 @@ function render(){
   // because hiding would make portfolio totals disagree with the visible list.
   const rows=state.holdings.map(h=>{
     // A malformed stored value must never render as a real negative quote.
-    const p=!supportedHoldingCurrency(h.currency)?0:validPositive(h.currentPrice)?Number(h.currentPrice):
-      (validPositive(h.manualPrice)?Number(h.manualPrice):0);
+    const p=!supportedHoldingCurrency(h.currency)?0:effectiveHoldingPrice(h);
     // Pre-fix foreign FX=1 may be a previously fabricated fallback. It is not
     // trusted without evidence of a successful rate verification.
     const unknownParity=Number(h.fxRate)===1&&!validQuoteTime(h.fxRateUpdatedAt);
@@ -1813,7 +1901,7 @@ function renderRiskCard(row,r,portfolioValue,decision,budgetUse,overweightTarget
 }
 
 function evaluateRisk(h,portfolioValue,fxRate){
-  const cur=n(h.currentPrice||h.manualPrice),buy=n(h.buyPrice);
+  const cur=effectiveHoldingPrice(h),buy=n(h.buyPrice);
   if(!cur)return{status:"NO_PRICE",label:"EI KURSSIA",activeStop:null,distancePct:null,riskEuro:0,explanation:"Kurssia ei ole saatavilla."};
 
   const atr=opt(h.atr), high20=opt(h.high20), low20=opt(h.low20);
@@ -2645,6 +2733,35 @@ async function runMarketRefresh(showErrors=false){
           else if(previousStatus==="unlinked"){fundUnlinked=Math.max(0,fundUnlinked-1);fundOk++}
         }
       }
+      // QA-only explicit opt-in for manual funds. Never replace their manual
+      // quoteObservation / manualPrice / NAV day / acquisition cost. A separate
+      // dated overlay is used only while fresh and identity-compatible.
+      const experimental=funds.filter(experimentalNavEnabled);
+      if(experimental.length){
+        alphaPublicNavReader??=navModule.createFundBackup();
+        for(const h of experimental){
+          const old=h.experimentalNavObservation;
+          const tested={...h,currentPrice:old?.price||h.manualPrice,
+            navDate:old?.navDate||h.navDate};
+          const candidate=await alphaPublicNavReader.lookup(tested);
+          if(candidate.status==="candidate"&&
+            candidate.navDate>=String(h.quoteObservation?.navDate||"")){
+            h.experimentalNavObservation={
+              sourceId:"rahastoraportti-public-experiment",
+              isin:candidate.isin,currency:candidate.currency,
+              price:candidate.price,navDate:candidate.navDate,
+              checkedAt:Date.now()
+            };
+            h.experimentalNavDiagnostic=null;
+          }else{
+            h.experimentalNavDiagnostic={reason:candidate.reason||
+              (candidate.navDate?"older_than_manual_nav":"not_accepted"),
+              status:candidate.diagnosticStatus||candidate.status,
+              checkedAt:Date.now()};
+          }
+        }
+      }
+
     }catch(err){
       // Any unavailable source leaves the primary value and portfolio untouched.
       console.info("Julkinen NAV-varalähde ei käytettävissä:",String(err?.message||err));
@@ -3408,6 +3525,19 @@ async function importBackup(e){
     if(Array.isArray(parsed.holdings)&&parsed.holdings.some(h=>h?.quoteSource==="MANUAL_NAV")){
       const {validateManualFundBackup}=await import("./engine/manual-fund.mjs");
       for(const h of parsed.holdings)validateManualFundBackup(h);
+    }
+    if(parsed.holdings.some(h=>h.experimentalAutoNav===true||h.experimentalNavObservation)){
+      for(const h of parsed.holdings){
+        if(h.experimentalAutoNav===true&&!experimentalNavEnabled(h))
+          throw Error("Kokeellisen NAV-sidonnan ISIN, osuuslaji tai manuaalinen varahinta ei täsmää.");
+        if(h.experimentalNavObservation && !usableExperimentalNav(h) &&
+          (!h.experimentalNavObservation?.sourceId||h.experimentalNavObservation.sourceId!=="rahastoraportti-public-experiment"||
+           h.experimentalNavObservation?.isin!==h.instrument?.isin||
+           h.experimentalNavObservation?.currency!==h.currency||
+           !Number.isFinite(h.experimentalNavObservation?.price)||
+           h.experimentalNavObservation.price<=0))
+          throw Error("Kokeellisen NAV-havainnon lähde, ISIN tai valuutta on ristiriitainen.");
+      }
     }
     validateBackupForRestore(parsed,{allowMissingCurrency:true}); // Check all holdings before touching the user's portfolio.
     const candidate=clonePortfolioCandidate({...state,...parsed,apiKey:state.apiKey||""});
