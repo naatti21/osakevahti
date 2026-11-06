@@ -41,6 +41,7 @@ jobs:
           node scripts/qa/issue77-sandbox-package.mjs
           test -f dist-alpha/engine/fund-review.mjs
           test -f dist-alpha/engine/isin.mjs
+          test -f dist-alpha/nav-test.html
           grep -q 'Osakevahti QA' dist-alpha/index.html
           grep -q "issue77-qa-v1" dist-alpha/sw.js
       - name: Archive separate-origin QA package (no user data)
@@ -108,7 +109,8 @@ jobs:
             ['/', 'Osakevahti QA – TESTI v1'],
             ['/sw.js','osakevahti-shell-v2.17.9-issue77-qa-v1'],
             ['/engine/fund-review.mjs','searchFundCandidates'],
-            ['/manifest.webmanifest','issue77-qa']
+            ['/manifest.webmanifest','issue77-qa'],
+            ['/nav-test.html','kokeellinen NAV-haku']
           ];
           let ok=false;
           for(let k=0;k<10;k++){
