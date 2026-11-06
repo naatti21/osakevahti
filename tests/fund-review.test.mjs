@@ -29,3 +29,13 @@ test('explicit local identity and source review never upgrades instrument to ext
  validateManualFundBackup(h,opts.now);
  for(const over of [{isin:'SE0013801453'},{currency:'USD'},{shareClass:'A'},{automatic:true},{providerId:'invented'}])assert.throws(()=>validateFundReviewBackup({...h,sourceBinding:{...h.sourceBinding,...over}}));
 });
+
+test('changing a position ISIN cannot reuse a shared instrument UUID or mutate another account',()=>{
+ const first=prepareManualFund(input,[],opts);
+ const second=prepareManualFund({...input,accountLabel:'Two'},[first],{...opts,id:'two'});
+ const before=structuredClone([first,second]);
+ const changed=prepareManualFund({...input,isin:'SE0013801453'},[first,second],opts);
+ assert.notEqual(changed.instrument.id,second.instrument.id);
+ assert.equal(changed.id,first.id);
+ assert.deepEqual([first,second],before);
+});

@@ -34,7 +34,8 @@ export function prepareManualFund(input,holdings,{id,now=Date.now(),supportedCur
   const sameInstrument=reviewed.instrument.isin?holdings.find(h=>h.instrument?.isin===reviewed.instrument.isin):null;
   if(sameInstrument&&(key(sameInstrument.name)!==key(name)||sameInstrument.currency!==currency||key(sameInstrument.instrument?.shareClass)!==key(shareClass)))throw Error('ISINin nimi, osuuslaji tai valuutta on ristiriidassa aiemman omistuksen kanssa.');
   const previous=holdings.find(h=>h.id===id);
-  reviewed.instrument.id=previous?.instrument?.id||sameInstrument?.instrument?.id||crypto.randomUUID();
+  const samePreviousIdentity=previous&&(previous.instrument?.isin||'')===(reviewed.instrument.isin||'');
+  reviewed.instrument.id=(samePreviousIdentity?previous.instrument?.id:null)||sameInstrument?.instrument?.id||crypto.randomUUID();
   reviewed.accountId=holdings.find(h=>h.accountType==='FUND'&&key(h.broker)===key(broker)&&key(h.accountLabel)===key(accountLabel))?.accountId||crypto.randomUUID();
   return reviewed;
 }
