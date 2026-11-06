@@ -17,6 +17,7 @@ const files = [
   'engine/csv.mjs',
   'engine/holdings.mjs',
   'engine/public-nav-backup.mjs',
+  'engine/nav-consent.mjs',
   'sw.js',
   'manifest.webmanifest',
   'icon-192.png',
@@ -46,8 +47,8 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 }
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
-    !sw.includes('if (res.ok)') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-public-nav1";')) {
+    !sw.includes('caches.match(') || sw.includes('await cache.put(') ||
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-nav-confirm1";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 
