@@ -590,9 +590,28 @@ $("newFundSearch").onclick=async()=>{
  $("newFundCandidates").replaceChildren();$("newFundSearchStatus").textContent="Haetaan ehdokkaita…";
  try{
   const {searchFundCandidates}=await import("./engine/fund-review.mjs");
-  const rows=await searchFundCandidates($("newFundQuery").value,{gatewayUrl:MARKET_WORKER_URL,signal:controller.signal});
+  const query=$("newFundQuery").value.trim();
+  let rows=[],gatewayUnavailable=false,publicUnavailable=false;
+  try{rows=await searchFundCandidates(query,{gatewayUrl:MARKET_WORKER_URL,signal:controller.signal});}
+  catch(err){if(err.name==="AbortError")throw err;gatewayUnavailable=true;}
+  if(!rows.length&&sequence===fundSearchSeq){
+    // Search the same public snapshot already used for NAV, without leaking
+    // holdings or account data; each result is only a reviewable candidate.
+    try{
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+      alphaPublicNavReader??=createFundBackup();
+      const matches=await alphaPublicNavReader.search(query,{limit:12});
+      rows=matches.map(c=>({name:c.name,isin:c.isin,currency:c.currency,
+        shareClass:c.shareClass,provider:"rahastoraportti-public-personal-backup",
+        evidence:c.evidence+" · NAV "+c.navDate}));
+    }catch{publicUnavailable=true;}
+  }
   if(sequence!==fundSearchSeq||!$("newFundDialog").open)return;
-  $("newFundSearchStatus").textContent=rows.length?"Ehdokkaat on tarkistettava erikseen. Haku ei vahvista identiteettiä.":"Ei yksiselitteisiä rahastoehdokkaita. Voit jatkaa nimellä ja käsin syötetyllä NAV:lla.";
+  $("newFundSearchStatus").textContent=rows.length?
+    rows.length+" rahastoehdokasta. Valitse oikea osuuslaji; nimen osuma ei varmista ISINiä.":
+    publicUnavailable&&gatewayUnavailable?
+      "Nimihakua ei saatu verkosta. Kokeile myöhemmin tai jatka käsin.":
+      "Rahastoa ei löydy näistä lähteistä. Kokeile nimen lyhyempää osaa tai jatka käsin.";
   for(const candidate of rows){
    const entry=document.createElement("div"),details=document.createElement("p"),button=document.createElement("button");button.type="button";
    details.textContent=[candidate.name,"Osuuslaji: "+(candidate.shareClass||"puuttuu"),candidate.isin,candidate.currency,"Lähde: "+candidate.provider,"Näyttö: "+candidate.evidence].join(" · ");
@@ -611,7 +630,7 @@ $("newFundSearch").onclick=async()=>{
  finally{clearTimeout(timeout);}
 };
 function openManualFund(h=null){
- cancelFundSearch();fundCandidate=null;$("newFundCandidates").replaceChildren();$("newFundEvidence").textContent="";$("newFundSearchStatus").textContent="Haku lähettää vain hakutekstin, ei salkkusi tietoja.";
+ cancelFundSearch();fundCandidate=null;$("newFundCandidates").replaceChildren();$("newFundEvidence").textContent="";$("newFundSearchStatus").textContent="Hae nimellä. Nimiehdokkaat voivat tulla julkisesta NAV-listasta; tiliä, osuusmääriä tai hankintahintoja ei lähetetä.";
  manualFundEditingId=h?.id||null;$("newFundForm").reset();$("newFundError").textContent="";
  if(h){for(const [field,value] of Object.entries({Name:h.name,Isin:h.instrument?.isin,Class:h.instrument?.shareClass,Broker:h.broker,Account:h.accountLabel,Currency:h.currency,Quantity:h.quantity,Cost:h.buyPrice,Nav:h.manualPrice,Date:h.quoteObservation?.navDate||h.navDate,Source:h.quoteObservation?.sourceDescription}))$("newFund"+field).value=value??"";}
  $("newFundAutoNav").checked=h?.experimentalAutoNav===true;
