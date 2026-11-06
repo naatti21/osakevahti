@@ -29,7 +29,7 @@ test('OCR refuses a bank screenshot full of UI headings instead of filling revie
   await expect(page.locator('#importReviewDlg')).not.toBeVisible();
   await expect(page.locator('#imageImportStatus')).toContainText('puuttuu luotettava omistusmäärä');
   await expect(page.locator('#imageImportStatus')).toContainText('salkkua muutettu');
-  await expect(page.locator('#imageOcrText')).toContainText('IQM Quantum Computers');
+  await expect(page.locator('#imageOcrText')).toHaveValue(/IQM Quantum Computers/);
   expect(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).holdings.length,KEY)).toBe(0);
 });
 test('Pure navigation and menu labels are never made into holding cards',async({page})=>{
