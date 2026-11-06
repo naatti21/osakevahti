@@ -1,6 +1,8 @@
 name: Alpha Pages static package verification
 
 on:
+  push:
+    branches: ["feat/issue77-fund-identity-review"]
   pull_request:
     paths:
       - "scripts/build-alpha-pages.mjs"

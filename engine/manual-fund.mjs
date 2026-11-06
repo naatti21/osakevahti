@@ -1,3 +1,4 @@
+import {attachReviewedIdentity,validateFundReviewBackup} from './fund-review.mjs';
 // Local-only review/commit boundary. A name and user confirmation are not
 // independent evidence of a financial identity or an automatic source binding.
 const clean=v=>String(v??'').trim();
@@ -22,14 +23,23 @@ export function prepareManualFund(input,holdings,{id,now=Date.now(),supportedCur
   if(!validManualNav(quoteObservation,now))throw Error('Anna positiivinen NAV, todellinen päivä vuosineen ja lähteen kuvaus. Tulevaa päivää ei hyväksytä.');
   if(!id)throw Error('Omistuksen tunniste on virheellinen.');
   if(holdings.some(h=>h.id!==id&&h.assetType==='fund'&&key(h.name)===key(name)&&key(h.broker)===key(broker)&&key(h.accountLabel)===key(accountLabel)))throw Error('Samanniminen rahasto on jo tällä tilillä. Tarkista ja muokkaa olemassa olevaa omistusta.');
-  return {id,symbol:'',providerSymbol:'',assetType:'fund',name,currency,quantity,buyPrice,
+  const holding={id,symbol:'',providerSymbol:'',assetType:'fund',name,currency,quantity,buyPrice,
     legacyAccount:broker+' · '+accountLabel,account:broker+' · '+accountLabel,accountType:'FUND',broker,accountLabel,accountDetailsConfirmed:true,accountOriginDerived:true,
     instrument:{schemaVersion:1,companyName:name,isin:'',listingTicker:'',providerSymbol:'',mic:'',exchange:'',dataKey:'',currency,shareClass,assetType:'fund',source:'manual-review',identification:'unverified'},
     sourceBinding:null,quoteObservation,manualPrice:quoteObservation.price,navDate:quoteObservation.navDate,
     quoteSource:'MANUAL_NAV',quoteProvider:quoteObservation.sourceDescription,quoteHealth:{status:'manual_nav',reason:'Käyttäjän syöttämä NAV, ei riippumattomasti varmennettu'},
     trailingPct:12,riskClass:'medium'};
+  const reviewed=attachReviewedIdentity(holding,input,now);
+  if(reviewed.instrument.isin&&holdings.some(h=>h.id!==id&&h.instrument?.isin===reviewed.instrument.isin&&key(h.broker)===key(broker)&&key(h.accountLabel)===key(accountLabel)))throw Error('Sama ISIN on jo tällä tilillä.');
+  const sameInstrument=reviewed.instrument.isin?holdings.find(h=>h.instrument?.isin===reviewed.instrument.isin):null;
+  if(sameInstrument&&(key(sameInstrument.name)!==key(name)||sameInstrument.currency!==currency||key(sameInstrument.instrument?.shareClass)!==key(shareClass)))throw Error('ISINin nimi, osuuslaji tai valuutta on ristiriidassa aiemman omistuksen kanssa.');
+  const previous=holdings.find(h=>h.id===id);
+  reviewed.instrument.id=previous?.instrument?.id||sameInstrument?.instrument?.id||crypto.randomUUID();
+  reviewed.accountId=holdings.find(h=>h.accountType==='FUND'&&key(h.broker)===key(broker)&&key(h.accountLabel)===key(accountLabel))?.accountId||crypto.randomUUID();
+  return reviewed;
 }
 export function validateManualFundBackup(h,now=Date.now()){
+  validateFundReviewBackup(h);
   if(h.quoteSource!=='MANUAL_NAV')return;
   if(!validManualNav(h.quoteObservation,now)||h.quoteObservation.currency!==h.currency||h.quoteObservation.price!==h.manualPrice||h.quoteObservation.navDate!==h.navDate||h.currentPrice!=null&&h.currentPrice!==h.manualPrice)
     throw Error('Käsin syötetyn NAV:n tiedot ovat ristiriidassa.');

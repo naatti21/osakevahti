@@ -16,7 +16,7 @@
     "test:public-fund-fallback": "node --test tests/public-fund-fallback.test.mjs",
     "test:public-fund-json": "node --test tests/public-fund-json-adapter.test.mjs",
     "test:alpha-public-nav": "node --test tests/public-nav-alpha.test.mjs",
-    "test:manual-fund": "node --test tests/manual-fund.test.mjs tests/public-fund-diagnostics.test.mjs"
+    "test:manual-fund": "node --test tests/manual-fund.test.mjs tests/public-fund-diagnostics.test.mjs tests/fund-review.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",

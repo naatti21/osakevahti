@@ -17,6 +17,12 @@ const files = [
   'engine/csv.mjs',
   'engine/holdings.mjs',
   'engine/manual-fund.mjs',
+  'engine/isin.mjs',
+  'engine/fund-nav-contract.mjs',
+  'engine/fund-review.mjs',
+  'engine/free-source-policy.mjs',
+  'engine/gateway-preview.mjs',
+  'engine/market-core.mjs',
   'engine/public-nav-backup.mjs',
   'sw.js',
   'manifest.webmanifest',
@@ -48,7 +54,7 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
     !sw.includes('cache.addAll(SHELL)') || sw.includes('cache.put(') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1";')) {
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-fund-identity1";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 

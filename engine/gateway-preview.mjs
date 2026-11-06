@@ -81,6 +81,7 @@ export async function previewGatewayQuotes(holdings,{
             fetchedAt:value.fetched_at??null,
             navDate:value.nav_date??null,
             sourceKind:value.sourceKind??null,
+            requiresManualReview:value.requiresManualReview!==false,
             providerIdentity:value.instrument
           }
         });

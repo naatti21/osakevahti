@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1';
+const CACHE = 'osakevahti-shell-v2.17.9-alpha-fund-identity1';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
@@ -18,6 +18,12 @@ const assetTypes = {
   'engine/acceptance.mjs': 'text/javascript; charset=utf-8',
   'engine/numbers.mjs': 'text/javascript; charset=utf-8',
   'engine/csv.mjs': 'text/javascript; charset=utf-8',
+  'engine/isin.mjs': 'text/javascript; charset=utf-8',
+  'engine/fund-nav-contract.mjs': 'text/javascript; charset=utf-8',
+  'engine/fund-review.mjs': 'text/javascript; charset=utf-8',
+  'engine/free-source-policy.mjs': 'text/javascript; charset=utf-8',
+  'engine/gateway-preview.mjs': 'text/javascript; charset=utf-8',
+  'engine/market-core.mjs': 'text/javascript; charset=utf-8',
   'engine/manual-fund.mjs': 'text/javascript; charset=utf-8',
   'engine/holdings.mjs': 'text/javascript; charset=utf-8',
   'engine/public-nav-backup.mjs': 'text/javascript; charset=utf-8',

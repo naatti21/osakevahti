@@ -2,7 +2,7 @@ name: Quality gate
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "feat/issue77-fund-identity-review"]
   pull_request:
   workflow_dispatch:
 
