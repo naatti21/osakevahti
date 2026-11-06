@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-nav-autosuggest1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-nav-readerfix1";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL = [
   "./engine/csv.mjs",
   "./engine/holdings.mjs",
   "./engine/public-nav-backup.mjs",
+  "./engine/public-nav-backup.mjs?nav-reader=2",
   "./engine/nav-consent.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
