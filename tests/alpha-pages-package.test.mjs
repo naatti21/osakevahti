@@ -48,7 +48,7 @@ test('Alpha deployment headers discourage indexing and do not copy user data',as
   assert.match(sw,/startsWith\("osakevahti-shell-"\)/);
   assert.match(sw,/caches\.match\(/);
   assert.doesNotMatch(sw,/await cache\.put\(/);
-  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-nav-confirm1"/);
+  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-nav-confirm2"/);
   assert.ok(!(await readdir(root)).some(f=>/\.(json|zip|env|bak)$/i.test(f)));
 });
 
