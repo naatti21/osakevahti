@@ -1,0 +1,41 @@
+name: QA Alpha4 external FX endpoint read only
+
+on:
+  pull_request:
+    paths: [".github/workflows/qa-alpha4-fx-origin-readonly.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fx:
+    name: Check real FX JSON, headers, values (NO DEPLOY)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check actual Frankfurter FX endpoint with Alpha Origin
+        run: |
+          node --input-type=module <<'NODE'
+          for(const from of ['USD','SEK','GBP']){
+            const url='https://api.frankfurter.app/latest?from='+from+'&to=EUR';
+            try{
+              const r=await fetch(url,{
+                headers:{Origin:'https://osakevahti-alpha-naatti21.pages.dev',Accept:'application/json'},
+                cache:'no-store',signal:AbortSignal.timeout(15000)
+              });
+              const body=await r.text();
+              let j=null;
+              try{j=JSON.parse(body)}catch{}
+              const quote=j?.rates?.EUR;
+              const cors=r.headers.get('access-control-allow-origin');
+              console.log(JSON.stringify({
+                pair:from+'/EUR',url,http:r.status,contentType:r.headers.get('content-type'),
+                cors: cors||'(none)',base:j?.base,hasRate:Number.isFinite(quote)&&quote>0,
+                sampleRate:quote,bodyKind:j?'JSON':'non-JSON'
+              }));
+            }catch(e){
+              console.log(JSON.stringify({pair:from+'/EUR',transportError:String(e)}));
+            }
+          }
+          NODE
