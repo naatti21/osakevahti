@@ -3655,8 +3655,8 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
   const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
   const isDocumentNoise=text=>
-    /^(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä(?: oleva saldo)?|suodata|n suodata|muutos\\s+kurssi|katsaus\\s+maksa|portfolio\\s+overview|holdings(?:\\s+summary)?|positions(?:\\s+summary)?)\\b/i.test(text) ||
-    /^(?:aot\\s+osake[-\\s]+ja\\s+rahastosalkku|omistukset\\s+lisätietoja|omistukset\\s+tapahtumat|yleisnäkymä\\s+seurantalistat|seurantalistat\\s+etsi|etsi\\s+fiidi|fiidi\\s+markkina|lisätietoja\\s+tapahtumat)\\b/i.test(text);
+    /^(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä(?: oleva saldo)?|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings(?:\s+summary)?|positions(?:\s+summary)?)\b/i.test(text) ||
+    /^(?:aot\s+osake[-\s]+ja\s+rahastosalkku|omistukset\s+lisätietoja|omistukset\s+tapahtumat|yleisnäkymä\s+seurantalistat|seurantalistat\s+etsi|etsi\s+fiidi|fiidi\s+markkina|lisätietoja\s+tapahtumat)\b/i.test(text);
   const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||isDocumentNoise(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
