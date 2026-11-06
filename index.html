@@ -1370,8 +1370,13 @@ async function scanLegacyFundNav(){
   const button=$("navLinkAutoScan");button.disabled=true;renderNavConsentList();
   navConsentScanInFlight=(async()=>{
     try{
-      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
-      navConsentReader??=createFundBackup();
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs?nav-reader=2");
+      // Old PWA tabs may still have a previous module cached; versioned import
+      // and an explicit capability check avoid a misleading "source offline" error.
+      if(!navConsentReader||typeof navConsentReader.suggest!=="function")
+        navConsentReader=createFundBackup();
+      if(typeof navConsentReader.suggest!=="function")
+        throw Error("NAV-moduuli on vanha. Sulje tämä välilehti ja avaa Alpha uudelleen.");
       const results=await navConsentReader.suggest(funds);
       // Do not change holdings; proposals exist only in this memory session.
       const ids=new Set(state.holdings.filter(h=>h.assetType==="fund"&&!h.navBinding).map(h=>String(h.id)));
@@ -1383,8 +1388,11 @@ async function scanLegacyFundNav(){
         "Lähde on kokeellinen; nimiosuma ei varmista pankin osuuslajia.";
     }catch(err){
       navConsentScanDone=false;
-      navConsentScanStatus="Automaattinen haku ei onnistunut: "+String(err?.message||err)+
-        ". Lähde saattaa estää selainpyynnöt tai olla pois käytöstä. Salkkua ei muutettu.";
+      const message=String(err?.message||err);
+      navConsentScanStatus="NAV-ehdotushaku ei onnistunut: "+message+
+        ". Salkkua ei muutettu. "+(/moduuli|not a function/i.test(message)?
+          "Tämä on sovelluksen välimuisti-/versio-ongelma, ei tietolähteen virhe.":
+          "Tarkista verkkoyhteys ja kokeile uudelleen.");
     }finally{
       button.disabled=false;navConsentScanInFlight=null;renderNavConsentList();
     }
@@ -1481,7 +1489,7 @@ async function searchLegacyFundNav(){
   if(!h||query.length<3){status.textContent="Kirjoita vähintään kolme merkkiä rahaston nimestä.";return}
   const btn=$("navLinkSearch");btn.disabled=true;status.textContent="Haetaan nimiehdokkaita…";
   try{
-    const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+    const {createFundBackup}=await import("./engine/public-nav-backup.mjs?nav-reader=2");
     navConsentReader??=createFundBackup();
     const rows=await navConsentReader.search(query,{limit:100});
     if(serial!==navConsentSearchSerial||!$("navLinkDlg").open)return;
@@ -1510,7 +1518,7 @@ async function acceptLegacyNavConsent(c){
     // global market refresh. Search has warmed the same public NAV snapshot,
     // so apply the user's just-approved observation before the single write.
     try{
-      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs?nav-reader=2");
       navConsentReader??=createFundBackup();
       const quote=await navConsentReader.lookup({assetType:"fund",
         instrument:{isin:c.isin},currency:h.currency,navDate:"",currentPrice:null});
@@ -2776,7 +2784,7 @@ async function runMarketRefresh(showErrors=false){
   // missing or >7 days old. No holdings/account/cost data leaves this device.
   if(funds.length){
     try{
-      const navModule=await import("./engine/public-nav-backup.mjs");
+      const navModule=await import("./engine/public-nav-backup.mjs?nav-reader=2");
       const pending=funds.filter(h=>navModule.shouldTryFundBackup(h));
       if(pending.length){
         alphaPublicNavReader??=navModule.createFundBackup();
@@ -2812,7 +2820,7 @@ async function runMarketRefresh(showErrors=false){
   // overwrite legacy quotes, purchase cost, quantity or account.
   if(navConsentCore&&funds.some(h=>h.navOptIn===true&&h.navBinding)){
     try{
-      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs?nav-reader=2");
       navConsentReader??=createFundBackup();
       for(const h of funds.filter(h=>h.navOptIn===true&&h.navBinding)){
         const result=await navConsentReader.lookup({assetType:"fund",
