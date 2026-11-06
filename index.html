@@ -438,8 +438,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 <label class="txt" for="newFundSourceMode">Hintalähteen valinta</label><select id="newFundSourceMode"><option value="manual">KÄSIN NAV · tarkistettu lähde ja päivä</option><option value="automatic" disabled>Automaattinen NAV · hyväksytty lähde puuttuu</option></select>
 <p id="newFundSourceStatus">Hyväksyttyä yleistä NAV-lähdettä ei ole. KÄSIN NAV toimii aina varana.</p>
 <details id="newFundExperimentalBox"><summary>Kokeellinen automaattinen NAV (vapaaehtoinen)</summary>
-<p>Hae päivitetty rahaston NAV julkisesta Rahastoraportti-ISIN-syötteestä vain omaan testikäyttöön. Hinta ja päivä ovat viitteellisiä. Syötteen jatkuvan automaattikäytön ehtoja ei ole vahvistettu. Pankkia, tiliä, osuusmääriä tai hankintahintoja ei lähetetä.</p>
-<label><input type="checkbox" id="newFundAutoNav"> Haluan kokeilla tämän rahaston päivittäistä automaattista NAV-päivitystä (vain vahvistettu ISIN + osuuslaji + valuutta).</label>
+<p>Hae rahaston NAV julkisesta Rahastoraportti-ISIN-syötteestä vain omaan testikäyttöön. Hinta ja päivä ovat viitteellisiä; tietoja voidaan käyttää enintään vuorokauden välimuistista. Syötteen jatkuvan automaattikäytön ehtoja ei ole vahvistettu. Pankkia, tiliä, osuusmääriä tai hankintahintoja ei lähetetä.</p>
+<label><input type="checkbox" id="newFundAutoNav"> Kokeile automaattista NAV-hakua, kun avaan sovelluksen tai painan Päivitä (ISIN + osuuslaji + valuutta vahvistettu itse). Ei jatkuvaa taustahakua.</label>
 <button type="button" id="newFundAutoNavProbe">Testaa julkinen NAV-haku nyt · ei tallenna mitään</button>
 <p id="newFundAutoNavStatus" role="status">Kokeilu on oletuksena pois käytöstä. Manuaalinen NAV säilyy aina varalla.</p>
 </details>
