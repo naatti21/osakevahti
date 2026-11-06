@@ -48,7 +48,7 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
     !sw.includes('caches.match(') || sw.includes('await cache.put(') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-nav-confirm1";')) {
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-nav-confirm2";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 
