@@ -156,7 +156,7 @@ export function proposeFundMatches(holding,snapshot,{limit=4}={}){
         if(found===input)rank=100;
         else if(found.startsWith(input+" "))rank=92;
         else if(input.startsWith(found+" ")&&found.length>=6)rank=88;
-        else if(words.length>=2&&tokens[0]===words[0]){
+        else if(words.length>=2&&tokens[0]===words[0]&&tokens[1]===words[1]){
           const overlap=words.filter(x=>tokens.includes(x)).length;
           if(overlap>=2)rank=Math.floor(overlap/Math.max(words.length,tokens.length)*80);
         }
