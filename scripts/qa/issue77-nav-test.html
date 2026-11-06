@@ -26,7 +26,7 @@ small{color:#aab7c4}
 </head>
 <body>
 <main>
-<h1>Osakevahti QA · kokeellinen NAV-haku</h1>
+<h1>Osakevahti QA · kokeellinen NAV-haku <small>(v6)</small></h1>
 <p>Vain omaan testikäyttöön. Tämä on erillinen, vain lukeva kokeilu: <strong>se ei lisää rahastoa, päivitä salkkua eikä tallenna mitään.</strong></p>
 <form id="nameSearch">
 <label for="nameQuery">Hae rahastoa nimellä – aloita tästä</label>
@@ -47,8 +47,8 @@ small{color:#aab7c4}
 <p><a href="./">Takaisin Osakevahti QA -sovellukseen</a></p>
 </main>
 <script type="module">
-import {validIsin} from "./engine/isin.mjs";
-import {createFundBackup} from "./engine/public-nav-backup.mjs";
+import {validIsin} from "./engine/isin.mjs?navqa=v6";
+import {createFundBackup} from "./engine/public-nav-backup.mjs?navqa=v6";
 const form=document.querySelector("#probe");
 const result=document.querySelector("#result");
 const button=document.querySelector("#check");
