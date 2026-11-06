@@ -21,6 +21,15 @@ function calendarAge(day,now){
 const up=v=>String(v??"").trim().toUpperCase();
 const displayName=v=>String(v??"").normalize("NFKC").trim().replace(/\s+/g," ").slice(0,180);
 const searchNorm=v=>displayName(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fi").replace(/[^a-z0-9]+/g," ").trim();
+// The public JSON's "class" field denotes the FUND CATEGORY (e.g. Japan
+// equities), NOT an investable share class. Only extract a tentative class
+// code from an explicit fund-NAME suffix, verified against the row currency.
+function classCodeFromName(name,currency){
+  const text=displayName(name),ccy=up(currency);
+  const suffix=text.match(/(?:\(([ABCDI]\d{0,2})\s+([A-Z]{3})\)|\b([ABCDI]\d{0,2})\s+([A-Z]{3}))$/i);
+  if(!suffix)return "";
+  return up(suffix[2]||suffix[4])===ccy?up(suffix[1]||suffix[3]):"";
+}
 function validIsin(s) {
   if(!/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(s))return false;
   const digits=[...s].map(c=>/[A-Z]/.test(c)?String(c.charCodeAt(0)-55):c).join("");
@@ -55,27 +64,33 @@ function positivePrice(raw){
 export function parseFundBackupSnapshot(raw,now=Date.now()){
   if(!Array.isArray(raw)||raw.length<1||raw.length>15000)
     return {ok:false,reason:"invalid_json_shape"};
-  const entries=Object.create(null);
-  const duplicate=new Set();
+  const entries=Object.create(null),catalog=Object.create(null);
+  const duplicate=new Set(),duplicateCatalog=new Set();
   let accepted=0;
   for(const row of raw){
     const isin=up(row?.ISIN),currency=up(row?.currency);
     if(!validIsin(isin)||!/^[A-Z]{3}$/.test(currency))continue;
+    const names=[row.companyNameFi,row.companyNameEn,row.companyNameSv]
+      .map(displayName).filter(Boolean);
+    const uniqueNames=[...new Set(names)];
+    const shareClass=classCodeFromName(uniqueNames[0]||"",currency);
+    if(uniqueNames.length){
+      if(Object.hasOwn(catalog,isin))duplicateCatalog.add(isin);
+      else catalog[isin]={currency,names:uniqueNames,shareClass,
+        classEvidence:shareClass?"published-name-suffix":"not-specified"};
+    }
     const price=positivePrice(row.closePrice);
     const navDate=isoDay(row.closePriceDate,now);
     if(!price||!navDate)continue;
     if(Object.hasOwn(entries,isin)){duplicate.add(isin);continue}
-    const names=[row.companyNameFi,row.companyNameEn,row.companyNameSv]
-      .map(displayName).filter(Boolean);
-    const uniqueNames=[...new Set(names)];
-    const shareClass=displayName(row.class?.fi||row.class?.en||row.class?.sv).slice(0,80);
     entries[isin]={currency,navDate,price,names:uniqueNames,shareClass};
     accepted++;
   }
   for(const isin of duplicate)delete entries[isin];
+  for(const isin of duplicateCatalog)delete catalog[isin];
   if(accepted<1)return {ok:false,reason:"no_usable_nav_rows"};
-  return {ok:true,entries,total:raw.length,accepted:accepted-duplicate.size,
-    duplicates:duplicate.size};
+  return {ok:true,entries,catalog,total:raw.length,accepted:accepted-duplicate.size,
+    duplicates:duplicate.size,catalogCount:Object.keys(catalog).length};
 }
 export function assessFundBackup(holding,entry,now=Date.now()){
   const isin=up(holding?.instrument?.isin||holding?.isin),ccy=up(holding?.currency);
@@ -122,7 +137,7 @@ export function createFundBackup({
     if(session&&now()-session.fetchedAt<TTL)return session;
     try{
       const o=JSON.parse(storage?.getItem(FUND_BACKUP_STORAGE_KEY)||"null");
-      if(o&&o.schemaVersion===2&&Number.isFinite(o.fetchedAt)&&now()-o.fetchedAt<TTL&&
+      if(o&&o.schemaVersion===3&&Number.isFinite(o.fetchedAt)&&now()-o.fetchedAt<TTL&&
         o.fetchedAt<=now()&&o.entries&&typeof o.entries==="object"){
         session=o;return o;
       }
@@ -158,8 +173,8 @@ export function createFundBackup({
         }
         const parsed=parseFundBackupSnapshot(JSON.parse(raw+decoder.decode()),now());
         if(!parsed.ok)throw Error(parsed.reason);
-        const compact={schemaVersion:2,fetchedAt:now(),entries:parsed.entries,total:parsed.total,
-          accepted:parsed.accepted};
+        const compact={schemaVersion:3,fetchedAt:now(),entries:parsed.entries,catalog:parsed.catalog,
+          total:parsed.total,accepted:parsed.accepted};
         session=compact;
         try{storage?.setItem(FUND_BACKUP_STORAGE_KEY,JSON.stringify(compact))}catch{}
         failedAt=0;
@@ -194,7 +209,7 @@ export function createFundBackup({
     const tokens=q.split(/\s+/).filter(x=>x.length>=2);
     if(!tokens.length)return [];
     const data=await fetchOnce(),hits=[];
-    for(const [isin,row] of Object.entries(data.entries)){
+    for(const [isin,row] of Object.entries(data.catalog||{})){
       if(!Array.isArray(row.names)||!row.names.length)continue;
       const matched=row.names.find(name=>{
         const normalized=searchNorm(name);
@@ -204,13 +219,18 @@ export function createFundBackup({
       if(!matched)continue;
       const normName=searchNorm(matched);
       const score=normName===q?0:normName.startsWith(q)?1:normName.includes(q)?2:3;
+      const quote=data.entries[isin];
       hits.push({isin,name:matched,currency:row.currency,shareClass:row.shareClass||"",
-        navDate:row.navDate,price:row.price,source:"Rahastoraportti (julkinen kokeilulähde)",
-        evidence:"Julkisen NAV-listan nimiosuma, ei riippumaton ISIN-/osuuslajivarmennus",score});
+        classEvidence:row.classEvidence,
+        navDate:quote?.navDate||null,price:quote?.price??null,
+        source:"Rahastoraportti (julkinen kokeilulähde)",
+        evidence:"Nimiosuma julkisesta lähteestä. Osuuslaji "+
+          (row.shareClass?"poimittu nimen lopusta, vahvista pankista":"ei ilmoitettu; vahvista pankista")+
+          ". Ei riippumaton ISIN-/osuuslajivarmennus",score});
     }
     hits.sort((a,b)=>a.score-b.score||a.name.localeCompare(b.name,"fi")||
       a.isin.localeCompare(b.isin));
-    return hits.slice(0,Math.max(1,Math.min(24,Number(limit)||12)))
+    return hits.slice(0,Math.max(1,Math.min(100,Number(limit)||12)))
       .map(({score,...candidate})=>candidate);
   }
   return {lookup,search,state:()=>({cached:!!readCache(),fetchedAt:session?.fetchedAt||0})};
