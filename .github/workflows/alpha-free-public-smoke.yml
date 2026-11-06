@@ -1,6 +1,8 @@
 name: Alpha free public data smoke (advisory)
 
 on:
+  push:
+    branches: ["feat/issue77-fund-identity-review"]
   pull_request:
     paths:
       - 'workers/providers/free-foundation.mjs'

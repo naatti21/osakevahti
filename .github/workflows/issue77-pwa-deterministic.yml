@@ -2,7 +2,7 @@ name: Issue 77 PWA deterministic QA
 
 on:
   push:
-    branches: [fix/issue77-pwa-lifecycle]
+    branches: [fix/issue77-pwa-lifecycle, feat/issue77-fund-identity-review]
   workflow_dispatch:
 
 permissions:

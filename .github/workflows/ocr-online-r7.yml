@@ -3,6 +3,8 @@ name: RC OCR real CDN browser verification
 # Browser uses the application's normal public CDN paths for Tesseract script,
 # worker, WASM/core and fin+eng data. No OCR interception or local assets.
 on:
+  push:
+    branches: ["feat/issue77-fund-identity-review"]
   pull_request:
     paths:
       - "index.html"

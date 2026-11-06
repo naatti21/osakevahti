@@ -1,10 +1,16 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-fund-identity1";
 const SHELL = [
   "./",
   "./index.html",
   "./image-reader.js",
   "./alpha-import-engine.mjs",
   "./engine/manual-fund.mjs",
+  "./engine/isin.mjs",
+  "./engine/fund-nav-contract.mjs",
+  "./engine/fund-review.mjs",
+  "./engine/free-source-policy.mjs",
+  "./engine/gateway-preview.mjs",
+  "./engine/market-core.mjs",
   "./engine/acceptance.mjs",
   "./engine/numbers.mjs",
   "./engine/csv.mjs",

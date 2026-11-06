@@ -8,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CURRENT_CACHE = 'osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1';
+const CURRENT_CACHE = 'osakevahti-shell-v2.17.9-alpha-fund-identity1';
 const LEGACY_CACHE = 'osakevahti-shell-v2.17.9-alpha-manual-fund-review1';
 const FAILED_CACHE = 'osakevahti-shell-qa-broken-v2';
 const OTHER_CACHE = 'visual-academy-qa-shell-v1';
@@ -69,7 +69,7 @@ async function controlledServer() {
     }
     try {
       const filename = pathname.slice(1);
-      if (!/^(image-reader\.js|alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup|manual-fund)\.mjs|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
+      if (!/^(image-reader\.js|alpha-import-engine\.mjs|engine\/(?:acceptance|numbers|csv|holdings|public-nav-backup|manual-fund|isin|fund-nav-contract|fund-review|free-source-policy|gateway-preview|market-core)\.mjs|manifest\.webmanifest|icon-(192|512)\.png)$/.test(filename)) {
         send(404, 'Not a shell resource'); return;
       }
       const contents = await readFile(filename);
@@ -171,7 +171,7 @@ test('PWA update: old installed shell becomes new offline shell without changing
     const cacheResult = await page.evaluate(async name => {
       const keys = await caches.keys();
       const resp = await caches.match('/visual-academy/launch');
-      const shell = await caches.open('osakevahti-shell-v2.17.9-alpha-pwa-lifecycle1');
+      const shell = await caches.open('osakevahti-shell-v2.17.9-alpha-fund-identity1');
       const html = await shell.match('/index.html');
       return {keys, other:resp ? await resp.text() : null, shell:html ? await html.text() : null};
     }, OTHER_CACHE);
