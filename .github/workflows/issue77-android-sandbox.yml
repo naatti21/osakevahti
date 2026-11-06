@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: issue77-android-preview
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   QA_GENERATION: v1
@@ -26,17 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install test dependencies
-        run: |
-          npm install --no-audit --no-fund --package-lock=false
-          npx playwright install --with-deps chromium
-      - name: Stage locked Alpha shell before regression tests
+      - name: Build locked source package before QA checks
         run: node scripts/build-alpha-pages.mjs
-      - name: Run fund identity, import, and SW offline/upgrade regressions
+      - name: Fast source and backup regression checks (full PR #96 CI is already green)
         run: |
-          node --test tests/*.test.mjs
+          node --test tests/fund-review.test.mjs tests/manual-fund.test.mjs tests/sw-cache-lifecycle.test.mjs tests/pwa-lifecycle.test.mjs tests/alpha-pages-package.test.mjs
           node tests/import-qa/qa8-guards.mjs
-          npx playwright test tests/e2e/issue77-fund-identity.spec.mjs tests/e2e/issue77-manual-fund-flow.spec.mjs tests/e2e/pwa-offline-sw.spec.mjs tests/e2e/pwa-upgrade-path.spec.mjs tests/e2e/pwa-navigation-http-error.spec.mjs --workers=2 --retries=0
       - name: Build allowlisted PWA and apply *output-only* QA branding
         run: |
           node scripts/build-alpha-pages.mjs
