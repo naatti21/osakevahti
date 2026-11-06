@@ -25,3 +25,24 @@ test('actual QA-origin Chromium can fetch the public NAV list through CORS',asyn
  expect(result.isinCount).toBeGreaterThan(150);
  expect(result.datedCount).toBeGreaterThan(150);
 });
+
+test('Live public-name candidate trace checks user-facing search against real source',async({page})=>{
+ await page.goto(base+'nav-test.html',{waitUntil:'domcontentloaded'});
+ const diagnostic=await page.evaluate(async()=>{
+   const r=await fetch('https://rahastoraportti-backend.app.sijoitustutkimus.fi/FUND_CLOSING_PRICES_JSON/Fund_ClosingPrices_LATEST.json',{mode:'cors',credentials:'omit'});
+   const rows=await r.json(); const q='handelsbanken';
+   const col=['companyNameFi','companyNameSv','companyNameEn','company','class'];
+   const byField=Object.fromEntries(col.map(k=>[k,rows.filter(x=>JSON.stringify(x[k]??'').toLowerCase().includes(q)).length]));
+   const sample=rows.find(x=>col.some(k=>JSON.stringify(x[k]??'').toLowerCase().includes(q)));
+   const val=sample?Object.fromEntries(col.map(k=>[k,sample[k]||null])):null;
+   return {byField,sample:val,overallCount:rows.length};
+ });
+ console.log('QA_PUBLIC_NAME_DIAGNOSTIC',JSON.stringify(diagnostic).slice(0,1300));
+ await page.locator('#nameQuery').fill('Handelsbanken');
+ await page.locator('#searchByName').click();
+ await expect(page.locator('#searchByName')).toBeEnabled({timeout:20000});
+ const count=await page.locator('#nameResults button').count();
+ const desc=(await page.locator('#nameResults').innerText()).slice(0,240);
+ console.log('QA_REAL_UI_NAME_SEARCH',JSON.stringify({count,desc}));
+ expect(count,'Handelsbanken public fund list contains bank funds, name-first search should show at least one').toBeGreaterThan(0);
+});
