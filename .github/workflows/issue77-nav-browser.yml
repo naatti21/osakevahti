@@ -23,6 +23,8 @@ jobs:
         run: npx playwright install chromium
       - name: Browser tests – opt-in, source identity, NAV preservation and opt-out
         run: npx playwright test tests/e2e/issue77-experimental-nav.spec.mjs --workers=1 --retries=0
+      - name: Real-browser public NAV feed CORS and shape smoke
+        run: npx playwright test tests/e2e/issue77-nav-public-cors.spec.mjs --workers=1 --retries=0
       - name: Keep failure screenshots and traces
         if: failure()
         uses: actions/upload-artifact@v4
