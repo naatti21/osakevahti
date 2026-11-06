@@ -30,6 +30,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund --package-lock=false
           npx playwright install --with-deps chromium
+      - name: Stage locked Alpha shell before regression tests
+        run: node scripts/build-alpha-pages.mjs
       - name: Run fund identity, import, and SW offline/upgrade regressions
         run: |
           node --test tests/*.test.mjs
