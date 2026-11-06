@@ -105,10 +105,13 @@ for(const status of [503,404]){
       },{key:KEY,holding:fakeHolding});
       await page.reload();
       await expect(page.locator('#dailyMoves')).toBeVisible();
-      const before=await snapshot(page);
-      expect(before).toEqual({count:1,id:fakeHolding.id,quantity:3.875,
+      const expected={count:1,id:fakeHolding.id,quantity:3.875,
         buyPrice:61.125,account:'Nordea',accountType:'AOT',
-        broker:'Nordea',confirmed:true,currency:'EUR'});
+        broker:'Nordea',confirmed:true,currency:'EUR'};
+      // The shell may initialize asynchronously after reload; assert full
+      // restored holdings before inducing HTTP 404/503 (no relaxed fields).
+      await expect.poll(()=>snapshot(page),{timeout:15000}).toEqual(expected);
+      const before=await snapshot(page);
 
       server.error(status);
       const bad=await page.goto(server.url+'/index.html',{waitUntil:'domcontentloaded'});
