@@ -88,3 +88,26 @@ test("existing positions get proposals automatically but never link without cons
  expect(requests()).toBe(1); // a single shared public download, never per holding
 });
 
+
+test("NAV reader version is isolated from a previously cached module without suggest()",async({page})=>{
+ let staleRequests=0;
+ await page.route(/\/engine\/public-nav-backup\.mjs(?:\?|$)/,route=>{
+   const url=new URL(route.request().url());
+   if(!url.searchParams.has('nav-reader')){
+     staleRequests++;
+     return route.fulfill({status:200,contentType:'text/javascript',
+       body:'export const createFundBackup=()=>({lookup:async()=>({status:"unavailable"}),search:async()=>[]});'});
+   }
+   return route.continue();
+ });
+ const requests=await setup(page);
+ await expect(page.locator("#navLinkStatus")).toContainText("1/2 rahastolle löytyi ehdokkaita");
+ const capability=await page.evaluate(async()=>{
+   const m=await import("./engine/public-nav-backup.mjs?nav-reader=2");
+   return typeof m.createFundBackup().suggest;
+ });
+ expect(capability).toBe("function");
+ expect(staleRequests).toBe(0);
+ expect(requests()).toBe(1);
+ await expect(page.locator("#navLinkStatus")).not.toContainText("not a function");
+});
