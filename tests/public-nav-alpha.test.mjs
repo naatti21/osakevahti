@@ -122,3 +122,49 @@ test("upstream 429 gracefully fails without zero price and honours one-hour cool
   assert.equal((await reader.lookup(fund())).reason,"public_nav_retry_cooldown");
   assert.equal(calls,1);
 });
+
+test("name search suggests separate ISIN share classes, never silently selects one",async()=>{
+  const calls=[],storage=mem();
+  const rows=[
+    item({ISIN:isin,companyNameFi:"Handelsbanken USA Indeksi A",class:{fi:"A"},closePrice:"123.4"}),
+    item({ISIN:other,companyNameFi:"Handelsbanken USA Indeksi B",class:{fi:"B"},closePrice:"99.3"})
+  ];
+  const reader=createFundBackup({now:()=>NOW,storage,fetchImpl:fetcher(rows,calls)});
+  const found=await reader.search("Handelsbanken USA Indeksi");
+  assert.equal(found.length,2);
+  assert.deepEqual(new Set(found.map(x=>x.isin)),new Set([isin,other]));
+  assert.deepEqual(new Set(found.map(x=>x.shareClass)),new Set(["A","B"]));
+  assert.ok(found.every(x=>x.evidence.includes("ei riippumaton")));
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,FUND_BACKUP_URL);
+  assert.equal(JSON.stringify(calls).includes("Handelsbanken"),false);
+  // Both NAV and name search share the same single global public read.
+  assert.equal((await reader.lookup(fund())).status,"candidate");
+  assert.equal(calls.length,1);
+});
+test("name search uses word prefixes but never invents a missing ISIN or class",async()=>{
+  const calls=[],reader=createFundBackup({now:()=>NOW,storage:mem(),fetchImpl:fetcher([
+    item({companyNameFi:"Handelsbanken USA Indeksi",class:{}}),
+    item({ISIN:other,companyNameFi:"Vieras rahasto",closePrice:"9"})
+  ],calls)});
+  const results=await reader.search("handelsbanken usa");
+  assert.equal(results.length,1);
+  assert.equal(results[0].isin,isin);
+  assert.equal(results[0].shareClass,"");
+  assert.equal((await reader.search("")).length,0);
+  assert.equal((await reader.search("sattumanvarainen")).length,0);
+  assert.equal(calls.length,1);
+});
+test("legacy price-only cache is refreshed once to populate name candidates",async()=>{
+  const calls=[],storage=mem();
+  storage.setItem(FUND_BACKUP_STORAGE_KEY,JSON.stringify({
+    fetchedAt:NOW,entries:{[isin]:{currency:"EUR",navDate:"2026-10-23",price:10.5}},accepted:1
+  }));
+  const reader=createFundBackup({now:()=>NOW,storage,fetchImpl:fetcher([
+    item({companyNameFi:"Handelsbanken USA Indeksi A",class:{fi:"A"}})
+  ],calls)});
+  const result=await reader.search("Handelsbanken");
+  assert.equal(result.length,1);
+  assert.equal(calls.length,1);
+  assert.equal(JSON.parse(storage.getItem(FUND_BACKUP_STORAGE_KEY)).schemaVersion,2);
+});
