@@ -55,3 +55,19 @@ test('all fund proposals come from one global public fetch; no portfolio details
  assert.equal(res[1].status,'review');
  assert.equal(res[2].status,'no_match');
 });
+
+test('Nordea Pohjoismaat Indeksi Select A matches verified Nordic alias and not another Nordea fund',()=>{
+ const liveLike=parseFundBackupSnapshot([
+   {ISIN:'FI4000602453',companyNameFi:'Nordea Nordic Indeksi Select A',
+    currency:'EUR',closePrice:'10.12',closePriceDate:'20261106'},
+   {ISIN:'FI0008800065',companyNameFi:'Nordea Pohjoismaat A',
+    currency:'EUR',closePrice:'25.20',closePriceDate:'20261106'}
+ ],NOW);
+ assert.equal(liveLike.ok,true);
+ const old=h('Nordea Pohjoismaat Indeksi Select A');
+ const match=proposeFundMatches(old,liveLike);
+ assert.equal(match.status,'strong_name');
+ assert.equal(match.candidates[0].isin,'FI4000602453');
+ assert.equal(match.candidates.length,1);
+ assert.equal(old.navBinding,undefined);
+});
