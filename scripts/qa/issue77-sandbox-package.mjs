@@ -2,7 +2,7 @@
  * Build-only watermark for the isolated Issue #77 Android QA preview.
  * NEVER modify the source Alpha files; mutate dist-alpha/ only.
  */
-import {readFile, writeFile} from 'node:fs/promises';
+import {readFile, writeFile, copyFile} from 'node:fs/promises';
 const generation=process.env.QA_GENERATION||'v1';
 if(!['v1','v2'].includes(generation))throw Error('Only explicit v1/v2 QA generations are accepted');
 const dir='dist-alpha/';
@@ -29,4 +29,7 @@ await replaceRequired('sw.js',cache,'osakevahti-shell-v2.17.9-issue77-qa-'+gener
 const html=await readFile(dir+'index.html','utf8');
 const sw=await readFile(dir+'sw.js','utf8');
 if(!html.includes('Osakevahti QA – TESTI '+generation)||!sw.includes('issue77-qa-'+generation)||sw.includes('cache.put('))throw Error('QA package verification failed');
+await copyFile('scripts/qa/issue77-nav-test.html',dir+'nav-test.html');
+const probe=await readFile(dir+'nav-test.html','utf8');
+if(!probe.includes('kokeellinen NAV-haku')||!probe.includes('createFundBackup'))throw Error('QA NAV probe missing');
 console.log('QA preview package verified:',generation,'(manifest identity isolated; source files unchanged)');
