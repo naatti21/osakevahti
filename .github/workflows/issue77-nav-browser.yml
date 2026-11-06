@@ -1,0 +1,32 @@
+name: Issue 77 experimental fund NAV browser integration (no deployment)
+on:
+  push:
+    branches: ["qa/issue77-android-sandbox-20261106"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: issue77-nav-e2e
+  cancel-in-progress: true
+jobs:
+  chromium-nav:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Install Chromium (without redundant OS apt install)
+        run: npx playwright install chromium
+      - name: Browser tests – opt-in, source identity, NAV preservation and opt-out
+        run: npx playwright test tests/e2e/issue77-experimental-nav.spec.mjs --workers=1 --retries=0
+      - name: Keep failure screenshots and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue77-nav-e2e-failure
+          path: test-results/
+          if-no-files-found: ignore
