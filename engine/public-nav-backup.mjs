@@ -20,7 +20,7 @@ function calendarAge(day,now){
 }
 const up=v=>String(v??"").trim().toUpperCase();
 const displayName=v=>String(v??"").normalize("NFKC").trim().replace(/\s+/g," ").slice(0,180);
-const searchNorm=v=>displayName(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fi").replace(/[^a-z0-9]+/g," ").trim();
+const searchNorm=v=>displayName(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fi").replace(/[^a-z0-9]+/g," ").trim().replace(/\bpohjoismaat\b/g,"nordic");
 // The public JSON's "class" field denotes the FUND CATEGORY (e.g. Japan
 // equities), NOT an investable share class. Only extract a tentative class
 // code from an explicit fund-NAME suffix, verified against the row currency.
