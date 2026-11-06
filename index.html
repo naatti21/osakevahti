@@ -1438,7 +1438,19 @@ async function acceptLegacyNavConsent(c){
   try{
     const core=await navConsentReady;
     if(!core)throw Error("NAV-lisämoduulia ei voitu ladata");
-    const linked=core.navConsentForHolding(h,c);
+    let linked=core.navConsentForHolding(h,c);
+    // The initial source read must be independent of an already-running
+    // global market refresh. Search has warmed the same public NAV snapshot,
+    // so apply the user's just-approved observation before the single write.
+    try{
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+      navConsentReader??=createFundBackup();
+      const quote=await navConsentReader.lookup({assetType:"fund",
+        instrument:{isin:c.isin},currency:h.currency,navDate:"",currentPrice:null});
+      linked=core.updateNavQuote(linked,quote);
+    }catch(err){
+      linked.navDiagnostic={reason:"source_unavailable",checkedAt:Date.now()};
+    }
     const candidate={...state,holdings:state.holdings.map(x=>x.id===h.id?linked:x)};
     validateBackupForRestore(candidate,{allowMissingCurrency:true});
     localStorage.setItem(KEY,JSON.stringify(candidate));
