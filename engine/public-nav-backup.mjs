@@ -128,6 +128,61 @@ export function shouldTryFundBackup(holding,now=Date.now()){
     return true;
   return days>MAX_AGE_DAYS||!info; // incl. yearless NAV source day
 }
+// A *proposal* is never a user-accepted NAV binding. All matching happens
+// against the downloaded public catalog, never by sending holdings to a server.
+export function proposeFundMatches(holding,snapshot,{limit=4}={}){
+  const missing={status:"no_match",candidates:[]};
+  if(!holding||holding.assetType!=="fund"||!snapshot?.catalog)return missing;
+  const currency=up(holding.currency);
+  const existingIsin=up(holding.instrument?.isin||holding.isin);
+  const hasIsin=validIsin(existingIsin);
+  if(existingIsin&&!hasIsin)return {status:"invalid_isin",candidates:[]};
+  const input=searchNorm(holding.name||"");
+  const words=input.split(" ").filter(Boolean);
+  const candidates=[];
+  for(const [isin,row] of Object.entries(snapshot.catalog)){
+    if(!row||row.currency!==currency||!Array.isArray(row.names))continue;
+    // A saved, valid ISIN is a hard constraint — name similarity may never
+    // silently override this instrument identity.
+    if(hasIsin&&isin!==existingIsin)continue;
+    let score=0,matched="";
+    const suffixClass=classCodeFromName(holding.name||"",currency);
+    if(suffixClass&&row.shareClass&&suffixClass!==row.shareClass)continue;
+    for(const name of row.names){
+      const found=searchNorm(name),tokens=found.split(" ").filter(Boolean);
+      let rank=0;
+      if(hasIsin)rank=110;
+      else if(input.length>=3){
+        if(found===input)rank=100;
+        else if(found.startsWith(input+" "))rank=92;
+        else if(input.startsWith(found+" ")&&found.length>=6)rank=88;
+        else if(words.length>=2&&tokens[0]===words[0]){
+          const overlap=words.filter(x=>tokens.includes(x)).length;
+          if(overlap>=2)rank=Math.floor(overlap/Math.max(words.length,tokens.length)*80);
+        }
+      }
+      if(rank>score){score=rank;matched=name;}
+    }
+    if(score<40)continue; // No weak same-category or common "index" hits.
+    const quote=snapshot.entries?.[isin]||null;
+    candidates.push({isin,name:matched,currency,shareClass:row.shareClass||"",
+      classEvidence:row.classEvidence||"not-specified",
+      price:quote?.price??null,navDate:quote?.navDate??null,
+      score,evidence:hasIsin?"existing-isin":score===100?"exact-name":"name-similarity",
+      source:"Rahastoraportti (julkinen kokeilulähde)"});
+  }
+  candidates.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,"fi")||
+    a.isin.localeCompare(b.isin));
+  const picked=candidates.slice(0,Math.max(1,Math.min(12,Number(limit)||4)));
+  if(!picked.length)return missing;
+  const exactIdentity=hasIsin&&picked[0].isin===existingIsin;
+  const strongName=!hasIsin&&picked[0].score>=92&&
+    (picked.length===1||picked[0].score-picked[1].score>=12);
+  return {status:exactIdentity?"known_isin":strongName?"strong_name":"review",
+    candidates:picked,ambiguous:picked.length>1&&picked[0].score-picked[1].score<12,
+    reason:exactIdentity?"Tallennettu ISIN löytyi lähteestä":strongName?
+      "Vahva nimiosuma, mutta osuuslaji on vahvistettava":"Useita tai epävarmoja nimiosumia"};
+}
 export function createFundBackup({
   fetchImpl=fetch, storage=typeof localStorage!=="undefined"?localStorage:null,
   now=()=>Date.now()
@@ -233,5 +288,10 @@ export function createFundBackup({
     return hits.slice(0,Math.max(1,Math.min(100,Number(limit)||12)))
       .map(({score,...candidate})=>candidate);
   }
-  return {lookup,search,state:()=>({cached:!!readCache(),fetchedAt:session?.fetchedAt||0})};
+  async function suggest(holdings){
+    const items=Array.isArray(holdings)?holdings:[];
+    const snapshot=await fetchOnce(); // one shared download for all funds
+    return items.map(h=>({id:h.id,...proposeFundMatches(h,snapshot)}));
+  }
+  return {lookup,search,suggest,state:()=>({cached:!!readCache(),fetchedAt:session?.fetchedAt||0})};
 }
