@@ -1,6 +1,16 @@
 name: OCR stress
 
 on:
+  # Test OCR changes on PRs before merge. This job is advisory on pull requests
+  # while known OCR stress limitations remain open; see step summary/artifacts.
+  pull_request:
+    paths:
+      - "image-reader.js"
+      - "index.html"
+      - "tests/e2e/**"
+      - "tests/import-qa/**"
+      - "package.json"
+      - ".github/workflows/ocr-stress.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
@@ -10,6 +20,7 @@ on:
       - "image-reader.js"
       - "index.html"
       - "tests/e2e/ocr-stress.spec.mjs"
+      - "tests/import-qa/**"
       - "package.json"
       - ".github/workflows/ocr-stress.yml"
 
@@ -39,8 +50,47 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Run QA8 source-identity regression guards
+        id: qa8
+        # QA8 fixes are in PR #1, while this infrastructure PR is based on main.
+        # Until they are integrated, this diagnostic may report expected failures.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: npm run test:qa-import
+
       - name: Run real OCR stress tests
+        id: ocr
+        # Keep existing push/schedule failures blocking. PR checks are advisory
+        # until the currently failing OCR fixtures are fixed and independently QA'd.
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: npm run test:ocr
+
+      - name: Summarize OCR result
+        if: always()
+        shell: bash
+        env:
+          OCR_OUTCOME: ${{ steps.ocr.outcome }}
+          QA8_OUTCOME: ${{ steps.qa8.outcome }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          {
+            echo '### Import QA diagnostics — see each step outcome'
+            echo "QA8 source-evidence guards: **${QA8_OUTCOME}**"
+            echo 'Read test-results/qa8-guards.json for the 15 individual cases.'
+            echo '### OCR stress — real Tesseract diagnostics'
+            echo "Result: **${OCR_OUTCOME}**"
+            if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
+              echo 'PR mode: **advisory**. Failures do not pass OCR QA and do not block the separate Quality gate.'
+            else
+              echo 'Main/scheduled/manual mode: test failures are **blocking** for this workflow.'
+            fi
+            echo 'See the test step and the uploaded report for failed assertions and OCR images.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$QA8_OUTCOME" != 'success' ]]; then
+            echo "::warning::QA8 source guards ${QA8_OUTCOME}; advisory check does NOT certify imported evidence."
+          fi
+          if [[ "$OCR_OUTCOME" != 'success' ]]; then
+            echo "::warning::OCR stress ${OCR_OUTCOME}; inspect report and fix failures before requiring this check."
+          fi
 
       - name: Upload OCR stress report
         if: always()

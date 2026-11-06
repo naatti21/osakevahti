@@ -5,10 +5,12 @@
   "scripts": {
     "test": "playwright test --grep-invert @ocr-stress",
     "test:smoke": "playwright test --grep @smoke",
-    "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1"
+    "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1",
+    "test:qa-import": "node tests/import-qa/qa8-guards.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",
-    "tesseract.js": "5.1.0"
+    "tesseract.js": "5.1.0",
+    "acorn": "8.15.0"
   }
 }
