@@ -163,7 +163,7 @@ export function proposeFundMatches(holding,snapshot,{limit=4}={}){
       }
       if(rank>score){score=rank;matched=name;}
     }
-    if(score<40)continue; // No weak same-category or common "index" hits.
+    if(score<55)continue; // Reject generic brand/region overlap without the actual fund identity.
     const quote=snapshot.entries?.[isin]||null;
     candidates.push({isin,name:matched,currency,shareClass:row.shareClass||"",
       classEvidence:row.classEvidence||"not-specified",
