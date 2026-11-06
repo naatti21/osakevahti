@@ -112,7 +112,7 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           const base="https://osakevahti-alpha-naatti21.pages.dev";
-          const items=[["/","ALPHA · v2.17.9"],["/","id=\"navLinkPanel\""],["/sw.js","osakevahti-shell-v2.17.9-alpha-nav-confirm2"],["/engine/public-nav-backup.mjs","async function search(query"],["/engine/nav-consent.mjs","navConsentForHolding"]];
+          const items=[["/","ALPHA · v2.17.9"],["/","id=\"navLinkPanel\""],["/sw.js","osakevahti-shell-v2.17.9-alpha-nav-autosuggest1"],["/engine/public-nav-backup.mjs","async function search(query"],["/engine/nav-consent.mjs","navConsentForHolding"]];
           let success=false;
           for(let n=0;n<8;n++){
             const found=await Promise.all(items.map(async ([path,needle])=>{
