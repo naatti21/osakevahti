@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Osakevahti QA – kokeellinen NAV-haku</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:20px 12px;background:#0b0d10;color:#eaf1f5;font-family:system-ui,sans-serif;line-height:1.5}
+main{max-width:620px;margin:auto}
+h1{font-size:23px}p{color:#bbc6d2}
+label{display:block;font-weight:700;margin:16px 0 5px}
+input,button{width:100%;font-size:17px;border:1px solid #36414c;border-radius:11px;padding:13px;background:#151d26;color:white}
+button{margin-top:16px;background:#76d2a0;color:#08120e;font-weight:800}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#141b22;border:1px solid #36414c;border-radius:12px;padding:14px}
+a{color:#76d2a0}
+small{color:#aab7c4}
+</style>
+</head>
+<body>
+<main>
+<h1>Osakevahti QA · kokeellinen NAV-haku</h1>
+<p>Vain omaan testikäyttöön. Tämä on erillinen, vain lukeva kokeilu: <strong>se ei lisää rahastoa, päivitä salkkua eikä tallenna mitään.</strong></p>
+<form id="probe">
+<label for="isin">Rahaston ISIN</label>
+<input id="isin" maxlength="12" minlength="12" autocomplete="off" autocapitalize="characters" placeholder="12-merkkinen ISIN" required>
+<label for="currency">Osuuslajin valuutta</label>
+<input id="currency" maxlength="3" minlength="3" value="EUR" autocomplete="off" autocapitalize="characters" required>
+<button type="submit" id="check">Kokeile julkista NAV-lähdettä</button>
+</form>
+<p><small>Julkisesta Rahastoraportti-syötteestä noudetaan lista yhtenä pyyntönä. Syöttämääsi ISINiä, tilitietoja tai omistusmääriä ei lähetetä palveluun. Lähteen käyttöoikeuksia jatkuvaan automaatioon ei ole vahvistettu.</small></p>
+<pre id="result" role="status" aria-live="polite">Syötä ISIN ja paina hakupainiketta.</pre>
+<p><a href="./">Takaisin Osakevahti QA -sovellukseen</a></p>
+</main>
+<script type="module">
+import {validIsin} from "./engine/isin.mjs";
+import {createFundBackup} from "./engine/public-nav-backup.mjs";
+const form=document.querySelector("#probe");
+const result=document.querySelector("#result");
+const button=document.querySelector("#check");
+const svc=createFundBackup({storage:null});
+form.addEventListener("submit",async e=>{
+  e.preventDefault();
+  const isin=document.querySelector("#isin").value.trim().toUpperCase();
+  const currency=document.querySelector("#currency").value.trim().toUpperCase();
+  if(!validIsin(isin)){result.textContent="Virheellinen ISIN-tarkiste tai muoto.";return;}
+  if(!/^[A-Z]{3}$/.test(currency)){result.textContent="Valuutta pitää antaa ISO-muodossa, esim. EUR.";return;}
+  button.disabled=true;
+  result.textContent="Luetaan julkista NAV-dataa, rajattu kertahaku...";
+  try{
+    const x=await svc.lookup({assetType:"fund",instrument:{isin},currency});
+    const lines=[
+      "Tila: "+(x.diagnosticStatus||x.status),
+      "Syy: "+(x.reason||"ei virhettä"),
+      "NAV-päivä: "+(x.navDate||"ei tiedossa"),
+      "NAV-ikä (päivää): "+(x.ageDays??"ei tiedossa"),
+      "Koko syötteen uusin päivä: "+(x.feedNewestDate||"ei tiedossa"),
+      "Syöte vanhentunut: "+(x.sourceFeedStale===true?"kyllä":x.sourceFeedStale===false?"ei":"ei tiedossa"),
+      "Hakuhetki: "+(x.fetchedAt?new Date(x.fetchedAt).toLocaleString("fi-FI"):"ei tiedossa"),
+      "Lähteen hyväksyttyjä tietueita: "+(x.sourceCount??"ei tiedossa"),
+      "NAV-hinta: "+(x.status==="candidate"?String(x.price)+" "+x.currency:"ei hyväksyttyä tuoretta havaintoa"),
+      "Tietojen luokka: kokeellinen / ei varmennettu automaattiseksi salkkulähteeksi"
+    ];
+    result.textContent=lines.join("\n");
+  }catch(e){result.textContent="Hakuvirhe: "+String(e?.message||e);}
+  finally{button.disabled=false;}
+});
+</script>
+</body>
+</html>
