@@ -1,0 +1,48 @@
+name: Alpha NAV confirmation integration gate (no deploy)
+on:
+  push:
+    branches: ["feature/alpha-fund-nav-confirm-20261106"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-alpha-nav-consent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Parse original Alpha embedded app syntax
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import {parse} from 'acorn';
+          const h=readFileSync('index.html','utf8');
+          const js=h.match(/<script>([\s\S]*?)<\/script>/);
+          if(!js)throw Error('No embedded Alpha application script');
+          parse(js[1],{ecmaVersion:'latest',sourceType:'script'});
+          console.log('Legacy Alpha embedded JS syntax PASS');
+          NODE
+      - name: NAV consent, old backup and research Engine tests
+        run: |
+          node --test tests/nav-consent.test.mjs tests/public-nav-alpha.test.mjs tests/alpha-import-engine.test.mjs
+          node tests/import-qa/qa8-guards.mjs
+      - name: Build unmodified-brand Alpha package and exact allowlist tests
+        run: |
+          node scripts/build-alpha-pages.mjs
+          node --test tests/alpha-pages-package.test.mjs
+      - name: Run Chromium against actual old Alpha UI with 2 legacy holdings
+        run: |
+          npx playwright install chromium
+          npx playwright test tests/e2e/alpha-nav-confirm.spec.mjs --workers=1 --retries=0
+      - name: Upload failure evidence only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-nav-consent-test-failure
+          path: test-results/
+          if-no-files-found: ignore
