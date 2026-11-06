@@ -247,6 +247,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     </div>
   </details>
   <div class="section"><h2>Omistukset <span id="holdingCount" class="muted small"></span></h2><div class="actions"><button id="importPortfolioBtn" class="primary">Tuo / päivitä</button><button id="addBtn">+ Lisää käsin</button></div></div>
+  <button id="navQuickLink" type="button" class="detailToggle hidden">Rahastot: etsi NAV-ehdotukset automaattisesti</button>
   <button id="detailsToggle" class="detailToggle" type="button">Näytä tarkemmat luvut</button>
   <div id="holdings" class="stack"></div><div id="holdingsEmpty" class="empty">Salkku on tyhjä.</div>
 </section>
@@ -369,8 +370,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
   <details id="navLinkPanel" class="navLinkPanel">
     <summary><strong>Rahastojen NAV-seuranta · vahvista vanhat omistukset</strong></summary>
-    <p class="muted small" style="margin:9px 0">Kokeellinen ISIN-pohjainen NAV-haku. Nykyiset määrät, keskihinnat, tilit, tunnisteet sekä vanhat hinnat säilyvät. Vahvista jokainen vanha rahasto erikseen. Lähteen NAV on viitteellinen.</p>
-    <div class="actions"><button type="button" id="navLinkBackup">Vie nykyisen salkun JSON ennen NAV-vahvistuksia</button></div>
+    <p class="muted small" style="margin:9px 0">Sovellus hakee kaikkien vanhojen rahastojen nimelle, ISINille ja valuutalle ehdokkaat yhdellä julkisella lähdelatauksella. Vahvista osuuslaji kerran, minkä jälkeen NAV päivittyy kurssipäivitysten yhteydessä. Vanhat omistustiedot ja hinnat säilyvät.</p>
+    <div class="actions"><button type="button" class="primary" id="navLinkAutoScan">Tunnista kaikki rahastot automaattisesti</button><button type="button" id="navLinkBackup">Vie nykyisen salkun JSON ennen NAV-vahvistuksia</button></div>
     <div id="navLinkStatus" class="statusBox muted">Yhtään olemassa olevaa rahastoa ei yhdistetä automaattisesti.</div>
     <div id="navLinkList" class="navLinkList"></div>
   </details>
@@ -582,7 +583,21 @@ const navConsentReady=import("./engine/nav-consent.mjs").then(m=>{
   return m;
 }).catch(err=>{console.info("Kokeellinen NAV ei käytettävissä:",String(err));return null});
 let navConsentReader=null,navConsentCurrentId=null,navConsentSearchSerial=0;
+let navConsentProposals=new Map(),navConsentScanDone=false,navConsentScanInFlight=null;
+let navConsentScanStatus="",navConsentBackupConfirmed=false;
 $("navLinkBackup").onclick=exportBackup;
+$("navLinkAutoScan").onclick=()=>scanLegacyFundNav();
+$("navLinkPanel").addEventListener("toggle",()=>{
+  if($("navLinkPanel").open&&!navConsentScanDone&&!navConsentScanInFlight)scanLegacyFundNav();
+});
+$("navQuickLink").onclick=()=>{
+  document.querySelector('[data-view="settingsView"]').click();
+  const panel=$("navLinkPanel");panel.open=true;
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
+};
+$("navLinkBackupConfirmed").onchange=()=>{
+  navConsentBackupConfirmed=$("navLinkBackupConfirmed").checked;
+};
 $("navLinkClose").onclick=$("navLinkLater").onclick=()=>$("navLinkDlg").close();
 $("navLinkSearch").onclick=()=>searchLegacyFundNav();
 $("navLinkQuery").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchLegacyFundNav()}});
@@ -1347,27 +1362,65 @@ function renderWhatIf(rows,valuationIncomplete,fxEstimate){
   update();
 }
 
+async function scanLegacyFundNav(){
+  if(navConsentScanInFlight)return navConsentScanInFlight;
+  const funds=state.holdings.filter(h=>h.assetType==="fund"&&!h.navBinding);
+  if(!funds.length){navConsentScanDone=true;navConsentScanStatus="Kaikilla rahastoilla on NAV-sidonta tai rahastoja ei ole.";renderNavConsentList();return}
+  navConsentScanStatus="Etsitään "+funds.length+" rahastolle NAV-ehdokkaita…";
+  const button=$("navLinkAutoScan");button.disabled=true;renderNavConsentList();
+  navConsentScanInFlight=(async()=>{
+    try{
+      const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
+      navConsentReader??=createFundBackup();
+      const results=await navConsentReader.suggest(funds);
+      // Do not change holdings; proposals exist only in this memory session.
+      const ids=new Set(state.holdings.filter(h=>h.assetType==="fund"&&!h.navBinding).map(h=>String(h.id)));
+      navConsentProposals=new Map(results.filter(r=>ids.has(String(r.id))).map(r=>[String(r.id),r]));
+      navConsentScanDone=true;
+      const suggested=results.filter(r=>r.candidates?.length).length;
+      navConsentScanStatus=suggested+"/"+funds.length+
+        " rahastolle löytyi ehdokkaita. Tarkista nimi, ISIN, osuuslaji ja valuutta. "+
+        "Lähde on kokeellinen; nimiosuma ei varmista pankin osuuslajia.";
+    }catch(err){
+      navConsentScanDone=false;
+      navConsentScanStatus="Automaattinen haku ei onnistunut: "+String(err?.message||err)+
+        ". Lähde saattaa estää selainpyynnöt tai olla pois käytöstä. Salkkua ei muutettu.";
+    }finally{
+      button.disabled=false;navConsentScanInFlight=null;renderNavConsentList();
+    }
+  })();
+  return navConsentScanInFlight;
+}
 function renderNavConsentList(){
-  const list=$("navLinkList"),status=$("navLinkStatus");
+  const list=$("navLinkList"),status=$("navLinkStatus"),quick=$("navQuickLink");
   if(!list||!status)return;
   const funds=state.holdings.filter(h=>h.assetType==="fund");
-  const linked=funds.filter(h=>h.navOptIn===true&&h.navBinding).length;
+  const pending=funds.filter(h=>!h.navBinding);
+  const linked=funds.length-pending.length;
   status.textContent=funds.length?funds.length+" rahastoa · "+linked+
-    " NAV-seurantaa vahvistettu · "+(funds.length-linked)+" odottaa käyttäjän valintaa.":
-    "Ei vielä rahasto-omistuksia. Voit tuoda ne nykyisellä kuvatuonnilla tai rahaston lisäyksellä.";
+    " NAV-seurantaa hyväksytty · "+pending.length+" vahvistamatta. "+
+    (navConsentScanStatus||"Avaa tämä osio: sovellus etsii ehdokkaat automaattisesti."):
+    "Ei rahasto-omistuksia. Lisää rahastot nykyisellä kuvatuonnilla tai manuaalisesti.";
+  if(quick){quick.classList.toggle("hidden",pending.length===0);
+    quick.textContent="Rahastojen NAV: "+pending.length+" vahvistamatta · etsi ehdotukset";}
   list.replaceChildren();
   for(const h of funds){
+    const proposal=navConsentProposals.get(String(h.id));
+    const suggestion=!h.navBinding?proposal?.candidates?.[0]:null;
     const row=document.createElement("div");row.className="navLinkRow";
     const left=document.createElement("div"),name=document.createElement("strong");
     name.textContent=h.name||h.symbol||"Rahasto";
     const meta=document.createElement("div");meta.className="muted";
     const current=navConsentCore?.usableNavObservation(h);
     meta.textContent=h.navBinding?
-      "ISIN "+h.navBinding.isin+" · "+(current?"≈ NAV "+current.price+" "+h.currency+" · "+current.navDate:"Käsin/vanha hinta käytössä"):
-      "NAV-tunnistus vahvistamatta · "+h.currency;
+      "ISIN "+h.navBinding.isin+" · "+(current?"≈ NAV "+current.price+" "+h.currency+" · "+current.navDate:"Vanha hinta käytössä / NAV odottaa"):
+      suggestion?
+        "Ehdotus: "+suggestion.name+" · "+suggestion.isin+" · "+suggestion.currency+
+          " · "+(proposal?.ambiguous?"useita samankaltaisia osumia":"tarkista osuuslaji"):
+        (navConsentScanDone?"Ei varmaa nimiosumaa · voi hakea käsin":"Odottaa tunnistusta · "+h.currency);
     left.append(name,meta);
     const action=document.createElement("button");action.type="button";
-    action.textContent=h.navBinding?"Poista NAV":"Vahvista NAV";
+    action.textContent=h.navBinding?"Poista NAV":suggestion?"Tarkista ehdotus":"Hae / tarkista";
     action.onclick=()=>h.navBinding?removeLegacyNavConsent(h.id):openLegacyNavConsent(h.id);
     row.append(left,action);list.append(row);
   }
@@ -1377,13 +1430,47 @@ function openLegacyNavConsent(id){
   if(!h)return;
   navConsentCurrentId=id;navConsentSearchSerial++;
   $("navLinkQuery").value=h.name||"";
-  $("navLinkBackupConfirmed").checked=false;
+  $("navLinkBackupConfirmed").checked=navConsentBackupConfirmed;
   $("navLinkHolding").textContent="Vanha omistus: "+(h.name||h.symbol)+
     " · "+n(h.quantity)+" osuutta · keskihinta "+n(h.buyPrice)+" "+h.currency+
     " · "+displayAccount(h)+". Nämä tiedot eivät muutu.";
   $("navLinkCandidates").replaceChildren();
-  $("navLinkSearchStatus").textContent="Hae nimen perusteella ja tarkista oikea osuuslaji ennen hyväksyntää.";
   $("navLinkDlg").showModal();
+  const proposal=navConsentProposals.get(String(id));
+  if(proposal?.candidates?.length){
+    $("navLinkSearchStatus").textContent="Löytyi "+proposal.candidates.length+
+      " ehdotusta. Tarkista oikea osuuslaji pankista, ei vain nimen perusteella.";
+    showLegacyNavCandidates(proposal.candidates,h);
+  }else{
+    $("navLinkSearchStatus").textContent="Valmista ehdokasta ei löytynyt. Kokeile nimen lyhyempää osaa.";
+  }
+}
+function showLegacyNavCandidates(rows,h){
+  const box=$("navLinkCandidates");box.replaceChildren();
+  let shown=0;
+  const more=document.createElement("button");more.type="button";
+  more.onclick=()=>showMore();box.append(more);
+  function showMore(){
+    const top=Math.min(rows.length,shown+12);
+    for(const c of rows.slice(shown,top)){
+      const b=document.createElement("button");b.type="button";
+      const title=document.createElement("strong");title.textContent=c.name||"Nimi puuttuu";
+      const detail=document.createElement("small");detail.textContent=[
+        c.isin,c.currency,"Osuuslaji: "+(c.shareClass||"ei ilmoitettu"),
+        c.navDate?"≈ NAV "+c.price+" · "+c.navDate:"NAV puuttuu"
+      ].join(" · ");
+      b.append(title,detail);
+      const existing=normalizedIdText(h.instrument?.isin||h.isin);
+      if(c.currency!==h.currency||(existing&&existing!==c.isin)){
+        b.disabled=true;b.title="Valuutta tai aiempi ISIN on ristiriidassa ehdotuksen kanssa";
+      }else b.onclick=()=>acceptLegacyNavConsent(c);
+      box.insertBefore(b,more);
+    }
+    shown=top;
+    more.textContent="Näytä lisää ("+(rows.length-shown)+" jäljellä)";
+    more.hidden=shown>=rows.length;
+  }
+  showMore();
 }
 async function searchLegacyFundNav(){
   const serial=++navConsentSearchSerial;
@@ -1399,28 +1486,8 @@ async function searchLegacyFundNav(){
     const rows=await navConsentReader.search(query,{limit:100});
     if(serial!==navConsentSearchSerial||!$("navLinkDlg").open)return;
     status.textContent=rows.length?rows.length+" ehdokasta. Valitse vain pankin osuuslajia vastaava rahasto.":
-      "Ei nimiosumia. Voit yrittää lyhyemmällä hakusanalla tai ohittaa toistaiseksi.";
-    let shown=0;
-    const more=document.createElement("button");more.type="button";
-    more.onclick=()=>showMore();box.append(more);
-    function showMore(){
-      for(const c of rows.slice(shown,shown+12)){
-        const b=document.createElement("button");b.type="button";
-        const title=document.createElement("strong");title.textContent=c.name;
-        const detail=document.createElement("small");detail.textContent=[
-          c.isin,c.currency,"Osuuslaji: "+(c.shareClass||"ei ilmoitettu"),
-          c.navDate?"≈ NAV "+c.price+" · "+c.navDate:"NAV puuttuu"
-        ].join(" · ");
-        b.append(title,detail);
-        if(c.currency!==h.currency){b.disabled=true;b.title="Valuutta ei vastaa omistusta";}
-        else b.onclick=()=>acceptLegacyNavConsent(c);
-        box.insertBefore(b,more);
-      }
-      shown=Math.min(rows.length,shown+12);
-      more.textContent="Näytä lisää ("+(rows.length-shown)+" jäljellä)";
-      more.hidden=shown>=rows.length;
-    }
-    showMore();
+      "Ei nimiosumia. Kokeile lyhyempää hakusanaa.";
+    showLegacyNavCandidates(rows,h);
   }catch(e){if(serial===navConsentSearchSerial)status.textContent="Nimihaku epäonnistui: "+String(e?.message||e)}
   finally{btn.disabled=false}
 }
@@ -1455,6 +1522,7 @@ async function acceptLegacyNavConsent(c){
     validateBackupForRestore(candidate,{allowMissingCurrency:true});
     localStorage.setItem(KEY,JSON.stringify(candidate));
     state=candidate;navConsentCurrentId=null;navConsentSearchSerial++;
+    navConsentProposals.delete(String(h.id));
     $("navLinkDlg").close();render();
     refreshMarket(false).catch(()=>{});
   }catch(e){status.textContent="Mitään ei tallennettu: "+String(e?.message||e)}
