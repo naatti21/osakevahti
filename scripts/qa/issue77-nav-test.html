@@ -14,6 +14,12 @@ label{display:block;font-weight:700;margin:16px 0 5px}
 input,button{width:100%;font-size:17px;border:1px solid #36414c;border-radius:11px;padding:13px;background:#151d26;color:white}
 button{margin-top:16px;background:#76d2a0;color:#08120e;font-weight:800}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#141b22;border:1px solid #36414c;border-radius:12px;padding:14px}
+#nameResults{display:grid;gap:10px;margin:16px 0}
+#nameResults button{margin:0;text-align:left;background:#182d28;color:#e7f5ed;border-color:#395f52;font-weight:500}
+#nameResults strong{display:block;font-size:15px}
+#nameResults small{display:block;margin-top:4px}
+#searchByName{background:#2eaf77;color:#061711}
+#probe{border-top:1px solid #36414c;padding-top:12px}
 a{color:#76d2a0}
 small{color:#aab7c4}
 </style>
@@ -22,8 +28,15 @@ small{color:#aab7c4}
 <main>
 <h1>Osakevahti QA · kokeellinen NAV-haku</h1>
 <p>Vain omaan testikäyttöön. Tämä on erillinen, vain lukeva kokeilu: <strong>se ei lisää rahastoa, päivitä salkkua eikä tallenna mitään.</strong></p>
+<form id="nameSearch">
+<label for="nameQuery">Hae rahastoa nimellä – aloita tästä</label>
+<input id="nameQuery" type="search" maxlength="80" placeholder="Esim. Handelsbanken USA Indeksi" required>
+<button type="submit" id="searchByName">Etsi nimellä</button>
+</form>
+<p><small>Valitse oikea rahasto ja osuuslaji. Nimen osuma on ehdotus, ei vahvistus. Jos et löydä, kokeile nimen lyhyempää osaa.</small></p>
+<div id="nameResults" role="status" aria-live="polite"></div>
 <form id="probe">
-<label for="isin">Rahaston ISIN</label>
+<label for="isin">ISIN (täyttyy valinnasta, voit myös syöttää käsin)</label>
 <input id="isin" maxlength="12" minlength="12" autocomplete="off" autocapitalize="characters" placeholder="12-merkkinen ISIN" required>
 <label for="currency">Osuuslajin valuutta</label>
 <input id="currency" maxlength="3" minlength="3" value="EUR" autocomplete="off" autocapitalize="characters" required>
@@ -40,6 +53,47 @@ const form=document.querySelector("#probe");
 const result=document.querySelector("#result");
 const button=document.querySelector("#check");
 const svc=createFundBackup({storage:null});
+const searchForm=document.querySelector("#nameSearch");
+const nameResults=document.querySelector("#nameResults");
+const searchButton=document.querySelector("#searchByName");
+searchForm.addEventListener("submit",async e=>{
+  e.preventDefault();
+  searchButton.disabled=true;
+  nameResults.textContent="Haetaan julkisen NAV-listan nimistä…";
+  try{
+    const rows=await svc.search(document.querySelector("#nameQuery").value,{limit:12});
+    nameResults.replaceChildren();
+    if(!rows.length){
+      nameResults.textContent="Ei nimiosumia. Kokeile rahaston nimen lyhyempää osaa tai tarkista nimi pankista.";
+      return;
+    }
+    const intro=document.createElement("p");
+    intro.textContent=rows.length+" ehdokasta. Tarkista osuuslaji ja valuutta pankista ennen valintaa.";
+    nameResults.append(intro);
+    for(const c of rows){
+      const button=document.createElement("button");
+      button.type="button";
+      const title=document.createElement("strong");
+      title.textContent=c.name;
+      const details=document.createElement("small");
+      details.textContent=[c.isin,c.currency,
+        "Osuuslaji: "+(c.shareClass||"ei ilmoitettu"),
+        "NAV "+c.navDate].join(" · ");
+      button.append(title,details);
+      button.onclick=()=>{
+        document.querySelector("#isin").value=c.isin;
+        document.querySelector("#currency").value=c.currency;
+        result.textContent="Valittu nimiehdokas: "+c.name+" · "+c.isin+
+          ". Tämä ei vielä vahvista instrumenttia. Tarkista osuuslaji ja paina NAV-hakua.";
+        document.querySelector("#probe").scrollIntoView({behavior:"smooth",block:"start"});
+      };
+      nameResults.append(button);
+    }
+  }catch(err){
+    nameResults.textContent="Nimihaku ei onnistunut: "+String(err?.message||err)+
+      ". ISIN-haku tai manuaalinen NAV on edelleen mahdollinen.";
+  }finally{searchButton.disabled=false;}
+});
 form.addEventListener("submit",async e=>{
   e.preventDefault();
   const isin=document.querySelector("#isin").value.trim().toUpperCase();
