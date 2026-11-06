@@ -41,8 +41,22 @@ test('Live public-name candidate trace checks user-facing search against real so
  await page.locator('#nameQuery').fill('Handelsbanken');
  await page.locator('#searchByName').click();
  await expect(page.locator('#searchByName')).toBeEnabled({timeout:20000});
- const count=await page.locator('#nameResults button').count();
+ const choices=page.locator('#nameResults button:not(#showMoreFundNames)');
+ const count=await choices.count();
  const desc=(await page.locator('#nameResults').innerText()).slice(0,240);
  console.log('QA_REAL_UI_NAME_SEARCH',JSON.stringify({count,desc}));
- expect(count,'Handelsbanken public fund list contains bank funds, name-first search should show at least one').toBeGreaterThan(0);
+ expect(count,'Public names should yield visible candidates').toBeGreaterThan(0);
+ const more=page.locator('#showMoreFundNames');
+ if(await more.isVisible()){
+   for(let i=0;i<12&&await more.isVisible();i++)await more.click();
+ }
+ await expect(page.locator('#nameResults')).toContainText('Handelsbanken USA Indeksi');
+ await page.locator('#nameQuery').fill('Handelsbanken USA Indeksi');
+ await page.locator('#searchByName').click();
+ await expect(page.locator('#searchByName')).toBeEnabled({timeout:20000});
+ await expect(page.locator('#nameResults')).toContainText('Handelsbanken USA Indeksi');
+ await expect(page.locator('#nameResults')).toContainText('A1 (nimestä poimittu');
+ console.log('QA_REAL_UI_PAGINATION',JSON.stringify({
+   nameSearchFound:true,pagedAllBrands:true,shareClassFromName:true
+ }));
 });
