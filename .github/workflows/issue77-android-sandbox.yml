@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QA_GENERATION: v1
+  QA_GENERATION: v2
   PREVIEW_BRANCH: issue77-android-sandbox
   PROJECT: osakevahti-alpha-naatti21
 
@@ -47,15 +47,15 @@ jobs:
           test -f dist-alpha/engine/isin.mjs
           test -f dist-alpha/nav-test.html
           grep -q 'Osakevahti QA' dist-alpha/index.html
-          grep -q "issue77-qa-v1" dist-alpha/sw.js
+          grep -q "issue77-qa-v2" dist-alpha/sw.js
       - name: Archive separate-origin QA package (no user data)
         run: |
           cd dist-alpha
-          zip -qr ../osakevahti-issue77-qa-v1.zip .
+          zip -qr ../osakevahti-issue77-qa-v2.zip .
       - uses: actions/upload-artifact@v4
         with:
-          name: issue77-android-qa-v1-static
-          path: osakevahti-issue77-qa-v1.zip
+          name: issue77-android-qa-v2-static
+          path: osakevahti-issue77-qa-v2.zip
           retention-days: 14
           if-no-files-found: error
       - name: Read-only public identity, FX and fund-feed probes (advisory)
@@ -110,8 +110,8 @@ jobs:
           node --input-type=module <<'NODE'
           const base='https://issue77-android-sandbox.osakevahti-alpha-naatti21.pages.dev';
           const checks=[
-            ['/', 'Osakevahti QA – TESTI v1'],
-            ['/sw.js','osakevahti-shell-v2.17.9-issue77-qa-v1'],
+            ['/', 'Osakevahti QA – TESTI v2'],
+            ['/sw.js','osakevahti-shell-v2.17.9-issue77-qa-v2'],
             ['/engine/fund-review.mjs','searchFundCandidates'],
             ['/manifest.webmanifest','issue77-qa'],
             ['/nav-test.html','kokeellinen NAV-haku']
