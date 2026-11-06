@@ -600,10 +600,10 @@ $("newFundSearch").onclick=async()=>{
     try{
       const {createFundBackup}=await import("./engine/public-nav-backup.mjs");
       alphaPublicNavReader??=createFundBackup();
-      const matches=await alphaPublicNavReader.search(query,{limit:12});
+      const matches=await alphaPublicNavReader.search(query,{limit:100});
       rows=matches.map(c=>({name:c.name,isin:c.isin,currency:c.currency,
         shareClass:c.shareClass,provider:"rahastoraportti-public-personal-backup",
-        evidence:c.evidence+" · NAV "+c.navDate}));
+        evidence:c.evidence+" · "+(c.navDate?"NAV "+c.navDate:"NAV-päivä ei saatavilla")}));
     }catch{publicUnavailable=true;}
   }
   if(sequence!==fundSearchSeq||!$("newFundDialog").open)return;
@@ -612,9 +612,18 @@ $("newFundSearch").onclick=async()=>{
     publicUnavailable&&gatewayUnavailable?
       "Nimihakua ei saatu verkosta. Kokeile myöhemmin tai jatka käsin.":
       "Rahastoa ei löydy näistä lähteistä. Kokeile nimen lyhyempää osaa tai jatka käsin.";
-  for(const candidate of rows){
+  const list=$("newFundCandidates");
+  const more=document.createElement("button");more.type="button";more.id="newFundShowMore";
+  list.append(more);let shown=0;
+  function renderMore(){
+   for(const candidate of rows.slice(shown,shown+12)){
    const entry=document.createElement("div"),details=document.createElement("p"),button=document.createElement("button");button.type="button";
-   details.textContent=[candidate.name,"Osuuslaji: "+(candidate.shareClass||"puuttuu"),candidate.isin,candidate.currency,"Lähde: "+candidate.provider,"Näyttö: "+candidate.evidence].join(" · ");
+   const publicSource=candidate.provider==="rahastoraportti-public-personal-backup";
+   details.textContent=[candidate.name,
+      "Osuuslaji: "+(candidate.shareClass?
+        candidate.shareClass+(publicSource?" (rahaston nimestä poimittu; tarkista pankista)":""):
+        "ei vahvistettu"),
+      candidate.isin,candidate.currency,"Lähde: "+candidate.provider,"Näyttö: "+candidate.evidence].join(" · ");
    button.textContent="Valitse "+candidate.name;
    button.onclick=async()=>{fundCandidate=candidate;$("newFundName").value=candidate.name;$("newFundClass").value=candidate.shareClass;$("newFundIsin").value=candidate.isin;
     if(![...$("newFundCurrency").options].some(o=>o.value===candidate.currency)&&supportedHoldingCurrency(candidate.currency)){const o=document.createElement("option");o.value=o.textContent=candidate.currency;$("newFundCurrency").append(o);}
@@ -624,8 +633,13 @@ $("newFundSearch").onclick=async()=>{
     const preview=await previewFundSource(candidate,{gatewayUrl:MARKET_WORKER_URL});
     if(fundCandidate===candidate&&$("newFundDialog").open)$("newFundSourceStatus").textContent=preview.issues[0]?.reason||"Lähdehavainto vaatii erillisen hyväksynnän. Käytä tässä vaiheessa KÄSIN NAV -reittiä.";
    };
-   entry.append(details,button);$("newFundCandidates").append(entry);
+   entry.append(details,button);list.insertBefore(entry,more);
+   }
+   shown=Math.min(rows.length,shown+12);
+   more.textContent="Näytä lisää rahastoja ("+(rows.length-shown)+" jäljellä)";
+   more.hidden=shown>=rows.length;
   }
+  more.onclick=renderMore;renderMore();
  }catch(err){if(sequence===fundSearchSeq)$("newFundSearchStatus").textContent=err.name==="AbortError"?"Haku keskeytyi. KÄSIN-reitti on käytettävissä.":err.message;}
  finally{clearTimeout(timeout);}
 };
