@@ -7,7 +7,7 @@ const root=resolve('dist-alpha');
 const paths=[
   'index.html','image-reader.js','alpha-import-engine.mjs',
   'engine/acceptance.mjs','engine/numbers.mjs','engine/csv.mjs','engine/holdings.mjs',
-  'engine/public-nav-backup.mjs',
+  'engine/public-nav-backup.mjs','engine/nav-consent.mjs',
   'sw.js','manifest.webmanifest',
   'icon-192.png','icon-512.png'
 ];
@@ -46,8 +46,9 @@ test('Alpha deployment headers discourage indexing and do not copy user data',as
   assert.match(robots,/Disallow: \//);
   const sw=await readFile(join(root,'sw.js'),'utf8');
   assert.match(sw,/startsWith\("osakevahti-shell-"\)/);
-  assert.match(sw,/if \(res\.ok\)/);
-  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-public-nav1"/);
+  assert.match(sw,/caches\.match\(/);
+  assert.doesNotMatch(sw,/await cache\.put\(/);
+  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-nav-confirm1"/);
   assert.ok(!(await readdir(root)).some(f=>/\.(json|zip|env|bak)$/i.test(f)));
 });
 
