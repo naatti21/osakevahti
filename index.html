@@ -181,6 +181,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 .fundMatchAmbiguous{color:var(--warn);margin-top:8px;font-size:12px;line-height:1.45}
 .fundNewBox{padding:12px;margin:10px 0;background:#111d25;border:1px solid #40645a;border-radius:12px;display:grid;gap:7px}
 .fundNewBox.hidden{display:none}.fundNewBox label{margin-top:6px}.fundNewBox input[type="checkbox"]{accent-color:#76d0a3}
+#confirmImportReview:disabled{opacity:.46;filter:grayscale(1);cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -3094,7 +3095,9 @@ function renderImportReview(){
     : research?" · Engine: ehdokastarkistus valmis":"";
   $("importReviewSummary").className=`statusBox ${unresolved?"":"statusOk"}`;
   $("importReviewSummary").textContent=`${pendingImport.rows.length} riviä · ${additions} lisätään · ${updates} päivitetään${unresolved?` · ${unresolved} vaatii tarkistuksen`:""}${batchConflict?" · Ristiriitaiset rivit: korjaa lähde ennen tuontia.":""}${researchWarning}`;
-  $("confirmImportReview").disabled=unresolved>0;
+  const canCommit=unresolved===0&&additions+updates>0;
+  $("confirmImportReview").disabled=!canCommit;
+  $("confirmImportReview").textContent=canCommit?"Hyväksy tuonti":"Tuonti estetty – tarkista rivit";
   $("importReviewList").innerHTML=pendingImport.rows.map((x,idx)=>{
     const h=x.holding,i=h.instrument||{};
     const action=actions[idx];
@@ -3318,7 +3321,10 @@ function commitPendingImport(){
     const src=observedSourceIsin(row.holding),verified=normalizedIdText(row.holding?.instrument?.isin);
     return !!(src&&verified&&src!==verified);
   }))return;
-  if(!pendingImport||batchImportConflicts(pendingImport.rows)||pendingImport.rows.some(x=>x.holding?.importMeta?.validationErrors?.length||importActionForRow(x).kind==="review"))return;
+  if(!pendingImport||!pendingImport.rows.length||batchImportConflicts(pendingImport.rows)||
+    pendingImport.rows.some(x=>
+      !Number.isFinite(x.holding?.quantity)||x.holding.quantity<=0||
+      x.holding?.importMeta?.validationErrors?.length||importActionForRow(x).kind==="review"))return;
   // A previous observation cannot be overwritten by a different unverified ISIN.
   if(pendingImport.rows.some(r=>state.holdings.some(old=>simpleListingKey(old) && simpleListingKey(old)===simpleListingKey(r.holding) && !distinctKnownMic(old,r.holding) && sourceIsinConflict(old,r.holding))))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
@@ -3648,7 +3654,9 @@ function screenshotCandidatesFromLines(sourceLines,{requireStrongUnit=false}={})
   const isType=text=>/(?:asset\s*type|instrument\s*type|instrumenttilaji|laji)\s*[:\-]?\s*(fund|etf|stock|rahasto|osake)\b/i.test(text);
   const isIdentifiers=text=>/^\s*(?:isin|mic|exchange|market|pörssi|porssi)\s*[:\-]?\s+/i.test(text);
   const isSummary=text=>/^\s*(?:market\s+value|position\s+value|account\s+value|total\s+value|markkina.arvo|arvo\s+yhteensä|yhteensä|total|portfolio\s+value)\b/i.test(text);
-  const isDocumentNoise=text=>/^\s*(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä oleva saldo|käytettävissä|suodata|n suodata|muutos\s+kurssi|katsaus\s+maksa|portfolio\s+overview|holdings(?:\s+summary)?|positions(?:\s+summary)?)\b/i.test(text);
+  const isDocumentNoise=text=>
+    /^(?:sijoitukset|osakkeet|rahastot|arvonmuutos|käytettävissä(?: oleva saldo)?|suodata|n suodata|muutos\\s+kurssi|katsaus\\s+maksa|portfolio\\s+overview|holdings(?:\\s+summary)?|positions(?:\\s+summary)?)\\b/i.test(text) ||
+    /^(?:aot\\s+osake[-\\s]+ja\\s+rahastosalkku|omistukset\\s+lisätietoja|omistukset\\s+tapahtumat|yleisnäkymä\\s+seurantalistat|seurantalistat\\s+etsi|etsi\\s+fiidi|fiidi\\s+markkina|lisätietoja\\s+tapahtumat)\\b/i.test(text);
   const isField=text=>!!(explicitTickerFromOcr(text)||priceFromOcrLine(text)||isType(text)||quantityFromOcrLine(text)||isIdentifiers(text)||isSummary(text)||isDocumentNoise(text)||/^\s*(?:currency|valuutta)\b/i.test(text));
   const names=[];
   for(let i=0;i<lines.length;i++){
@@ -3803,6 +3811,19 @@ async function runOcrCandidateImport(ocr,source){
   if(!candidates.length){
     $("imageImportStatus").className="statusBox statusBad";
     $("imageImportStatus").textContent="Teksti saatiin kuvasta, mutta yhtään omistusriviä ei tunnistettu riittävän varmasti. Salkkua ei muutettu. Voit korjata poimittua tekstiä ja yrittää uudelleen.";
+    return;
+  }
+  // A screenshot with UI headings or missing unit evidence is not a holding list.
+  // Do not display a huge modal of guessed instruments. Ask for a tighter crop
+  // or editing the OCR text, rather than allowing a risky partial import.
+  const unanchored=candidates.filter(x=>!Number.isFinite(x.quantity)||x.quantity<=0);
+  if(unanchored.length){
+    $("imageImportStatus").className="statusBox statusBad";
+    $("imageImportStatus").textContent=
+      "OCR poimi "+candidates.length+" nimiehdokasta, mutta "+
+      unanchored.length+" riviltä puuttuu luotettava omistusmäärä (kpl). "+
+      "Kuvassa voi olla valikkoja tai otsikoita. Rajaa kuvakaappaus omistusriveihin "+
+      "tai korjaa poimittu teksti. Tuontia ei aloitettu eikä salkkua muutettu.";
     return;
   }
   const invalidCount=candidates.filter(x=>x.validationErrors?.length).length;
