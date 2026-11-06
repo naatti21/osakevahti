@@ -670,7 +670,19 @@ $("newFundForm").onsubmit=async e=>{
         previous.instrument?.shareClass===h.instrument.shareClass&&previous.experimentalNavObservation)
           h.experimentalNavObservation={...previous.experimentalNavObservation};
     }
-    const candidate={...state,holdings:manualFundEditingId?state.holdings.map(old=>old.id===manualFundEditingId?h:old):[...state.holdings,h]};
+    // Keep unrelated legacy/FX fields on edit, but never inherit a stale
+    // experimental overlay after opt-out, identity change or manual NAV edit.
+    const savedHolding=manualFundEditingId?{
+      ...state.holdings.find(old=>old.id===manualFundEditingId),...h
+    }:h;
+    if(!wantsAuto||!h.experimentalNavObservation){
+      delete savedHolding.experimentalNavObservation;
+      delete savedHolding.experimentalNavDiagnostic;
+    }
+    if(!wantsAuto)delete savedHolding.experimentalAutoNav;
+    const candidate={...state,holdings:manualFundEditingId?
+      state.holdings.map(old=>old.id===manualFundEditingId?savedHolding:old):
+      [...state.holdings,savedHolding]};
     // Persist first: a quota failure preserves both portfolio and review fields.
     try{localStorage.setItem(KEY,JSON.stringify(candidate))}catch{throw Error("Tallennus epäonnistui. Omistuksia ei muutettu; tarkistus säilyy.")}
     state=candidate;render();$("newFundDialog").close();
@@ -1136,12 +1148,14 @@ function holdingValuationQuality(h,p,fx){
   if(h.assetType==="fund"){
     const key=String(h.fundQuoteKey||h.symbol||"").trim();
     if(fundSourceIdentity(key)&&!fundBindingMatches(h,key))return unavailable("NAV-lähde on ristiriidassa instrumentin tai osuuslajin kanssa");
-    const info=fundNavDateInfo(h.navDate);
+    const experiment=usableExperimentalNav(h);
+    const info=fundNavDateInfo(experiment?.navDate||h.navDate);
     if(!info)reasons.push("NAV-päivä puuttuu");
     else if(info.days>FUND_NAV_MAX_AGE_DAYS)reasons.push("NAV on yli viikon vanha");
-    if(!fundBindingMatches(h,key))reasons.push("NAV-lähteen identiteetti on vahvistamatta");
+    if(experiment)reasons.push("ISIN-NAV on kokeellinen eikä ulkoisesti riippumattomasti varmennettu");
+    else if(!fundBindingMatches(h,key))reasons.push("NAV-lähteen identiteetti on vahvistamatta");
   }else if(!validQuoteTime(h.quoteTimestamp)||Date.now()-Number(h.quoteTimestamp)>96*3600000||quoteIsStaleWhileOpen(h))reasons.push("kurssin ajantasaisuus on vahvistamatta");
-  if(!validPositive(h.currentPrice))reasons.push("hinta on syötetty käsin");
+  if(!validPositive(h.currentPrice)&&!usableExperimentalNav(h))reasons.push("hinta on syötetty käsin");
   if(h.quoteHealth?.status==="failed")reasons.push("viimeisin hintahaku epäonnistui; käytössä aiempi hinta");
   return {status:reasons.length?"indicative":"verified",reason:reasons.join("; ")};
 }
@@ -2549,6 +2563,7 @@ async function runMarketRefresh(showErrors=false){
     $("refreshFeedback").textContent="Päivitetään kursseja, rahastoja ja valuuttoja…";
   }
   let stockOk=0, stockFail=0, fundOk=0, fundFail=0, fundUnlinked=0, firstError="";
+  let experimentalNavChecked=0,experimentalNavOk=0;
   const fx={};
   const fxSuccess=new Set(),fxFailures=new Map();
   const stocks=state.holdings.filter(h=>h.assetType!=="fund");
@@ -2740,6 +2755,7 @@ async function runMarketRefresh(showErrors=false){
       if(experimental.length){
         alphaPublicNavReader??=navModule.createFundBackup();
         for(const h of experimental){
+          experimentalNavChecked++;
           const old=h.experimentalNavObservation;
           const tested={...h,currentPrice:old?.price||h.manualPrice,
             navDate:old?.navDate||h.navDate};
@@ -2753,6 +2769,7 @@ async function runMarketRefresh(showErrors=false){
               checkedAt:Date.now()
             };
             h.experimentalNavDiagnostic=null;
+            experimentalNavOk++;
           }else{
             h.experimentalNavDiagnostic={reason:candidate.reason||
               (candidate.navDate?"older_than_manual_nav":"not_accepted"),
@@ -2778,6 +2795,7 @@ async function runMarketRefresh(showErrors=false){
     fundsUpdated:fundOk,
     fundsTracked:funds.length,
     fundsUnlinked:fundUnlinked,
+    experimentalNavChecked,experimentalNavOk,
     snapshot:snapshotCount,
     failed:stockFail+fundFail,
     workerOk:!!workerData,
@@ -2798,7 +2816,7 @@ async function runMarketRefresh(showErrors=false){
     const feedback=$("refreshFeedback");
     const someFailed=stockFail>0||fundFail>0||fxFailures.size>0;
     feedback.className=someFailed?"statusBox statusBad":"statusBox statusOk";
-    const summary=`Päivitys valmis: osakkeet ${stockOk}/${stocks.length}, rahastot ${fundOk}/${funds.length}, valuuttaparit ${fxSuccess.size}/${fxSuccess.size+fxFailures.size}.`;
+    const summary=`Päivitys valmis: osakkeet ${stockOk}/${stocks.length}, rahastot ${fundOk}/${funds.length}, kokeellinen NAV ${experimentalNavOk}/${experimentalNavChecked}, valuuttaparit ${fxSuccess.size}/${fxSuccess.size+fxFailures.size}.`;
     const fxDetail=fxFailures.size
       ? " Valuuttakurssien virheet: "+[...fxFailures].map(([pair,error])=>pair+" ("+error+")").join("; ")+"."
       : "";

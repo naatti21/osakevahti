@@ -8,7 +8,7 @@ const end=s.indexOf('function priceIssue(h){',start);
 assert.ok(start>0&&end>start);
 const helpers=s.slice(start,end);
 const context={normalizedIdText:x=>String(x??'').trim().toUpperCase(),
- validImportIsin:x=>x==='IE00B03HD191',verifiedNavDate:x=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(x)),
+ validImportIsin:x=>x==='IE00B03HD191',verifiedNavDate:x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x)),
  fundNavDateInfo:x=>({date:x,days:1,assumedYear:false}),
  FUND_NAV_MAX_AGE_DAYS:7,
  validPositive:x=>typeof x==='number'&&Number.isFinite(x)&&x>0};
@@ -48,4 +48,6 @@ test('UI has a reversible manual-NAV opt in and no unreviewed publication claim'
  assert.ok(s.includes('KOKEILU-NAV'));assert.ok(s.includes('sourceId:"rahastoraportti-public-experiment"'));
  assert.ok(s.includes('if(wantsAuto)refreshMarket(false)'));
  assert.ok(s.includes('h.experimentalNavObservation'));
+ assert.ok(s.includes('experimentalNavChecked,experimentalNavOk'));
+ assert.ok(s.includes('delete savedHolding.experimentalNavObservation'));
 });
