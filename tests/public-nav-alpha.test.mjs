@@ -139,7 +139,7 @@ test("name search suggests separate ISIN share classes, never silently selects o
   assert.equal(calls[0].url,FUND_BACKUP_URL);
   assert.equal(JSON.stringify(calls).includes("Handelsbanken"),false);
   // Both NAV and name search share the same single global public read.
-  assert.equal((await reader.lookup(fund())).status,"candidate");
+  assert.equal((await reader.lookup(fund({currentPrice:null}))).status,"candidate");
   assert.equal(calls.length,1);
 });
 test("name search uses word prefixes but never invents a missing ISIN or class",async()=>{
