@@ -4,7 +4,7 @@
  */
 import {readFile, writeFile, copyFile} from 'node:fs/promises';
 const generation=process.env.QA_GENERATION||'v1';
-if(!['v1','v2','v3','v4','v5'].includes(generation))throw Error('Only explicit v1-v5 QA generations are accepted');
+if(!['v1','v2','v3','v4','v5','v6'].includes(generation))throw Error('Only explicit v1-v6 QA generations are accepted');
 const dir='dist-alpha/';
 async function replaceRequired(path,oldText,newText){
   const old=await readFile(dir+path,'utf8');
