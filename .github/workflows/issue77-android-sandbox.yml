@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install only Node test dependencies (no duplicate Chromium)
+        run: npm install --no-audit --no-fund --package-lock=false
       - name: Build locked source package before QA checks
         run: node scripts/build-alpha-pages.mjs
       - name: Fast source and backup regression checks (full PR #96 CI is already green)
