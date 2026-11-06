@@ -73,11 +73,18 @@ test("legacy fund source linkage requires backup acknowledgment, explicit user c
  expect(removed.currentPrice).toBe(350.01);
  expect(requests()).toBe(1);
 });
-test("existing positions are never linked automatically on launch",async({page})=>{
+test("existing positions get proposals automatically but never link without consent",async({page})=>{
  const requests=await setup(page);
  await expect(page.locator("#navLinkStatus")).toContainText("0 NAV-seurantaa");
- await expect(page.locator("#navLinkDlg")).not.toBeVisible();
+ await expect(page.locator("#navLinkStatus")).toContainText("1/2 rahastolle löytyi ehdokkaita");
+ await expect(page.locator("#navLinkList button").first()).toHaveText("Tarkista ehdotus");
+ await expect(page.locator("#navLinkList button").nth(1)).toHaveText("Hae / tarkista");
+ await page.locator("#navLinkList button").first().click();
+ await expect(page.locator("#navLinkCandidates button").first()).toContainText("Nordnet Suomi Indeksi");
+ await expect(page.locator("#navLinkQuery")).toHaveValue("Nordnet Suomi Indeksi");
+ await page.locator("#navLinkLater").click();
  const h=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
  expect(h.every(x=>!x.navBinding)).toBe(true);
- expect(requests()).toBe(0);
+ expect(requests()).toBe(1); // a single shared public download, never per holding
 });
+
