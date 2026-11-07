@@ -108,11 +108,18 @@ export function auditFilingEvidence(matrix,{identity,currency,receipts=[],years=
     value:fact.value,unit:fact.unit,fiscalYear:year,concept:fact.concept,
     evidenceClass:receipt.format==='xbrl-json'?'structured-source':'issuer-html'};
    if(receipt.format==='issuer-html'){
-    // The existing HTML reader uses a 1e6 multiplier supplied by the
-    // caller. Until this can be tied to the selected table's unit
-    // declaration, require explicit review even if all cells parse.
+    // Never graduate issuer HTML to independently verified just because
+    // a monetary scale was read from the actual statement heading.
+    const proof=fact.scaleEvidence;
+    const sourceScaleProven=proof?.status==='ok'&&proof.sourceUrl===fact.sourceUrl&&
+     proof.tableIndex===fact.tableIndex&&
+     ['adjacent-statement-heading','inside-statement-table'].includes(proof.scope)&&
+     [1,1000,1000000,1000000000].includes(proof.multiplier)&&
+     typeof proof.declaration==='string'&&/^\((?:amounts?\s+)?in\s+(dollars|thousands|millions|billions)\b/i.test(proof.declaration);
     cells[year][metric]={...base,status:'needs-review',
-      reason:'html-table-units-and-issuer-context-require-independent-check'};
+      scaleEvidence:sourceScaleProven?proof:null,
+      reason:sourceScaleProven?'html-scale-proven-issuer-currency-and-independent-review-pending':
+       'html-scale-not-proven-from-statement'};
     counts.needsReview++;
    }else{
     cells[year][metric]={...base,status:'source-consistent',

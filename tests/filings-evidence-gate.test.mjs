@@ -91,3 +91,24 @@ test('HTML: exact fiscal year mandatory; source URL must not silently change CIK
  out=auditFilingEvidence(m,opts);
  assert.equal(out.counts.blocked,1);
 });
+
+test('HTML documented scale is carried as evidence but does not create investment approval',()=>{
+ const proof={status:'ok',sourceUrl:htmlUrl,tableIndex:8,statement:'income',
+   multiplier:1000000,scope:'adjacent-statement-heading',declaration:'(In millions)'};
+ const fact={status:'ok',value:416161000000,unit:'USD',
+  concept:'HTML:total net sales',fiscalYear:2025,sourceUrl:htmlUrl,
+  sourceTier:'issuer-html-not-xbrl',tableIndex:8,scaleEvidence:proof};
+ const m={quality:'issuer-html-not-sec',years:{2025:{revenue:fact}}};
+ const options={identity:'CIK:0000320193',currency:'USD',years:[2025],
+   asOf:now,receipts:[htmlReceipt()]};
+ const a=auditFilingEvidence(m,options);
+ assert.equal(a.cells[2025].revenue.status,'needs-review');
+ assert.equal(a.cells[2025].revenue.scaleEvidence.multiplier,1000000);
+ assert.equal(a.cells[2025].revenue.reason,
+   'html-scale-proven-issuer-currency-and-independent-review-pending');
+ assert.equal(a.counts.independentlyVerified,0);
+ fact.scaleEvidence={...proof,tableIndex:999};
+ const b=auditFilingEvidence(m,options);
+ assert.equal(b.cells[2025].revenue.reason,'html-scale-not-proven-from-statement');
+ assert.equal(b.cells[2025].revenue.scaleEvidence,null);
+});

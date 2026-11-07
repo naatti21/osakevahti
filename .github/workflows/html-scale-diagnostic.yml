@@ -1,0 +1,22 @@
+name: HTML statement scale context diagnostic (research)
+on:
+  pull_request:
+    paths:
+      - "scripts/diagnose-html-units.mjs"
+      - ".github/workflows/html-scale-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-context:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect original issuer statements for declared financial units
+        run: node scripts/diagnose-html-units.mjs
