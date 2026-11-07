@@ -16,5 +16,11 @@ test('empty, wrong class/currency, duplicate, future paid, unadjusted split fail
  assert.equal(run([event('a','2026-01-01'),event('a','2026-01-01')]).status,'unavailable');
 });
 test('proposal excluded, approved future distinct from trailing paid',()=>{
- const r=run([{...event('a','2026-12-01'),status:'approved'},{...event('b','2026-12-02'),status:'proposed'}]);assert.equal(r.trailingPaid,0);assert.equal(r.approvedFuture,.25);
+ const r=run([{...event('a','2026-12-01'),status:'approved'},{...event('b','2026-12-02'),status:'proposed'}]);assert.equal(r.trailingPaid,null);assert.equal(r.approvedFuture,.25);
+});
+
+test('different event IDs cannot duplicate one economic payment; malformed dates do not throw',()=>{
+ assert.equal(run([event('a','2026-01-01'),event('b','2026-01-01')]).status,'unavailable');
+ assert.equal(run([{...event('a','2026-01-01'),paymentDate:'2026-99-99'}]).status,'unavailable');
+ assert.equal(run([null]).status,'unavailable');
 });
