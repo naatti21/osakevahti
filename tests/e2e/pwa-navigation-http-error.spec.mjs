@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.9-alpha-nav-readerfix1';
+const CACHE = 'osakevahti-shell-v2.17.9-alpha-fund-onboard1';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
