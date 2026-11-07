@@ -7,7 +7,7 @@ const USER_AGENT='Osakevahti official-filings research https://github.com/naatti
 const TIMEOUT_MS=25000;
 async function get(url,{maxBytes=40000000}={}){
  const target=new URL(url);
- if(target.protocol!=='https:'||!['data.sec.gov','filings.xbrl.org'].includes(target.hostname))
+ if(target.protocol!=='https:'||!['data.sec.gov','filings.xbrl.org','www.microsoft.com'].includes(target.hostname))
   throw new Error('Disallowed source host');
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),TIMEOUT_MS);
@@ -50,6 +50,29 @@ async function pullOneEsef(year){
   return {status:'retrieved',year,source:url.href,report,debtConcepts};
  }catch(e){return {status:'blocked',year,source:page,error:String(e?.message||e)}}
 }
+
+// Alternate official issuer-IR source probe. This is not SEC Company Facts and
+// must never be quietly substituted for the standard-tag analysis contract.
+async function pullMicrosoftIrProbe(){
+ const years=[2025,2023,2021];
+ const result=[];
+ for(const year of years){
+  const url='https://www.microsoft.com/investor/reports/ar'+String(year).slice(2)+'/';
+  try{
+   const html=await get(url,{maxBytes:12000000});
+   const strip=s=>s.replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;|&#xA0;/gi,' ')
+     .replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
+   const rows=[...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
+     .map(m=>[...m[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+       .map(cell=>strip(cell[1])).filter(Boolean)).filter(a=>a.length);
+   const focus=rows.filter(a=>/^(total revenue|net income|net cash from operations|short-term debt|current portion of long-term debt|long-term debt)$/i.test(a[0]||''))
+    .slice(0,40);
+   result.push({year,status:'retrieved',url,byteCount:html.length,tableRows:rows.length,focusRows:focus});
+  }catch(e){result.push({year,status:'blocked',url,error:String(e?.message||e)})}
+ }
+ return result;
+}
+
 function mini(x){
  if(!x)return {status:'missing'};
  const compact={status:x.status};
@@ -66,13 +89,14 @@ function summarizeReport(report){
  }
  return out;
 }
-const [sec,esefArr]=await Promise.all([pullSec(),Promise.all(PILOT_YEARS.map(pullOneEsef))]);
+const [sec,esefArr,microsoftIrProbe]=await Promise.all([pullSec(),Promise.all(PILOT_YEARS.map(pullOneEsef)),pullMicrosoftIrProbe()]);
 const esefDocs=Object.fromEntries(esefArr.filter(r=>r.status==='retrieved').map(r=>[r.year,r.report]));
 const esef=combineEsefYears(esefDocs,{lei:ESEF_LEI});
 const report={
  checkedAt:new Date().toISOString(),
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
+ microsoftIrProbe,
  esef:{source:'https://filings.xbrl.org/',lei:ESEF_LEI,
   sources:esefArr.map(({year,status,source,error,debtConcepts})=>({year,status,source,error:error||null,
    debtConcepts:year===2025?debtConcepts:undefined})),
