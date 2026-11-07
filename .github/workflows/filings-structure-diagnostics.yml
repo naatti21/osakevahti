@@ -1,0 +1,22 @@
+name: Filings structural diagnostics (research only)
+on:
+  pull_request:
+    paths:
+      - "scripts/diagnose-filings-structures.mjs"
+      - ".github/workflows/filings-structure-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect public report structures
+        run: node scripts/diagnose-filings-structures.mjs
