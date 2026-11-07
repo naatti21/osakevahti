@@ -13,8 +13,8 @@ const IFRS_TAGS={
   revenue:['Revenue','RevenueFromContractsWithCustomers'],
   netIncome:['ProfitLoss'],
   operatingCashflow:['CashFlowsFromUsedInOperatingActivities'],
-  debtCurrent:['CurrentBorrowings'],
-  debtNoncurrent:['NoncurrentBorrowings']
+  debtCurrent:['CurrentBorrowings','CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings'],
+  debtNoncurrent:['NoncurrentBorrowings','LongtermBorrowings']
 };
 const annual=['revenue','netIncome','operatingCashflow'];
 const missing=reason=>({status:'missing',reason});
