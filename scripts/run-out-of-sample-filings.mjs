@@ -1,5 +1,6 @@
 import {normalizeEsefXbrlJson,combineEsefYears,coverage,PILOT_YEARS} from '../engine/official-filings-pilot.mjs';
 import {normalizeIssuerIrTables,combineIrReports} from '../engine/issuer-ir-tables-pilot.mjs';
+import {normalizeGenericStatementHtml} from '../engine/generic-statement-tables.mjs';
 import {writeFile,appendFile} from 'node:fs/promises';
 // Blind test: same generic engines as Nokia and Microsoft, no issuer-specific concept/label additions.
 const LEI='743700TU2S3DXWGU7H32';
@@ -51,9 +52,10 @@ async function apple({year,url}){
   const html=await get(url,15_000_000);
   if(!html.toLowerCase().includes('apple inc.')||!html.toLowerCase().includes('form 10-k'))
    throw Error('not-verified-10k');
-  const report=normalizeIssuerIrTables(html,{sourceUrl:url,reportYear:year});
+  const legacy=normalizeIssuerIrTables(html,{sourceUrl:url,reportYear:year});
+  const report=normalizeGenericStatementHtml(html,{sourceUrl:url,reportYear:year});
   return {year,status:'retrieved',source:url,bytes:html.length,
-   tablesDetected:report.tablesDetected,yearsDetected:report.yearsDetected,report};
+   tablesDetected:report.statementSelection,yearsDetected:report.yearLists,legacy,report};
  }catch(e){return {year,status:'blocked',source:url,error:String(e?.message||e)}}
 }
 function facts(data){
@@ -67,11 +69,13 @@ function facts(data){
 const [er,ar]=await Promise.all([Promise.all(PILOT_YEARS.map(elisa)),Promise.all(APPLE.map(apple))]);
 const eu=combineEsefYears(Object.fromEntries(er.filter(r=>r.status==='retrieved').map(r=>[r.year,r.report])),{lei:LEI});
 const us=combineIrReports(ar.filter(r=>r.status==='retrieved').map(r=>r.report));
+const appleLegacy=combineIrReports(ar.filter(r=>r.status==='retrieved').map(r=>r.legacy));
 const ec=coverage(eu),ac=coverage(us);
 const output={checkedAt:new Date().toISOString(),
- methodology:'UNCHANGED generic IFRS ESEF + generic US issuer HTML parsers; blind out-of-sample; missing is not zero',
+ methodology:'IFRS generic ShorttermBorrowings + semantic source-neutral HTML layout reader; original out-of-sample baseline retained; missing is not zero',
  elisa:{identity:'LEI:'+LEI,coverage:ec,runs:er.map(({report,...x})=>x),years:facts(eu)},
- apple:{identity:'CIK:0000320193',coverage:ac,runs:ar.map(({report,...x})=>x),years:facts(us)},
+ apple:{identity:'CIK:0000320193',coverage:ac,legacyCoverage:coverage(appleLegacy),
+   runs:ar.map(({report,legacy,...x})=>x),years:facts(us)},
  total:{ok:ec.ok+ac.ok,of:40,gate:ec.complete&&ac.complete?'REVIEW_REQUIRED':'NO_GO_PARTIAL'}};
 console.log('OUT_OF_SAMPLE_EVIDENCE_BEGIN');
 console.log(JSON.stringify(output,null,2));

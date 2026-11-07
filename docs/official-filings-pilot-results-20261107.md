@@ -1,20 +1,28 @@
 # Virallisen tilinpäätösdatan pilotin TULOS — 7.11.2026
 
 **Tila:** tutkimuskoe onnistui osittain, **NO-GO tuotantoon**.
-Lähdeajo: https://github.com/naatti21/osakevahti/actions/runs/42380715328
+Lähdeajo (korjattu lainavelan tilikausi): https://github.com/naatti21/osakevahti/actions/runs/42389799538
 
 Koe mittasi 2021–2025 yhteensä 40 solua: kaksi yhtiötä, neljä
 talouslukua, viisi tilikautta.
 
 ## Nokia: 20/20 havaintoa, ESEF / IFRS, kaikki luvut miljoonaa euroa
 
+**KORJAUS 7.11.2026 — tasepäivän tulkinta:** Aikaisempi PR #101:n
+tutkimusversio kohdisti ESEF:n *hetkelliset* tasearvot vuoden liian
+myöhään: esimerkiksi `2025-01-01T00:00:00` merkitsee
+**31.12.2024** loppusaldoa, ei vuoden 2025 saldoa. Tulos- ja
+rahavirtajaksojen poiminta oli jo korjattu, mutta tasepäivät eivät.
+Alla oleva lainavelkasarja 2021–2025 on korjattu uuden koeajon avulla.
+Vanhaa lainavelkataulukkoa ei saa käyttää sijoitusanalyysiin.
+
 | Tilikausi | Liikevaihto | Nettotulos | Liiketoiminnan rahavirta | Lyhyt + pitkä lainavelka |
 | --- | ---: | ---: | ---: | ---: |
-| 2021 | 22 202 | 1 645 | 2 625 | 5 576 |
-| 2022 | 24 911 | 4 259 | 1 474 | 4 653 |
-| 2023 | 22 258 | 679 | 1 317 | 4 477 |
-| 2024 | 19 220 | 1 284 | 2 493 | 4 191 |
-| 2025 | 19 889 | 660 | 2 071 | 3 887 |
+| 2021 | 22 202 | 1 645 | 2 625 | 4 653 |
+| 2022 | 24 911 | 4 259 | 1 474 | 4 477 |
+| 2023 | 22 258 | 679 | 1 317 | 4 191 |
+| 2024 | 19 220 | 1 284 | 2 493 | 3 887 |
+| 2025 | 19 889 | 660 | 2 071 | 3 413 |
 
 **Lähde:** XBRL Internationalin filings.xbrl.org-arkiston 2021–2025
 Nokian ESEF-iXBRL JSON; alkuperäinen ilmoitusarkisto Nasdaq.
@@ -31,7 +39,7 @@ Yhtiöstä riippumattomat käsitteet:
 ja \`ifrs-full:LongtermBorrowings\`.
 
 **Tärkeä löydetty ja korjattu virhe:**
-ESEF xBRL-JSON raportoi vuotuisen ajanjakson **päättymispäivän
+ESEF xBRL-JSON raportoi sekä vuotuisen ajanjakson että hetkellisen tasepäivän **päättymispäivän
 eksklusiivisena**. Esimerkiksi \`2025-01-01/2026-01-01\` on
 tilikausi 2025. Alkuperäinen tulkinta siirsi arvot vuoden eteenpäin.
 Korjaus ja regressiotesti sisältyvät koodiin. Tämän vuoksi pelkkä
