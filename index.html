@@ -293,6 +293,8 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <label>Vuotuinen kurssimuutosoletus (%)<input id="taxGrowth" type="number" min="-89" max="100" step="0.1" inputmode="decimal"></label>
       <label>Aikahorisontti<select id="taxYears"><option value="3">3 vuotta</option><option value="5">5 vuotta</option><option value="10">10 vuotta</option></select></label>
       <label>Osingot<select id="taxReinvest"><option value="">Valitse</option><option value="yes">Sijoitan uudelleen</option><option value="no">Nostan käyttöön</option></select></label>
+      <label>Helsingin listaustunnus (valinnainen)<input id="taxListing" maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="Esim. KESKO-B.HE"></label>
+      <div id="taxAccountFit" class="statusBox muted" role="status">Näet suunnitellun oston vaikutuksen omiin OST/AOT-omistuksiisi syöttämällä listaustunnuksen.</div>
       <button id="taxCompare" type="button">Vertaa molemmat verokannat</button>
       <div id="taxResult" role="status"></div>
       <p>Vertailu olettaa uuden erillisen OST:n, ei kuluja eikä väliaikaisia myyntejä. Lopussa sijoitus myydään ja varat nostetaan. Todellinen OST-nostovero riippuu koko tilistä. Ulkomainen lähdevero ja tappioiden vähennykset eivät sisälly. Tilille sopivuus: tieto ei riitä.</p>
@@ -4518,13 +4520,34 @@ $("taxCompare").addEventListener("click",async()=>{
   const out=$("taxResult");out.textContent="";
   try {
     if(["taxPrincipal","taxYield","taxGrowth","taxReinvest"].some(id=>!$(id).value.trim()))throw Error("missing");
-    const {compareScenario}=await import("./engine/account-tax.mjs");
+    const {compareScenario,localAccountPlacement}=await import("./engine/account-tax.mjs");
     const input={principal:Number($("taxPrincipal").value),years:Number($("taxYears").value),dividendYield:Number($("taxYield").value)/100,priceGrowth:Number($("taxGrowth").value)/100,reinvest:$("taxReinvest").value==='yes'};
     for(const rate of [.30,.34]){
       const r=compareScenario({...input,rate});const p=document.createElement("p");
       p.textContent=`${rate*100} % skenaario: AOT ≈ ${Math.round(r.aot)} € · OST ≈ ${Math.round(r.ost)} €. Verot: AOT osingot ${Math.round(r.aotDividendTaxes)} €, myynti ${Math.round(r.aotSaleTax)} €; OST nostot ${Math.round(r.ostTax)} €.`;out.append(p);
     }
-  } catch {out.textContent="Täydennä kelvolliset oletukset. Sijoitus 1–100 000 €, osinko 0–30 %, kurssimuutos −89–100 %.";}
+    const box=$("taxAccountFit");box.replaceChildren();
+    if($("taxListing").value.trim()){
+      const fit=localAccountPlacement({holdings:state.holdings,listing:$("taxListing").value,
+        investmentEur:input.principal,baseCurrency:state.baseCurrency});
+      if(fit.status==="unavailable")box.textContent=fit.reason;
+      else {
+        const head=document.createElement("p");head.textContent="Omat tilit · tallennetut omistukset, ei käteistä:";box.append(head);
+        for(const type of ["OST","AOT"]){
+          const a=fit.accounts[type],p=document.createElement("p");
+          p.textContent=type+": "+a.count+" vahvistettua omistusta · "+
+            (a.complete?"≈ "+Math.round(a.value)+" € · listauksen osuus uuden oston jälkeen ≈ "+
+              a.newListingWeightPct.toFixed(1)+" %"+(a.highSingleListingShare?" · suuri tilikohtainen keskittymä":""):
+              "arvostus puutteellinen ("+a.missing+" omistusta)")+
+            (a.approximate?" · "+a.approximate+" hinta-arviota":"");
+          box.append(p);
+        }
+        const note=document.createElement("p");
+        note.textContent=(fit.unconfirmed?fit.unconfirmed+" tiliä vahvistamatta. ":"")+
+          "Sijoituspaikkasuositus: tieto ei riitä. "+fit.warning;box.append(note);
+      }
+    }else box.textContent="Lisää täsmällinen .HE-tunnus nähdäksesi omien tilien keskittymän.";
+  } catch {out.textContent="Täydennä kelvolliset oletukset. Sijoitus 1–100 000 €, osinko 0–30 %, kurssimuutos −89–100 %.";$("taxAccountFit").textContent="Tilivertailua ei päivitetty virheellisillä oletuksilla.";}
 });
 loadPortfolioNews(false).catch(()=>{});
 loadMarketContext(false).catch(()=>{});
