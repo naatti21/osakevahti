@@ -115,6 +115,8 @@ const report={
  checkedAt:new Date().toISOString(),
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
  sourceAudit:{nokia:nokiaAudit,microsoft:microsoftAudit},
+ receiptDiagnostics:esefArr.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
+ count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
  microsoftSemantic:{coverage:coverage(microsoftGeneric),years:summarizeReport(microsoftGeneric),
    sourceTier:'issuer-html-not-xbrl',
