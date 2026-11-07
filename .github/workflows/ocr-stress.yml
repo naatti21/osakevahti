@@ -34,7 +34,7 @@ concurrency:
 jobs:
   qa8-source-guards:
     name: QA8 source identity (required)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 7
     steps:
       - name: Checkout
@@ -82,7 +82,7 @@ jobs:
           retention-days: 7
 
   real-ocr:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
