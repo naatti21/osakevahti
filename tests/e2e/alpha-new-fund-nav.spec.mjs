@@ -96,3 +96,32 @@ test('Storebrand Japan A EUR gets exact identity-only notice; no fake auto NAV c
  expect(stored.manualPrice).toBe(209.34);
  expect(reads()).toBe(1);
 });
+
+test('a real manually added fund needs no ticker and opens candidate review immediately',async({page})=>{
+ const reads=await prepare(page);
+ await page.locator('#addBtn').click();
+ await expect(page.locator('#newHoldingType')).toHaveValue('stock');
+ await page.locator('#newHoldingType').selectOption('fund');
+ await expect(page.locator('#holdingTickerSection')).toBeHidden();
+ await expect(page.locator('#fundIsinEditor')).toBeVisible();
+ await page.locator('#name').fill('Nordnet Suomi Indeksi');
+ await page.locator('#qty').fill('0.37');
+ await page.locator('#buy').fill('200.25');
+ await page.locator('#currency').selectOption('EUR');
+ await page.locator('#accountType').selectOption('FUND');
+ await page.locator('#brokerSelect').selectOption('Nordnet');
+ await page.locator('#accountLabel').fill('Testitili');
+ await page.locator('#manualPrice').fill('349.99');
+ await page.locator('#form button[type="submit"]').click();
+ await expect(page.locator('#dlg')).not.toBeVisible();
+ await expect(page.locator('#settingsView')).toHaveClass(/active/);
+ await expect(page.locator('#navLinkStatus')).toContainText('1/1 rahastolle löytyi ehdokkaita',{timeout:18000});
+ await expect(page.locator('#navLinkList')).toContainText('Nordnet Suomi Indeksi');
+ const holdings=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY);
+ expect(holdings).toHaveLength(1);
+ expect(holdings[0]).toMatchObject({assetType:'fund',quantity:0.37,buyPrice:200.25,
+   manualPrice:349.99,currency:'EUR',broker:'Nordnet',accountType:'FUND'});
+ expect(holdings[0].symbol).toBe('');
+ expect(holdings[0].navBinding).toBeUndefined();
+ expect(reads()).toBe(1);
+});
