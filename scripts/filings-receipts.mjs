@@ -20,6 +20,8 @@ export function createFilingsReceipt({sourceUrl,body,format,issuerId,issuerName}
    const facts=Object.values(doc.facts||{}).filter(f=>
     f?.dimensions?.concept&&f?.dimensions?.unit&&typeof f.value!=='object');
    const allIdentifiers=[...new Set(facts.map(f=>f?.dimensions?.entity))];
+   r.dimensionFactCount=facts.length;
+   r.entityDimensions=allIdentifiers.slice(0,12).map(x=>typeof x==='string'?x:'(missing)');
    r.identityMethod='xbrl-entity-dimension';
    r.entityMatched=facts.length>0&&allIdentifiers.length===1&&
      String(allIdentifiers[0]).toUpperCase()==='LEI:'+lei;
