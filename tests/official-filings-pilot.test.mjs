@@ -71,3 +71,13 @@ test('ESEF annual duration end is EXCLUSIVE; last year must not be shifted to ne
  assert.equal(b.fields.revenue.status,'ok');
  assert.equal(b.fields.revenue.period,'2025-01-01/2025-12-31');
 });
+
+test('generic ShorttermBorrowings plus LongtermBorrowings without issuer-specific taxonomy aliases',()=>{
+ const d=esefDoc(2025);
+ d.facts.f3.dimensions.concept='ifrs-full:ShorttermBorrowings';
+ d.facts.f4.dimensions.concept='ifrs-full:LongtermBorrowings';
+ const row=normalizeEsefXbrlJson(d,{lei,year:2025,sourceUrl:url});
+ assert.equal(row.fields.interestBearingDebt.status,'ok');
+ assert.equal(row.fields.interestBearingDebt.value,2425+2525);
+ assert.match(row.fields.interestBearingDebt.concept,/ShorttermBorrowings.*LongtermBorrowings/);
+});
