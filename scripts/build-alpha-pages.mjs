@@ -19,6 +19,7 @@ const files = [
   'engine/public-nav-backup.mjs',
   'engine/nav-consent.mjs',
   'engine/instrument-data.mjs','engine/instrument-client.mjs','engine/account-tax.mjs',
+  'engine/fi-dividend-decisions.mjs',
   'sw.js',
   'manifest.webmanifest',
   'icon-192.png',
@@ -49,7 +50,7 @@ if (!html.includes('<title>Osakevahti Alpha</title>') ||
 const sw = await readFile(join(root, 'sw.js'), 'utf8');
 if (!sw.includes('k.startsWith("osakevahti-shell-")') ||
     !sw.includes('caches.match(') || sw.includes('await cache.put(') ||
-    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-local-account2";')) {
+    !sw.includes('const CACHE = "osakevahti-shell-v2.17.9-alpha-fi-evidence3";')) {
   throw new Error('Missing locked service-worker safety guards');
 }
 

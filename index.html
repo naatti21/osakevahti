@@ -299,6 +299,10 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <div id="taxResult" role="status"></div>
       <p>Vertailu olettaa uuden erillisen OST:n, ei kuluja eikä väliaikaisia myyntejä. Lopussa sijoitus myydään ja varat nostetaan. Todellinen OST-nostovero riippuu koko tilistä. Ulkomainen lähdevero ja tappioiden vähennykset eivät sisälly. Tilille sopivuus: tieto ei riitä.</p>
     </div></details>
+    <div class="section"><div><div class="eyebrow">YHTIÖIDEN JULKAISUT · 7.11.2026</div><h3>Lähteistetyt osinkopäätökset</h3></div></div>
+    <p class="muted small">Kolmen suomalaisyhtiön yhtiökokouspäätökset. Ei automaattisesti päivittyvä markkinasyöte. Päätetty osinko, tuleva erä ja erikseen vahvistettu maksu pidetään erillään.</p>
+    <p id="fiDividendStatus" class="muted small" role="status">Ladataan tarkistettua lähdeaineistoa…</p>
+    <div id="fiDividendIssuerList" class="stack"></div>
     <div id="dividendPrivate" class="stack"></div>
     <div id="dividendUpdated" class="insightUpdated"></div>
     <div id="dividendList" class="stack"></div>
@@ -4515,7 +4519,74 @@ if("serviceWorker" in navigator){
 }
 updateInstallStatus();
 render();
+
+// Read-only snapshot display: no third-party fetch, no account mutations.
+async function renderFiIssuerDividends(){
+ const host=$("fiDividendIssuerList"),status=$("fiDividendStatus");
+ if(!host||!status)return;
+ host.replaceChildren();
+ try{
+  const {FI_ISSUER_DIVIDENDS,assessFiIssuerDecision}=await import("./engine/fi-dividend-decisions.mjs");
+  const localDay=new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Helsinki",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const eur=x=>Number(x).toLocaleString("fi-FI",{minimumFractionDigits:2,maximumFractionDigits:2});
+  let valid=0;
+  for(const source of FI_ISSUER_DIVIDENDS){
+   const item=assessFiIssuerDecision(source,localDay);
+   if(item.status!=="ok"){
+    const p=document.createElement("p");p.className="statusBox statusBad";p.textContent=source.issuer+": lähdeaineisto hylätty ("+item.reason+")";
+    host.append(p);continue;
+   }
+   valid++;
+   const card=document.createElement("div");card.className="card";card.dataset.fiIssuer=item.listing;
+   const heading=document.createElement("strong");heading.textContent=item.issuer+" · "+item.listing;card.append(heading);
+   const main=document.createElement("p");main.textContent="Tilikaudelta 2025 päätetty: "+eur(item.decision.amount)+" €/osake · "+
+     item.installments.length+" maksuerä"+(item.installments.length>1?"ä":"")+
+     ". "+(item.needsReview?"Lähdetarkistus VANHENTUNUT.":"Aineisto tarkistettu "+item.reviewedAt+".");
+   card.append(main);
+   const history=document.createElement("p");history.className="muted small";
+   history.textContent=(item.fullFive?"Tilikausien 2021–2025 päätökset: ":"Puutteellinen historia: ")+
+     item.history.map(x=>x.year+" "+eur(x.amount)+" €").join(" · ")+
+     (item.changeSince2024===null?"":" · 2025 vs 2024 "+(item.changeSince2024>0?"+":"")+eur(item.changeSince2024)+" €");
+   card.append(history);
+   const detail=document.createElement("details");detail.className="fiIssuerDetails";
+   const summary=document.createElement("summary");summary.textContent="Maksuerät ja alkuperäislähteet";detail.append(summary);
+   const body=document.createElement("div");body.className="detailsBody";
+   for(const event of item.installments){
+    const text=document.createElement("p");text.className="muted small";
+    const label=event.state==="payment-confirmed"?"Maksettu – vahvistettu yhtiön toisessa julkaisussa":
+      event.state==="approved-future"?"Tuleva päätetty maksuerä":
+      "Päätetty maksupäivä; toteutunutta maksua ei vahvistettu erikseen";
+    text.textContent=eur(event.amount)+" €/osake · täsmäytys "+event.recordDate+
+      " · maksupäivä "+event.payDate+" · "+label;
+    body.append(text);
+    const a=document.createElement("a");a.href=event.paidProofUrl||event.sourceUrl;
+    a.target="_blank";a.rel="noopener noreferrer";a.textContent="Avaa yhtiön lähdetiedote";body.append(a);
+   }
+   const historyHeader=document.createElement("p");historyHeader.className="muted small";
+   historyHeader.textContent="Tilikausihistorian alkuperäiset vuosilähteet:";body.append(historyHeader);
+   for(const old of item.history){
+    const line=document.createElement("p");line.className="muted small";const link=document.createElement("a");
+    link.href=old.sourceUrl;link.target="_blank";link.rel="noopener noreferrer";
+    link.textContent=old.year+" · yhtiön oma lähde";line.append(link);body.append(line);
+   }
+   const sourceLine=document.createElement("p");const sourceLink=document.createElement("a");
+   sourceLink.href=item.decision.sourceUrl;sourceLink.target="_blank";sourceLink.rel="noopener noreferrer";
+   sourceLink.textContent="Yhtiökokouksen päätös";sourceLine.append(sourceLink);body.append(sourceLine);
+   const caution=document.createElement("p");caution.className="muted small";
+   caution.textContent=item.sustainability+" Historiavuodet ovat tilikausia, eivät kalenterivuoden maksuja. Ilman nykykurssia ei lasketa osinkotuottoa.";
+   body.append(caution);detail.append(body);card.append(detail);
+   const action=document.createElement("button");action.type="button";action.className="watchAction";
+   action.textContent="Vertaa OST / AOT";action.addEventListener("click",()=>{
+    $("accountComparison").open=true;$("taxListing").value=item.listing;
+    $("accountComparison").scrollIntoView({block:"start",behavior:"auto"});
+   });card.append(action);host.append(card);
+  }
+  status.textContent=valid+" / "+FI_ISSUER_DIVIDENDS.length+" yhtiön lähdeaineistoa tarkistettu. Ei live-päivitystä, yhtiöiden laatupisteitä eikä automaattista ostosuositusta.";
+ }catch(error){status.textContent="Yhtiöiden lähdeaineisto ei latautunut: "+String(error?.message||error);}
+}
+
 loadInsights(false).catch(()=>{});
+renderFiIssuerDividends().catch(()=>{});
 $("taxCompare").addEventListener("click",async()=>{
   const out=$("taxResult");out.textContent="";
   try {

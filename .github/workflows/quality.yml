@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   browser-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -59,7 +59,7 @@ jobs:
           retention-days: 7
 
   external-connectivity:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
