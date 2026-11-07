@@ -1,3 +1,4 @@
+import { listingSymbol, chartInstrumentData, instrumentNews } from "../engine/instrument-data.mjs";
 const CACHE_TTL_SECONDS = 60;
 const RESOLVER_CACHE_SECONDS = 300;
 
@@ -266,6 +267,41 @@ async function buildStatus(env) {
   };
 }
 
+// Exact listing only: no portfolio values, arbitrary URLs or fuzzy name binding.
+async function instrumentResponse(url, ctx) {
+  const symbol=listingSymbol(url.searchParams.get('symbol'));
+  if(!symbol || url.searchParams.get('symbol')!==symbol)
+    return jsonResponse({error:'Invalid listing symbol'},400,{'Cache-Control':'no-store'});
+  const key=new Request(`${url.origin}/instrument?symbol=${encodeURIComponent(symbol)}`);
+  const cache=globalThis.caches?.default;
+  const cached=cache?await cache.match(key):null;
+  if(cached)return cached;
+  const read=async target=>{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    try {
+      const response=await fetch(target,{signal:controller.signal,redirect:'error',
+        headers:{Accept:'application/json','User-Agent':'Osakevahti/1.0'}});
+      if(!response.ok)throw new Error(`Provider HTTP ${response.status}`);
+      return await response.json();
+    } finally { clearTimeout(timer); }
+  };
+  const [chart,news]=await Promise.allSettled([
+    read('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=2y&interval=1d&events=div&includePrePost=false'),
+    read('https://query2.finance.yahoo.com/v1/finance/search?'+new URLSearchParams({q:symbol,quotesCount:'0',newsCount:'10',enableFuzzyQuery:'false'}))
+  ]);
+  const now=Date.now();
+  const payload=chart.status==='fulfilled'?chartInstrumentData(symbol,chart.value,now):
+    {version:1,symbol,checkedAt:now,quote:{status:'error',reason:String(chart.reason?.message||chart.reason)},
+      momentum:{status:'unavailable',reason:'chart-failed'},dividends:{status:'unavailable',reason:'chart-failed'}};
+  payload.news=news.status==='fulfilled'?instrumentNews(symbol,news.value,now):
+    {status:'error',reason:String(news.reason?.message||news.reason),items:[]};
+  const response=jsonResponse(payload,200,{'Cache-Control':'public, max-age=300'});
+  // Do not preserve a transient provider failure as a successful cache entry.
+  if(cache&&payload.quote.status!=='error'&&payload.news.status!=='error')ctx.waitUntil(cache.put(key,response.clone()));
+  return response;
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") {
@@ -277,6 +313,8 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/instrument") return instrumentResponse(url, ctx);
 
     if (url.pathname === "/resolve") {
       const q = String(url.searchParams.get("q") || "").trim();
