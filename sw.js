@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-fund-onboard1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-private-data1";
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,8 @@ const SHELL = [
   "./engine/public-nav-backup.mjs",
   "./engine/public-nav-backup.mjs?nav-reader=2",
   "./engine/nav-consent.mjs",
+  "./engine/instrument-data.mjs",
+  "./engine/instrument-client.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"

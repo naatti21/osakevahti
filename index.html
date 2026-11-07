@@ -273,19 +273,20 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
   <div id="newsPanel" class="insightPanel active">
     <div class="section"><div><div class="eyebrow">OMAT YHTIÖT</div><h2>Uutiset</h2></div><button id="newsBtn">Päivitä</button></div>
     <p class="muted introCompact">Vain salkun yhtiöiden uutiset.</p>
-    <div id="news" class="stack"></div><div id="newsEmpty" class="empty">Ei uutisia.</div>
+    <p id="privateNewsStatus" class="muted" role="status"></p><div id="news" class="stack"></div><div id="newsEmpty" class="empty">Ei uutisia.</div>
   </div>
 
   <div id="dividendPanel" class="insightPanel">
     <div class="section"><div><div class="eyebrow">SUOMI</div><h2>Osinkokoneet</h2></div><button id="insightsBtn">Päivitä</button></div>
     <p class="muted introCompact">Osinkokoneet pisteyttää tällä hetkellä <strong>10 valittua suomalaisyhtiötä</strong>, ei koko pörssiä. Vertailussa painavat osinkotuotto, maksuvuodet, kurssitrendi ja historiallinen pudotus. Ei ostosuositus.</p>
     <details class="learnHelp universeManager"><summary>Muokkaa seurattavia yhtiöitä</summary><div class="detailsBody">
-      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. <strong>Uusille tunnuksille ei vielä lasketa pisteitä</strong>; niiden analyysi edellyttää erillistä datankeruuta.</p>
+      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. Oman tunnuksen saatavilla oleva analyysi haetaan erikseen. Puuttuvia tietoja ei pisteytetä.</p>
       <div class="watchForm"><input id="dividendWatchInput" aria-label="Osinkoseurantaan lisättävä pörssitunnus" maxlength="20" placeholder="Esim. FSKRS.HE"><button type="button" data-watch-add="dividends">Lisää</button></div>
       <div id="dividendWatchFeedback" class="watchNote" role="status"></div>
       <div id="dividendWatchList" class="watchList"></div>
     </div></details>
     <details class="learnHelp"><summary>Selitä Osinkokoneiden luvut</summary><div class="detailsBody"><p><strong>TTM</strong> tarkoittaa viimeisiä 12 kuukautta. <strong>Osinkotuotto</strong> vertaa viimeisen 365 päivän aikana maksettuja osinkoja käytettyyn kurssiin. Tuleva osinko voi muuttua.</p><p><strong>Osinkovuosia</strong> kertoo, monenako viidestä tarkastellusta kalenterivuodesta osinkoa maksettiin.</p><p><strong>12 kk</strong> kuvaa osakekurssin muutosta, ei osingot sisältävää kokonaistuottoa.</p><p><strong>Max pudotus</strong> kertoo suurimman historiallisen huipusta pohjaan -laskun tarkastelujaksolla. Ei tulevan tappion ylärajaa.</p><p><strong>Pisteet</strong> ovat säännöillä laskettu seulontaluku, eivät nousutodennäköisyys tai arvio osingon kestävyydestä. Lista koskee ennalta valittuja yhtiöitä.</p></div></details>
+    <div id="dividendPrivate" class="stack"></div>
     <div id="dividendUpdated" class="insightUpdated"></div>
     <div id="dividendList" class="stack"></div>
     <div id="dividendEmpty" class="empty">Osinkodata ei ole vielä saatavilla.</div>
@@ -295,12 +296,13 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <div class="section"><div><div class="eyebrow">GLOBAL MOMENTUM</div><h2>Rocket Radar</h2></div></div>
     <p class="muted introCompact">Rocket Radar pisteyttää tällä hetkellä <strong>30 valittua kansainvälistä yhtiötä</strong>, ei koko markkinaa. Mittareita ovat kurssitrendi, osakevaihto ja heilunta; pisteet eivät ole nousun todennäköisyys.</p>
     <details class="learnHelp universeManager"><summary>Muokkaa seurattavia yhtiöitä</summary><div class="detailsBody">
-      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. <strong>Uusille tunnuksille ei vielä lasketa pisteitä</strong>; niiden analyysi edellyttää erillistä datankeruuta.</p>
+      <p>Voit piilottaa listan yhtiöitä tai lisätä oman seurattavan tunnuksen. Oman tunnuksen saatavilla oleva analyysi haetaan erikseen. Puuttuvia tietoja ei pisteytetä.</p>
       <div class="watchForm"><input id="rocketWatchInput" aria-label="Rocket Radariin lisättävä pörssitunnus" maxlength="20" placeholder="Esim. TSLA"><button type="button" data-watch-add="rockets">Lisää</button></div>
       <div id="rocketWatchFeedback" class="watchNote" role="status"></div>
       <div id="rocketWatchList" class="watchList"></div>
     </div></details>
     <details class="learnHelp"><summary>Selitä Rocket Radarin luvut</summary><div class="detailsBody"><p><strong>1/3/6 kk</strong> ovat osakekurssin historiallisia muutoksia eri ajanjaksoilla.</p><p><strong>Volyymi 1,6×</strong> tarkoittaa, että viimeisten viiden kaupankäyntipäivän keskimääräinen vaihto oli 1,6-kertainen edeltäviin 20 päivään nähden.</p><p><strong>Volatiliteetti</strong> mittaa päivittäisten prosenttimuutosten hajontaa noin 20 kaupankäyntipäivältä. Se kuvaa mennyttä heiluntaa, ei ennusta tulevia päiviä.</p><p><strong>52 viikon huippu</strong> on vertailu aiemman noin vuoden korkeimpaan kurssiin.</p><p><strong>Radar-pisteet</strong> järjestävät ennalta valittuja osakkeita kurssitrendin, vaihdon ja heilunnan perusteella. Pisteet eivät ole nousun todennäköisyys.</p></div></details>
+    <div id="rocketPrivate" class="stack"></div>
     <div id="rocketUpdated" class="insightUpdated"></div>
     <div id="rocketList" class="stack"></div>
     <div id="rocketEmpty" class="empty">Rocket Radar -data ei ole vielä saatavilla.</div>
@@ -2184,39 +2186,78 @@ async function loadRiskData(force=false){
     if(force) alert(`Riskidata ei latautunut: ${err.message||err}`);
   }
 }
+let privateInstrumentClient=null;
+const privateInstrumentData=new Map();
+function privateListing(h){return tickerCode(h.instrument?.providerSymbol||h.providerSymbol||finnhubSymbol(h)||h.symbol)}
+function dataStatus(status){return {ok:"Haettu",stale:"Vanha data",unavailable:"Puuttuva data",error:"Hakuvirhe"}[status]||"Ei vielä haettu"}
+async function getPrivateClient(){
+  privateInstrumentClient??=import("./engine/instrument-client.mjs").then(m=>m.createInstrumentClient({origin:MARKET_WORKER_URL}));
+  return privateInstrumentClient;
+}
+async function loadPrivateInstruments(force=false){
+  const symbols=[...new Set([...state.holdings.filter(h=>h.assetType!=="fund").map(privateListing),
+    ...watchPrefs.dividends.added,...watchPrefs.rockets.added].filter(Boolean))];
+  const client=await getPrivateClient();
+  await Promise.all(symbols.map(async symbol=>{privateInstrumentData.set(symbol,await client.lookup(symbol,{force}));}));
+  renderNews();renderInsights();
+}
 function renderNews(){
   $("news").innerHTML="";
-  const raw=portfolioNews?.items?.length?portfolioNews.items:(state.news||[]);
-  const items=[...raw].sort((a,b)=>n(b.datetime)-n(a.datetime)).slice(0,14);
+  const held=new Map(state.holdings.filter(h=>h.assetType!=="fund").map(h=>[privateListing(h),h]));
+  const publicItems=[...(portfolioNews?.items||[]),...(state.news||[])];
+  const raw=[];const counts={ok:0,stale:0,unavailable:0,error:0};
+  for(const [symbol,h] of held){
+    const news=privateInstrumentData.get(symbol)?.news;
+    counts[news?.status||'unavailable']++;
+    if(news)raw.push(...news.items);
+    if(!news||news.status==='error'||news.status==='unavailable')raw.push(...publicItems.filter(x=>
+      tickerCode(x.symbol)===symbol||tickerCode(x.symbol)===tickerCode(h.symbol)));
+  }
+  $("privateNewsStatus").textContent=held.size?
+    `Omistukset: ${held.size} · haettu ${counts.ok} · vanha ${counts.stale} · puuttuu ${counts.unavailable} · virhe ${counts.error}. Julkinen varasyöte voi olla vanha.`:
+    "Lisää omistus nähdäksesi siihen kohdistetut uutiset.";
+  const seen=new Set();
+  const items=raw.filter(x=>{
+    try{if(!['https:','http:'].includes(new URL(x.url).protocol))return false}catch{return false}
+    if(!x.headline||!Number.isFinite(x.datetime)||x.datetime<=0||x.datetime*1000>Date.now()+300000||seen.has(x.url))return false;
+    seen.add(x.url);return true;
+  }).sort((a,b)=>b.datetime-a.datetime).slice(0,20);
   $("newsEmpty").classList.toggle("hidden",items.length>0);
   items.forEach(x=>{
-    const a=document.createElement(x.url?"a":"div");a.className="card news";
-    if(x.url){a.href=x.url;a.target="_blank";a.rel="noopener"}
-    const rel=x.relevance>=8?'<span class="newsBadge">OLENNAINEN</span>':"";
-    a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${x.datetime?ago(n(x.datetime)*1000):""}${rel}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;
+    const a=document.createElement("a");a.className="card news";a.href=x.url;a.target="_blank";a.rel="noopener noreferrer";
+    const stale=Date.now()-x.datetime*1000>7*86400000?' · VANHA':'';
+    a.innerHTML=`<div class="newsMeta">${esc(x.symbol)} · ${esc(x.source||"Lähde")} · ${ago(x.datetime*1000)}${stale}</div><div class="newsTitle">${esc(x.headline)}</div>${x.summary?`<div class="newsSummary">${esc(x.summary.slice(0,220))}</div>`:""}`;
     $("news").appendChild(a);
   });
 }
 async function loadPortfolioNews(force=false){
-  try{
-    const r=await fetch(publicFeedUrl("news-data.json"),{cache:"no-store"});
-    if(!r.ok) throw new Error(`news-data.json HTTP ${r.status}`);
-    portfolioNews=await r.json();
-    renderNews();
-    render();
-  }catch(err){
-    if(force) alert(`Omistusuutiset eivät latautuneet: ${err.message||err}`);
-    if(!portfolioNews) renderNews();
-  }
+  await Promise.allSettled([loadPrivateInstruments(force),(async()=>{
+    const response=await fetch(publicFeedUrl("news-data.json"),{cache:"no-store"});
+    if(!response.ok)throw Error('News fallback unavailable');portfolioNews=await response.json();
+  })()]);
+  renderNews();
 }
 async function loadInsights(force=false){
-  try{
-    const r=await fetch(publicFeedUrl("insights.json"),{cache:"no-store"});
-    if(!r.ok) throw new Error(`insights.json HTTP ${r.status}`);
-    insights=await r.json();
-    renderInsights();
-  }catch(err){
-    if(force) alert(`Radar-data ei latautunut: ${err.message||err}`);
+  await Promise.allSettled([loadPrivateInstruments(force),(async()=>{
+    const response=await fetch(publicFeedUrl("insights.json"),{cache:"no-store"});
+    if(!response.ok)throw Error('Screening unavailable');insights=await response.json();
+  })()]);
+  renderInsights();
+}
+function renderPrivateAnalysis(kind){
+  const key=kind==='dividends'?'dividend':'rocket',host=$(key+'Private');host.replaceChildren();
+  const symbols=[...new Set([...state.holdings.filter(h=>h.assetType!=="fund").map(privateListing),...watchPrefs[kind].added].filter(Boolean))];
+  if(symbols.length){const title=document.createElement('h3');title.textContent='Omat omistukset ja seuranta';host.append(title);}
+  for(const symbol of symbols){
+    const data=privateInstrumentData.get(symbol),value=kind==='dividends'?data?.dividends:data?.momentum;
+    const card=document.createElement('div');card.className='card';card.dataset.instrument=symbol;
+    const usable=['ok','stale'].includes(value?.status);
+    const date=usable?new Date(value.observedAt).toLocaleDateString('fi-FI'):'';
+    const details=!usable?'Ei vielä analyysiä: lähde ei toimittanut kelvollisia tietoja.':kind==='dividends'
+      ?`Lähteen raportoimat 12 kk osingot ${value.amount.toFixed(2)} ${esc(value.currency)} · tuotto ${value.yieldPct.toFixed(2)} %. Ei ennuste tai arvio osingon kestävyydestä.`
+      :`1 kk ${pct(value.m1)} · 3 kk ${pct(value.m3)} · 6 kk ${pct(value.m6)}. Kurssimuutos ilman osinkoja.`;
+    card.innerHTML=`<strong>${esc(symbol)}</strong><div class="name">${dataStatus(value?.status)}${date?' · '+date:''}</div><p>${details}</p>`;
+    host.append(card);
   }
 }
 function pct(v,d=1){
@@ -2261,8 +2302,8 @@ function renderWatch(k){
  const add=watchPrefs[k].added.filter(x=>!known.has(x));
  const hidden=watchPrefs[k].hidden.filter(x=>known.has(x));
  const button=(ticker,action,title)=>'<button type="button" class="watchAction" data-watch-action="'+action+'" data-watch-kind="'+k+'" data-watch-ticker="'+esc(ticker)+'">'+title+'</button>';
- let html='<p class="watchNote">Omat seurattavat tallentuvat vain tähän selaimeen. Lisäyksille ei lasketa pisteitä ilman datapalvelun tukea.</p>';
- if(add.length)html+='<strong>Omat lisäykset – ei vielä analyysiä</strong>'+add.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"remove","Poista")+'</div>').join('');
+ let html='<p class="watchNote">Lista tallentuu tähän selaimeen. Vain tunnus lähetetään datapalveluun; ei määriä, hankintahintoja tai tilejä.</p>';
+ if(add.length)html+='<strong>Omat lisäykset – analyysi omissa korteissa, tai ei vielä analyysiä</strong>'+add.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"remove","Poista")+'</div>').join('');
  if(hidden.length)html+='<strong>Piilotetut yhtiöt</strong>'+hidden.map(t=>'<div class="watchItem"><span>'+esc(t)+'</span>'+button(t,"restore","Palauta")+'</div>').join('');
  if(!add.length&&!hidden.length)html+='<p class="watchNote">Ei omia lisäyksiä tai piilotettuja yhtiöitä.</p>';
  el.innerHTML=html;
@@ -2270,7 +2311,8 @@ function renderWatch(k){
 function editWatch(k,action,x){
  if(!["dividends","rockets"].includes(k))return false;
  const t=tickerCode(x);if(!t)return false;
- const pref=watchPrefs[k],known=watchUniverse(k).some(y=>tickerCode(y.ticker)===t);
+ const next=JSON.parse(JSON.stringify(watchPrefs));
+ const pref=next[k],known=watchUniverse(k).some(y=>tickerCode(y.ticker)===t);
  if(action==="add"){
   if(known)pref.hidden=pref.hidden.filter(y=>y!==t);
   else if(!pref.added.includes(t)){if(pref.added.length>=30)return false;pref.added.push(t)}
@@ -2279,8 +2321,9 @@ function editWatch(k,action,x){
  }else if(action==="restore")pref.hidden=pref.hidden.filter(y=>y!==t);
  else if(action==="remove")pref.added=pref.added.filter(y=>y!==t);
  else return false;
- try{localStorage.setItem(WATCH_KEY,JSON.stringify(watchPrefs))}catch{return false}
- renderInsights();return true;
+ try{localStorage.setItem(WATCH_KEY,JSON.stringify(next))}catch{return false}
+ watchPrefs=next;
+ renderInsights();loadPrivateInstruments(false).catch(()=>{});return true;
 }
 document.addEventListener("click",e=>{
  const help=e.target.closest("[data-metric-help]");
@@ -2292,7 +2335,7 @@ document.addEventListener("click",e=>{
   const k=add.dataset.watchAdd,input=$(k==="dividends"?"dividendWatchInput":"rocketWatchInput"),note=$(k==="dividends"?"dividendWatchFeedback":"rocketWatchFeedback"),t=tickerCode(input?.value);
   if(!t){note.textContent="Anna pörssitunnus, esimerkiksi FSKRS.HE.";return}
   if(!editWatch(k,"add",t)){note.textContent="Lisäys ei onnistunut tai lista on täynnä.";return}
-  input.value="";note.textContent="Lisätty omaan seurantaan. Uudelle tunnukselle ei vielä ole pisteytystä.";return
+  input.value="";note.textContent="Lisätty omaan seurantaan. Haetaan saatavilla oleva analyysi.";return
  }
  const action=e.target.closest("[data-watch-action]");
  if(action)editWatch(action.dataset.watchKind,action.dataset.watchAction,action.dataset.watchTicker);
@@ -2305,11 +2348,12 @@ function renderInsights(){
   const dividends=(insights?.dividends||[]).filter(x=>!watchPrefs.dividends.hidden.includes(tickerCode(x.ticker)));
   const rockets=(insights?.rockets||[]).filter(x=>!watchPrefs.rockets.hidden.includes(tickerCode(x.ticker)));
   renderWatch("dividends");renderWatch("rockets");
+  renderPrivateAnalysis("dividends");renderPrivateAnalysis("rockets");
   $("dividendEmpty").classList.toggle("hidden",dividends.length>0);
   $("rocketEmpty").classList.toggle("hidden",rockets.length>0);
   const updated=insights?.generated_at?ago(Date.parse(insights.generated_at)):"";
   $("dividendUpdated").textContent=updated?`Analyysi päivitetty ${updated}.`:"";
-  $("rocketUpdated").textContent=updated?`Analyysi päivitetty ${updated} · seulottu ${insights?.rocket_universe_count||0} yhtiötä.`:"";
+  $("rocketUpdated").textContent=updated?`Rajattu seulonta: ${insights?.rocket_universe_count||0} yhtiötä · näkyvissä ${rockets.length} · virheitä ${Object.keys(insights?.errors?.rockets||{}).length} · päivitetty ${updated}${Date.now()-Date.parse(insights.generated_at)>24*3600000?' · VANHA DATA':''}. Ei koko markkina.`:"Rajattu markkinaseulonta ei ole saatavilla.";
 
   dividends.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
