@@ -5,6 +5,10 @@ on:
       - "engine/official-filings-pilot.mjs"
       - "scripts/run-official-filings-pilot.mjs"
       - "tests/official-filings-pilot.test.mjs"
+      - "engine/filings-evidence-gate.mjs"
+      - "scripts/filings-receipts.mjs"
+      - "tests/filings-evidence-gate.test.mjs"
+      - "tests/filings-receipts.test.mjs"
       - "engine/issuer-ir-tables-pilot.mjs"
       - "tests/issuer-ir-tables-pilot.test.mjs"
       - "engine/generic-statement-tables.mjs"
@@ -25,6 +29,6 @@ jobs:
         with:
           node-version: 22
       - name: Generic-source contract tests
-        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs tests/generic-statement-tables.test.mjs
+        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs tests/generic-statement-tables.test.mjs tests/filings-evidence-gate.test.mjs tests/filings-receipts.test.mjs
       - name: Read-only SEC and ESEF source evidence
         run: node scripts/run-official-filings-pilot.mjs

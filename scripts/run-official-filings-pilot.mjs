@@ -1,6 +1,8 @@
 import {normalizeSecCompanyFacts,normalizeEsefXbrlJson,combineEsefYears,coverage,PILOT_YEARS} from '../engine/official-filings-pilot.mjs';
 import {normalizeIssuerIrTables,combineIrReports} from '../engine/issuer-ir-tables-pilot.mjs';
 import {normalizeGenericStatementHtml} from '../engine/generic-statement-tables.mjs';
+import {auditFilingEvidence} from '../engine/filings-evidence-gate.mjs';
+import {createFilingsReceipt} from './filings-receipts.mjs';
 import {appendFile} from 'node:fs/promises';
 
 const SEC_URL='https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json';
@@ -42,14 +44,17 @@ async function pullOneEsef(year){
    .find(u=>u&&u.hostname==='filings.xbrl.org'&&
      u.pathname.includes('/'+ESEF_LEI+'/'+year+'-12-31/')&&u.pathname.endsWith('.json'));
   if(!url)throw new Error('ESEF xBRL-JSON link absent in official filing index');
-  const raw=JSON.parse(await get(url.href,{maxBytes:55000000}));
+  const rawText=await get(url.href,{maxBytes:55000000});
+  const raw=JSON.parse(rawText);
+  const receipt=createFilingsReceipt({sourceUrl:url.href,body:rawText,format:'xbrl-json',
+   issuerId:'LEI:'+ESEF_LEI});
   const report=normalizeEsefXbrlJson(raw,{lei:ESEF_LEI,year,sourceUrl:url.href});
   // Non-invasive taxonomy diagnostic: which standard debt concepts are actually
   // present at the filing-period balance-sheet instant? No inferred debt amounts.
   const debtConcepts=[...new Set(Object.values(raw.facts||{}).map(x=>x?.dimensions?.concept)
     .filter(x=>typeof x==='string'&&x.startsWith('ifrs-full:')&&
       /(borrow|debt|loan|lease|financialliabilit)/i.test(x)))].sort().slice(0,80);
-  return {status:'retrieved',year,source:url.href,report,debtConcepts};
+  return {status:'retrieved',year,source:url.href,report,receipt,debtConcepts};
  }catch(e){return {status:'blocked',year,source:page,error:String(e?.message||e)}}
 }
 
@@ -62,6 +67,8 @@ async function pullMicrosoftIrProbe(){
   const url='https://www.microsoft.com/investor/reports/ar'+String(year).slice(2)+'/';
   try{
    const html=await get(url,{maxBytes:12000000});
+   const receipt=createFilingsReceipt({sourceUrl:url,body:html,format:'issuer-html',
+    issuerId:'CIK:0000789019',issuerName:'Microsoft'});
    const strip=s=>s.replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;|&#xA0;/gi,' ')
      .replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
    const rows=[...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
@@ -72,7 +79,7 @@ async function pullMicrosoftIrProbe(){
    const report=normalizeIssuerIrTables(html,{sourceUrl:url,reportYear:year});
    const generic=normalizeGenericStatementHtml(html,{sourceUrl:url,reportYear:year});
    result.push({year,status:'retrieved',url,byteCount:html.length,tableRows:rows.length,
-    focusRows:focus,report,generic});
+    focusRows:focus,report,generic,receipt});
   }catch(e){result.push({year,status:'blocked',url,error:String(e?.message||e)})}
  }
  return result;
@@ -99,9 +106,17 @@ const esefDocs=Object.fromEntries(esefArr.filter(r=>r.status==='retrieved').map(
 const microsoftIr=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.report));
 const microsoftGeneric=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.generic));
 const esef=combineEsefYears(esefDocs,{lei:ESEF_LEI});
+const auditedAt=new Date().toISOString();
+const nokiaAudit=auditFilingEvidence(esef,{identity:'LEI:'+ESEF_LEI,currency:'EUR',
+ asOf:auditedAt,receipts:esefArr.flatMap(r=>r.receipt?[r.receipt]:[])});
+const microsoftAudit=auditFilingEvidence(microsoftGeneric,{identity:'CIK:0000789019',currency:'USD',
+ asOf:auditedAt,receipts:microsoftIrProbe.flatMap(r=>r.receipt?[r.receipt]:[])});
 const report={
  checkedAt:new Date().toISOString(),
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
+ sourceAudit:{nokia:nokiaAudit,microsoft:microsoftAudit},
+ receiptDiagnostics:esefArr.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
+ count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
  microsoftSemantic:{coverage:coverage(microsoftGeneric),years:summarizeReport(microsoftGeneric),
    sourceTier:'issuer-html-not-xbrl',
@@ -132,6 +147,8 @@ if(process.env.GITHUB_STEP_SUMMARY){
   'Nokia / ESEF: '+c2.ok+'/'+c2.total+' vaadittua lukua',
   'Microsoft / omat IR-HTML-raportit (vanha lukija): '+c3.ok+'/'+c3.total+' lukua',
   'Microsoft / semanttinen yleislukija: '+c4.ok+'/'+c4.total+' lukua',
+  'Nokia evidence: '+nokiaAudit.counts.sourceConsistent+' structurally consistent, '+nokiaAudit.counts.blocked+' blocked',
+  'Microsoft evidence: '+microsoftAudit.counts.needsReview+' HTML facts awaiting review, '+microsoftAudit.counts.blocked+' blocked',
   'Datan lähde ja jokaisen kentän tila ovat työajon lokissa.',
   'Tämä ei ole käyttöönotto- eikä sijoituspäätös.'];
  await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n\n')+'\n');
