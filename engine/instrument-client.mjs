@@ -32,7 +32,9 @@ export function createInstrumentClient({origin,fetchImpl=globalThis.fetch,now=Da
       }
       data=await inflight.get(symbol);
     }
-    const quote=data.quote?.value?validateStockQuote(data.quote.value,{symbol,currency},now()):data.quote;
+    const declaredCurrency=typeof data.currency==='string'?data.currency:'';
+    const expectedCurrency=currency||declaredCurrency;
+    const quote=data.quote?.value?validateStockQuote(data.quote.value,{symbol,currency:expectedCurrency},now()):data.quote;
     const valid=['ok','stale'].includes(quote?.status);
     const metric=(value,keys)=>valid&&['ok','stale'].includes(value?.status)&&observationTime(value.observedAt,now())&&
       keys.every(key=>typeof value[key]==='number'&&Number.isFinite(value[key]))

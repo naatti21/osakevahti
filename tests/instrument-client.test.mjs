@@ -21,3 +21,13 @@ test('old Worker and invalid currency cannot masquerade as successful observatio
  const client=createInstrumentClient({origin:'https://worker.test',fetchImpl:async()=>Response.json({...data('AAA'),dividends:{status:'ok',amount:1,yieldPct:3,eventCount:1,currency:'USD',observedAt:now}})});
  assert.equal((await client.lookup('AAA')).dividends.status,'error');
 });
+
+test('verified quote currency must agree with provider envelope even when caller has no expected currency',async()=>{
+ const client=createInstrumentClient({origin:'https://worker.test',fetchImpl:async()=>Response.json({
+  ...data('NEW.HE'),currency:'EUR',instrumentType:'EQUITY',name:'Synthetic',
+  quote:{status:'ok',value:{symbol:'NEW.HE',currency:'USD',price:12,observedAt:now,source:'synthetic'}}
+ })});
+ const result=await client.lookup('NEW.HE');
+ assert.equal(result.quote.status,'error');
+ assert.equal(result.instrumentType,'EQUITY');
+});

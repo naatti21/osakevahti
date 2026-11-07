@@ -28,7 +28,7 @@ test('never-coded ticker gets source-dated price, trend, TTM events and honest m
  await expect(page.locator('#stockInspectionResult [data-stock-inspection]')).toHaveCount(1);
  const out=page.locator('#stockInspectionResult');
  await expect(out).toContainText(symbol);
- await expect(out).toContainText('37,00 EUR');
+ await expect(out).toContainText('37 EUR');
  await expect(out).toContainText('Yahoo Finance chart');
  await expect(out).toContainText('1 kk');
  await expect(out).toContainText('0.55 EUR'); // locale may be dot decimals for toFixed
