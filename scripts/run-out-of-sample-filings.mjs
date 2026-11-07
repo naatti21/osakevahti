@@ -86,6 +86,8 @@ const appleAudit=auditFilingEvidence(us,{identity:'CIK:0000320193',currency:'USD
 const output={checkedAt:new Date().toISOString(),
  methodology:'IFRS + semantic HTML source evidence; original out-of-sample baseline retained; missing is not zero',
  sourceAudit:{elisa:elisaAudit,apple:appleAudit},
+ receiptDiagnostics:er.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
+ count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  elisa:{identity:'LEI:'+LEI,coverage:ec,runs:er.map(({report,receipt,...x})=>x),years:facts(eu)},
  apple:{identity:'CIK:0000320193',coverage:ac,legacyCoverage:coverage(appleLegacy),
    runs:ar.map(({report,legacy,receipt,...x})=>x),years:facts(us)},
