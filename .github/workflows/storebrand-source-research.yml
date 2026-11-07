@@ -1,0 +1,21 @@
+name: Storebrand exact-share-class NAV source research (read only)
+on:
+  push:
+    branches: ["feat/alpha-new-fund-nav-and-storebrand-20261107"]
+    paths:
+      - "scripts/qa/storebrand-source-probe.mjs"
+      - ".github/workflows/storebrand-source-research.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare first-party Storebrand EUR NAV to third-party sources (no writes)
+        run: node scripts/qa/storebrand-source-probe.mjs
