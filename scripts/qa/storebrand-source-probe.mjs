@@ -17,10 +17,8 @@ for(const [name,url] of endpoints){
   if(name==="official-fundlist"){
     const idAt=content.indexOf("SE0013801479");
     const area=content.slice(Math.max(0,idAt-14000),idAt+12000);
-    const tagText=area.replace(/<script[\\s\\S]*?<\\/script>/g,"")
-      .replace(/<style[\\s\\S]*?<\\/style>/g,"")
-      .replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ")
-      .replace(/\\s+/g," ").trim();
+    const tagText=area.replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ")
+      .replace(/\s+/g," ").trim();
     const loc=tagText.indexOf("Fondkurs");
     console.log("STOREBRAND_OFFICIAL_LOCAL_CONTEXT",JSON.stringify({
       isinPosition:idAt,
