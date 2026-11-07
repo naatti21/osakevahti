@@ -1,5 +1,6 @@
 import {normalizeSecCompanyFacts,normalizeEsefXbrlJson,combineEsefYears,coverage,PILOT_YEARS} from '../engine/official-filings-pilot.mjs';
 import {normalizeIssuerIrTables,combineIrReports} from '../engine/issuer-ir-tables-pilot.mjs';
+import {normalizeGenericStatementHtml} from '../engine/generic-statement-tables.mjs';
 import {appendFile} from 'node:fs/promises';
 
 const SEC_URL='https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json';
@@ -69,8 +70,9 @@ async function pullMicrosoftIrProbe(){
    const focus=rows.filter(a=>/^(total revenue|net income|net cash from operations|short-term debt|current portion of long-term debt|long-term debt)$/i.test(a[0]||''))
     .slice(0,40);
    const report=normalizeIssuerIrTables(html,{sourceUrl:url,reportYear:year});
+   const generic=normalizeGenericStatementHtml(html,{sourceUrl:url,reportYear:year});
    result.push({year,status:'retrieved',url,byteCount:html.length,tableRows:rows.length,
-    focusRows:focus,report});
+    focusRows:focus,report,generic});
   }catch(e){result.push({year,status:'blocked',url,error:String(e?.message||e)})}
  }
  return result;
@@ -95,11 +97,16 @@ function summarizeReport(report){
 const [sec,esefArr,microsoftIrProbe]=await Promise.all([pullSec(),Promise.all(PILOT_YEARS.map(pullOneEsef)),pullMicrosoftIrProbe()]);
 const esefDocs=Object.fromEntries(esefArr.filter(r=>r.status==='retrieved').map(r=>[r.year,r.report]));
 const microsoftIr=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.report));
+const microsoftGeneric=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.generic));
 const esef=combineEsefYears(esefDocs,{lei:ESEF_LEI});
 const report={
  checkedAt:new Date().toISOString(),
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
+ microsoftSemantic:{coverage:coverage(microsoftGeneric),years:summarizeReport(microsoftGeneric),
+   sourceTier:'issuer-html-not-xbrl',
+   tableSelection:microsoftIrProbe.map(({year,generic})=>({year,statementSelection:generic?.statementSelection,
+     candidateCounts:generic?.candidateCounts,yearLists:generic?.yearLists}))},
  microsoftIr:{
    sources:microsoftIrProbe.map(({year,url,status,error,tableRows,report})=>({
      year,url,status,error:error||null,tableRows,
@@ -119,11 +126,12 @@ console.log('PILOT_EVIDENCE_BEGIN');
 console.log(JSON.stringify(report,null,2));
 console.log('PILOT_EVIDENCE_END');
 if(process.env.GITHUB_STEP_SUMMARY){
- const c1=report.sec.coverage,c2=report.esef.coverage,c3=report.microsoftIr.coverage;
+ const c1=report.sec.coverage,c2=report.esef.coverage,c3=report.microsoftIr.coverage,c4=report.microsoftSemantic.coverage;
  const lines=['## Virallisten tilinpäätösten pilotti','**Tulos: '+report.result+'**',
   'Microsoft / SEC: '+c1.ok+'/'+c1.total+' vaadittua lukua',
   'Nokia / ESEF: '+c2.ok+'/'+c2.total+' vaadittua lukua',
-  'Microsoft / omat IR-HTML-raportit (varareitti): '+c3.ok+'/'+c3.total+' lukua',
+  'Microsoft / omat IR-HTML-raportit (vanha lukija): '+c3.ok+'/'+c3.total+' lukua',
+  'Microsoft / semanttinen yleislukija: '+c4.ok+'/'+c4.total+' lukua',
   'Datan lähde ja jokaisen kentän tila ovat työajon lokissa.',
   'Tämä ei ole käyttöönotto- eikä sijoituspäätös.'];
  await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n\n')+'\n');
