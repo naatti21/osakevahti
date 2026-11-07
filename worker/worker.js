@@ -50,6 +50,7 @@ async function yahooQuote(ticker) {
   if (!result) throw new Error(`Yahoo ${ticker}: no chart result`);
 
   const meta = result.meta || {};
+  if(meta.symbol!==ticker || !/^[A-Z]{3}$/.test(meta.currency||""))throw new Error("Quote listing or currency missing");
   const timestamps = result.timestamp || [];
   const closes = result?.indicators?.quote?.[0]?.close || [];
 
@@ -98,7 +99,7 @@ async function yahooQuote(ticker) {
     price: freshest.price,
     day_change_pct: dayChangePct,
     quote_timestamp: freshest.ts * 1000,
-    currency: meta.currency || "EUR",
+    currency: meta.currency,
     source: "Yahoo Finland",
     delayed: null,
     data_point: freshest.point,
@@ -212,7 +213,7 @@ async function finnhubQuote(symbol, apiKey) {
     ticker: symbol,
     price: q.c,
     day_change_pct: Number.isFinite(q.dp) ? q.dp : null,
-    quote_timestamp: Number.isFinite(q.t) ? q.t * 1000 : Date.now(),
+    quote_timestamp: Number.isFinite(q.t) && q.t > 0 ? q.t * 1000 : null,
     currency: "USD",
     source: "Finnhub",
     delayed: false,
@@ -348,13 +349,16 @@ export default {
         {
           ok: true,
           service: "osakevahti-market-worker",
-          version: "worker-v1.1",
+          version: "worker-v1.3",
+          capabilities: ["exact-listing-quote", "daily-momentum", "reported-dividends", "related-listing-news"],
           time: new Date().toISOString(),
         },
         200,
         { "Cache-Control": "no-store" }
       );
     }
+
+    if(!["/","/status"].includes(url.pathname))return jsonResponse({error:"Unknown route"},404,{"Cache-Control":"no-store"});
 
     const cacheKey = new Request(`${url.origin}/status`, { method: "GET" });
     const cache = caches.default;

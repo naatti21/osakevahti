@@ -9,7 +9,7 @@ const dataNames = [
 ];
 const remote = 'https://naatti21.github.io/osakevahti/';
 
-test('Alpha3 browser gets all six live financial JSON feeds and renders actual insight lists', async ({page}) => {
+test('@live-external Alpha3 browser gets all six live financial JSON feeds and renders actual insight lists', async ({page}) => {
   test.setTimeout(90_000);
   await page.goto('/index.html');
   await expect(page.locator('header .eyebrow')).toHaveText('ALPHA · v2.17.9');
@@ -48,7 +48,7 @@ test('Alpha3 browser gets all six live financial JSON feeds and renders actual i
     .toBe(insights.countRockets);
 });
 
-test('Alpha3 original refresh dependencies: Worker and the live fallback both respond', async ({page}) => {
+test('@live-external Alpha3 original refresh dependencies: Worker and the live fallback both respond', async ({page}) => {
   test.setTimeout(90_000);
   await page.goto('/index.html');
   const live=await page.evaluate(async() => {

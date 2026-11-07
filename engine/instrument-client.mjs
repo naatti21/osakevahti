@@ -39,13 +39,13 @@ export function createInstrumentClient({origin,fetchImpl=globalThis.fetch,now=Da
       ?{...value,status:now()-value.observedAt>72*3600000?'stale':value.status}
       :{status:value?.status==='error'?'error':'unavailable',reason:value?.reason||'incomplete-data'};
     const dividends=metric(data.dividends,['amount','yieldPct','eventCount']);
-    if(dividends.currency&&dividends.currency!==quote?.value?.currency)Object.assign(dividends,{status:'error',reason:'currency-mismatch'});
+    if(['ok','stale'].includes(dividends.status)&&(dividends.currency!==quote?.value?.currency||dividends.amount<0||dividends.yieldPct<0||!Number.isInteger(dividends.eventCount)||dividends.eventCount<1))Object.assign(dividends,{status:'error',reason:'currency-mismatch'});
     const news=data.news;
     const items=Array.isArray(news?.items)?news.items.filter(item=>{
       if(item.symbol!==symbol||!observationTime(item.datetime*1000,now())||!item.headline)return false;
       try{return ['https:','http:'].includes(new URL(item.url).protocol)}catch{return false}
     }):[];
     return {symbol,quote:quote||{status:'unavailable'},momentum:metric(data.momentum,['m1','m3','m6']),dividends,
-      news:{status:['ok','stale','error','unavailable'].includes(news?.status)?news.status:'unavailable',items},checkedAt:data.checkedAt};
+      news:{status:news?.status==='ok'&&items.length&&now()-Math.max(...items.map(x=>x.datetime))*1000>7*86400000?'stale':['ok','stale','error','unavailable'].includes(news?.status)?news.status:'unavailable',items},checkedAt:data.checkedAt};
   }};
 }

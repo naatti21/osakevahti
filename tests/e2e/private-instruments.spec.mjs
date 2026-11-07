@@ -39,3 +39,45 @@ test('only actual holding news is shown, removal invalidates attribution',async(
  await page.evaluate(()=>{state.holdings=[];renderNews();});
  await expect(page.locator('#news .news')).toHaveCount(0);
 });
+test('new holding receives exact dated quote; error and older response preserve last price',async({page})=>{
+ await setup(page);
+ await page.evaluate(({symbol,now})=>{state.holdings=[{id:'quote-regression',assetType:'stock',symbol,providerSymbol:symbol,name:'Synthetic Novel',currency:'EUR',quantity:2,buyPrice:100,manualStop:90,account:'Synthetic AOT'}];save();}, {symbol,now});
+ await page.evaluate(()=>refreshMarket(false));
+ let holding=await page.evaluate(()=>state.holdings[0]);
+ expect(holding.currentPrice).toBe(140);expect(holding.quoteTimestamp).toBe(Math.floor(now/1000)*1000);
+ expect(holding.quoteSource).toBe('INSTRUMENT');
+ const identity={id:holding.id,quantity:holding.quantity,buyPrice:holding.buyPrice,account:holding.account};
+ await page.route('**/instrument?symbol=*',route=>{const value=observation();value.quote.value.price=120;value.quote.value.observedAt=now-5*86400000;return route.fulfill({json:value});});
+ await page.evaluate(()=>refreshMarket(true));
+ holding=await page.evaluate(()=>state.holdings[0]);expect(holding.currentPrice).toBe(140);
+ expect(holding.quoteHealth.status).toBe('stale');
+ await page.route('**/instrument?symbol=*',route=>{const value=observation();value.quote.value.currency='USD';return route.fulfill({json:value});});
+ await page.evaluate(()=>refreshMarket(true));
+ holding=await page.evaluate(()=>state.holdings[0]);expect(holding.currentPrice).toBe(140);expect(holding.currency).toBe('EUR');
+ expect(holding.quoteHealth.status).toBe('failed');
+ expect({id:holding.id,quantity:holding.quantity,buyPrice:holding.buyPrice,account:holding.account}).toEqual(identity);
+});
+test('missing price date and invalid screening metrics cannot claim verified analysis',async({page})=>{
+ await setup(page);
+ const result=await page.evaluate(()=>({risk:evaluateRisk({symbol:'UNKNOWN',currency:'EUR',currentPrice:10,quantity:1,manualStop:5},100,1),
+   row:validScreenRow({ticker:'UNKNOWN',score:90,yield_pct:null,dividend_years:5,return_12m:3,max_drawdown:-2},'dividends')}));
+ expect(result.risk.dataStale).toBe(true);expect(result.row).toBe(false);
+});
+test('quota failure leaves private watchlist unchanged',async({page})=>{
+ await setup(page);
+ const result=await page.evaluate(()=>{
+   const before=JSON.stringify(watchPrefs),original=Storage.prototype.setItem;
+   Storage.prototype.setItem=()=>{throw new DOMException('full','QuotaExceededError')};
+   try{return {saved:editWatch('rockets','add','NEWQ'),same:JSON.stringify(watchPrefs)===before}}
+   finally{Storage.prototype.setItem=original}
+ });
+ expect(result).toEqual({saved:false,same:true});
+});
+test('contradictory saved identity is not silently resolved by precedence',async({page})=>{
+ await setup(page);
+ const values=await page.evaluate(()=>[
+  privateListing({symbol:'AAA',providerSymbol:'AAA',currency:'EUR',instrument:{providerSymbol:'BBB',currency:'EUR'}}),
+  privateListing({symbol:'AAA',providerSymbol:'AAA',currency:'EUR',instrument:{providerSymbol:'AAA',currency:'USD'}})
+ ]);
+ expect(values).toEqual(['','']);
+});

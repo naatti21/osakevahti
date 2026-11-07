@@ -493,18 +493,31 @@ jobs:
               result = (((data.get("chart") or {}).get("result") or [None])[0])
               if not result:
                   raise RuntimeError("no chart data")
+              meta = result.get("meta") or {}
+              if meta.get("symbol") != ticker or not (len(str(meta.get("currency") or "")) == 3 and all("A" <= c <= "Z" for c in str(meta.get("currency") or ""))):
+                  raise RuntimeError("listing identity or currency missing")
               ts = result.get("timestamp") or []
               quote = (((result.get("indicators") or {}).get("quote") or [{}])[0])
               closes = quote.get("close") or []
               volumes = quote.get("volume") or []
               rows = []
+              if not (len(ts) == len(closes) == len(volumes)):
+                  raise RuntimeError("incomplete price history")
               for t,c,v in zip(ts,closes,volumes):
-                  if isinstance(c,(int,float)):
-                      rows.append((int(t),float(c),float(v or 0)))
+                  if not (type(c) in (int,float) and math.isfinite(c) and c > 0
+                          and type(t) in (int,float) and 0 < t <= time.time()+300
+                          and type(v) in (int,float) and math.isfinite(v) and v >= 0):
+                      raise RuntimeError("invalid price, volume or observation date")
+                  if rows and t <= rows[-1][0]: raise RuntimeError("unordered history")
+                  rows.append((int(t),float(c),float(v)))
               dividends = []
               for _,d in (((result.get("events") or {}).get("dividends") or {}).items()):
-                  if isinstance(d,dict) and isinstance(d.get("amount"),(int,float)):
-                      dividends.append((int(d.get("date") or 0),float(d["amount"])))
+                  if not (isinstance(d,dict) and type(d.get("amount")) in (int,float)
+                          and math.isfinite(d["amount"]) and d["amount"] > 0
+                          and type(d.get("date")) in (int,float) and 0 < d["date"] <= time.time()+300
+                          and (not d.get("currency") or d["currency"] == meta.get("currency"))):
+                      raise RuntimeError("invalid dividend event")
+                  dividends.append((int(d["date"]),float(d["amount"])))
               return rows, dividends
 
           def clamp(x,a=0,b=1):
@@ -526,9 +539,12 @@ jobs:
           def dividend_score(ticker,name,market):
               rows, divs = yahoo_history(ticker,5,True)
               closes=[r[1] for r in rows]
-              if len(closes)<200: raise RuntimeError("too little price history")
-              now=int(time.time())
-              ttm=sum(a for t,a in divs if t>=now-365*86400)
+              if len(closes)<253: raise RuntimeError("too little price history")
+              now=rows[-1][0]
+              if rows[0][0] > now-365*86400 or not divs: raise RuntimeError("dividend coverage missing")
+              recent=[a for t,a in divs if now-365*86400 <= t <= now]
+              if not recent: raise RuntimeError("no reported trailing-year dividend; not proof of zero")
+              ttm=sum(recent)
               yld=(ttm/closes[-1]*100) if closes[-1] else 0
               current_year=datetime.now(timezone.utc).year
               years=set(datetime.fromtimestamp(t,timezone.utc).year for t,a in divs if a>0 and current_year-4<=datetime.fromtimestamp(t,timezone.utc).year<=current_year)
@@ -542,13 +558,14 @@ jobs:
               score=round(clamp((yield_score+consistency+trend+drawdown)/100)*100,1)
               label="VAHVA SEURANTA" if score>=75 else "SEURAA" if score>=60 else "NEUTRAALI"
               reason=f"TTM-osinko {yld:.1f} %, osinkoa {len(years)}/5 viime vuodesta, 12 kk {r12:+.1f} %."
-              return {"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"yield_pct":round(yld,2),"dividend_years":len(years),"return_12m":round(r12,2),"max_drawdown":round(dd,2),"reason":reason}
+              return {"observed_at":datetime.fromtimestamp(rows[-1][0],timezone.utc).isoformat(),"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"yield_pct":round(yld,2),"dividend_years":len(years),"return_12m":round(r12,2),"max_drawdown":round(dd,2),"reason":reason}
 
           def rocket_score(ticker,name,market):
               rows,_=yahoo_history(ticker,2,False)
               closes=[r[1] for r in rows]
               vols=[r[2] for r in rows]
-              if len(closes)<140: raise RuntimeError("too little history")
+              if len(closes)<253: raise RuntimeError("too little history for 52-week comparison")
+              if sum(vols[-25:-5]) <= 0: raise RuntimeError("volume baseline missing")
               m1=ret(closes,21);m3=ret(closes,63);m6=ret(closes,126)
               high=max(closes[-252:] if len(closes)>=252 else closes)
               dist=(closes[-1]/high-1)*100 if high else 0
@@ -569,7 +586,7 @@ jobs:
               label="RAKETTI" if score>=80 else "KUUMA" if score>=68 else "SEURAA"
               risk="erittäin korkea" if vol>=5 else "korkea" if vol>=3 else "kohtalainen"
               reason=f"52v huippuun {dist:.1f} %, 20 pv volatiliteetti {vol:.1f} %, volyymi {vr:.1f}×."
-              return {"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"m1":round(m1,2),"m3":round(m3,2),"m6":round(m6,2),"volume_ratio":round(vr,2),"distance_high":round(dist,2),"volatility":round(vol,2),"risk":risk,"reason":reason}
+              return {"observed_at":datetime.fromtimestamp(rows[-1][0],timezone.utc).isoformat(),"ticker":ticker,"name":name,"market":market,"score":score,"label":label,"m1":round(m1,2),"m3":round(m3,2),"m6":round(m6,2),"volume_ratio":round(vr,2),"distance_high":round(dist,2),"volatility":round(vol,2),"risk":risk,"reason":reason}
 
           dividends=[]
           dividend_errors={}
@@ -587,7 +604,7 @@ jobs:
 
           payload={
               "generated_at":datetime.now(timezone.utc).isoformat(),
-              "method_version":"2.3",
+              "method_version":"2.4-observation-integrity",
               "dividends":dividends[:8],
               "rockets":rockets[:8],
               "rocket_universe_count":len(ROCKETS),

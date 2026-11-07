@@ -3,12 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "test": "playwright test --grep-invert @ocr-stress",
+    "test": "playwright test --grep-invert \"@ocr-stress|@live-external\"",
     "test:smoke": "playwright test --grep @smoke",
     "test:ocr": "playwright test tests/e2e/ocr-stress.spec.mjs --workers=1",
     "test:qa-import": "node tests/import-qa/qa8-guards.mjs",
     "test:engine": "node --test tests/alpha-import-engine.test.mjs",
-    "test:alpha-public-nav": "node --test tests/public-nav-alpha.test.mjs"
+    "test:alpha-public-nav": "node --test tests/public-nav-alpha.test.mjs",
+    "test:live": "playwright test --grep @live-external"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",

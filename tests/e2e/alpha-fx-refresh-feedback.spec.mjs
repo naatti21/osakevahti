@@ -28,7 +28,7 @@ async function prepareSyntheticUSD(page){
     return {warning:!document.querySelector('#valuationWarning').classList.contains('hidden')};
   });
 }
-test('browser fetch from official direct FX v1 works without redirect or keys',async({page})=>{
+test('@live-external browser fetch from official direct FX v1 works without redirect or keys',async({page})=>{
   test.setTimeout(40_000);
   await page.goto('/index.html');
   const output=await page.evaluate(async()=>{

@@ -321,7 +321,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
     <label class="txt">Finnhub API -avain</label>
     <input id="apiKey" type="password" placeholder="Tallentuu vain tämän selaimen localStorageen">
     <p class="muted small">Avainta käytetään vielä uutis- ja historiatoimintoihin tässä versiossa. Kurssipäivitys ei enää riipu puhelimen Finnhub-yhteydestä.</p>
-    <p class="muted small">Osakekurssien ensisijainen lähde on Cloudflare Worker: Helsinki Yahoo intradaysta ja AMD Finnhubista. GitHub market-data.json toimii automaattisena varalähteenä ja rahastojen NAV-lähteenä.</p>
+    <p class="muted small">Osakekurssien ensisijainen lähde on Cloudflare Worker: valittu listaus Yahoo-lähteestä, vanhoille listauksille myös rajattu varasyöte. GitHub market-data.json toimii automaattisena varalähteenä ja rahastojen NAV-lähteenä.</p>
     <div class="actions" style="margin-top:8px">
       <button id="testApiBtn" type="button">Testaa Finnhub-uutisyhteys</button>
       <button id="testNordnetBtn" type="button">Testaa kurssipalvelu</button>
@@ -1878,22 +1878,13 @@ function renderMarketContext(){
     <p><strong>SOX</strong> = puolijohdeyhtiöiden sektori-indeksi. Se auttaa erottamaan esimerkiksi AMD:n oman liikkeen koko sirusektorin liikkeestä.</p>
   </div></details>`;
 }
-function thesisFocus(h){
-  const s=(h.symbol||"").toUpperCase();
-  const map={
-    "AMD":"AI/datakeskus-kasvu, marginaalit, kilpailuasema",
-    "FORTUM":"osingon kestävyys, sähköhinta, suojaus, investoinnit",
-    "NDA-FI":"luottotappiot, korkokate, CET1, osinko/pääomanpalautus",
-    "METSO":"tilaukset, marginaalit, kaivos-/teollisuussykli",
-    "VERK":"kannattavuus, liikevaihto, kassavirta, turnaround",
-    "FRAMERY":"kasvu, tilauskehitys, marginaalit, kassavirta",
-    "IQMX":"rahoitus/kassa, tilaukset, kaupalliset virstanpylväät, diluutio"
-  };
-  return map[s]||"tulos, ohjeistus, kassavirta ja kilpailuasema";
-}
+function thesisFocus(h){return "tulos, ohjeistus, kassavirta ja kilpailuasema";}
 function thesisSignal(h){
   const sym=(h.symbol||"").toUpperCase();
-  const items=(portfolioNews?.items||[]).filter(x=>(x.symbol||"").toUpperCase()===sym).slice(0,3);
+  const news=privateInstrumentData.get(privateListing(h))?.news;
+  const items=(news?.status==='ok'?news.items:(portfolioNews?.items||[]))
+    .filter(x=>[sym,privateListing(h)].includes(tickerCode(x.symbol))&&
+      Number.isFinite(x.datetime)&&x.datetime*1000<=Date.now()&&Date.now()-x.datetime*1000<7*86400000).slice(0,3);
   if(!items.length) return {level:"NONE",label:"ei uutistriggeriä",reason:"Ei havaittua olennaista uutistriggeriä syötteessä."};
   const text=items.map(x=>`${x.headline||""} ${x.summary||""}`.toLowerCase()).join(" ");
   const neg=["profit warning","cuts guidance","cut guidance","lowers guidance","misses estimates","dividend cut","cuts dividend","liquidity","bankruptcy","capital raise","share offering","downgrade","tulosvaroitus","alentaa ohjeistusta","laskee ohjeistusta","heikentää näkymiä","leikkaa osinkoa","osinkoa leikataan","maksuvalmius","rahoitustarve"];
@@ -1904,16 +1895,16 @@ function thesisSignal(h){
 }
 function ownerDecision(row,r,portfolioValue,budgetUse,overweightTarget){
   const h=row.h, thesis=thesisSignal(h);
-  const mins=new Date().getHours()*60+new Date().getMinutes();
-  const isAMD=(h.symbol||"").toUpperCase()==="AMD";
-  const sectorBench=isAMD?mcAsset("SOX"):null;
-  const bench=sectorBench || (isAMD ? (mins>=990 ? mcAsset("NASDAQ") : mcAsset("NQ_FUT")) : mcAsset("HELSINKI"));
-  const benchPct=bench?n(bench.day_change_pct):null;
-  const stockPct=n(h.dayChangePct);
-  const rel=benchPct==null?null:stockPct-benchPct;
+  const mic=normalizedIdText(h.instrument?.mic);
+  const exchange=String(h.instrument?.exchange||'').toLowerCase();
+  const bench=isHelsinkiHolding(h)?mcAsset('HELSINKI'):
+    (['XNAS','XNYS'].includes(mic)||/nasdaq|new york|nyse/.test(exchange))?mcAsset('SP_FUT'):null;
+  const benchPct=Number.isFinite(bench?.day_change_pct)?bench.day_change_pct:null;
+  const stockPct=Number.isFinite(h.dayChangePct)?h.dayChangePct:null;
+  const rel=benchPct==null||stockPct==null?null:stockPct-benchPct;
   const broadDown=n(mcAsset("HELSINKI")?.day_change_pct)<=-1 && n(mcAsset("EUROPE")?.day_change_pct)<=-.5;
-  const compareWord=sectorBench?"sirusektoria":"markkinaa";
-  const marketLabel=benchPct==null?"konteksti puuttuu"
+  const compareWord="markkinaa";
+  const marketLabel=rel==null?"konteksti puuttuu"
     : rel<=-2?`${compareWord} heikompi (${rel.toFixed(1)} %-yks.)`
     : rel>=2?`${compareWord} vahvempi (+${rel.toFixed(1)} %-yks.)`
     : `lähellä ${compareWord} (${rel>=0?"+":""}${rel.toFixed(1)} %-yks.)`;
@@ -2067,7 +2058,7 @@ function evaluateRisk(h,portfolioValue,fxRate){
   const ageMs=h.quoteTimestamp?Date.now()-n(h.quoteTimestamp):null;
   const yahooDelayed=["HELSINKI_CACHE","WORKER"].includes(h.quoteSource) && /Yahoo/i.test(h.quoteProvider||"");
   const staleLimitMs=yahooDelayed?45*60*1000:60*60*1000;
-  const dataStale=ageMs!=null && ageMs>staleLimitMs;
+  const dataStale=!validQuoteTime(h.quoteTimestamp) || ageMs>staleLimitMs;
   const quoteAge=h.quoteTimestamp?quoteAgeShort(h):"";
   const delayNote=yahooDelayed?"Yahoo ~15 min viive":"";
 
@@ -2122,10 +2113,10 @@ async function loadSharedStatus(force=false){
       const key=(h.symbol||"").toUpperCase();
       const a=assets[key];
       if(!a) continue;
-      const sharedTs=n(a.quote_timestamp)||(sharedStatus?.generated_at?Date.parse(sharedStatus.generated_at):0);
+      const sharedTs=validQuoteTime(a.quote_timestamp)?Number(a.quote_timestamp):0;
       const localTs=n(h.quoteTimestamp);
       // portfolio-status täydentää analytiikkaa, mutta ei saa ylikirjoittaa tuoreempaa Worker-kurssia.
-      if(n(a.price)>0 && (!n(h.currentPrice) || (sharedTs>0 && sharedTs>localTs))){
+      if(validPositive(a.price)&&sharedTs&&a.currency&&quotedCurrencyMatches(a,h) && (!n(h.currentPrice) || sharedTs>localTs)){
         h.currentPrice=n(a.price);
         h.dayChangePct=n(a.day_change_pct);
         h.quoteTimestamp=sharedTs||h.quoteTimestamp;
@@ -2188,7 +2179,13 @@ async function loadRiskData(force=false){
 }
 let privateInstrumentClient=null;
 const privateInstrumentData=new Map();
-function privateListing(h){return tickerCode(h.instrument?.providerSymbol||h.providerSymbol||finnhubSymbol(h)||h.symbol)}
+let screeningFetchStatus="unavailable";
+function privateListing(h){
+  const nested=tickerCode(h.instrument?.providerSymbol),direct=tickerCode(h.providerSymbol);
+  if(nested&&direct&&nested!==direct)return '';
+  if(h.instrument?.currency&&h.currency&&normalizedIdText(h.instrument.currency)!==normalizedIdText(h.currency))return '';
+  return nested||direct||tickerCode(finnhubSymbol(h)||h.symbol);
+}
 function dataStatus(status){return {ok:"Haettu",stale:"Vanha data",unavailable:"Puuttuva data",error:"Hakuvirhe"}[status]||"Ei vielä haettu"}
 async function getPrivateClient(){
   privateInstrumentClient??=import("./engine/instrument-client.mjs").then(m=>m.createInstrumentClient({origin:MARKET_WORKER_URL}));
@@ -2203,7 +2200,7 @@ async function loadPrivateInstruments(force=false){
 }
 function renderNews(){
   $("news").innerHTML="";
-  const held=new Map(state.holdings.filter(h=>h.assetType!=="fund").map(h=>[privateListing(h),h]));
+  const held=new Map(state.holdings.filter(h=>h.assetType!=="fund").map(h=>[privateListing(h),h]).filter(([symbol])=>symbol));
   const publicItems=[...(portfolioNews?.items||[]),...(state.news||[])];
   const raw=[];const counts={ok:0,stale:0,unavailable:0,error:0};
   for(const [symbol,h] of held){
@@ -2240,8 +2237,11 @@ async function loadPortfolioNews(force=false){
 async function loadInsights(force=false){
   await Promise.allSettled([loadPrivateInstruments(force),(async()=>{
     const response=await fetch(publicFeedUrl("insights.json"),{cache:"no-store"});
-    if(!response.ok)throw Error('Screening unavailable');insights=await response.json();
-  })()]);
+    if(!response.ok)throw Error('Screening unavailable');
+    const data=await response.json();
+    if(!Array.isArray(data?.dividends)||!Array.isArray(data?.rockets))throw Error('Invalid screening payload');
+    insights=data;screeningFetchStatus='ok';
+  })().catch(()=>{screeningFetchStatus='error';})]);
   renderInsights();
 }
 function renderPrivateAnalysis(kind){
@@ -2299,7 +2299,7 @@ function watchUniverse(k){return k==="dividends"?(insights?.dividends||[]):(insi
 function renderWatch(k){
  const el=$(k==="dividends"?"dividendWatchList":"rocketWatchList");if(!el)return;
  const known=new Set(watchUniverse(k).map(x=>tickerCode(x.ticker)));
- const add=watchPrefs[k].added.filter(x=>!known.has(x));
+ const add=watchPrefs[k].added;
  const hidden=watchPrefs[k].hidden.filter(x=>known.has(x));
  const button=(ticker,action,title)=>'<button type="button" class="watchAction" data-watch-action="'+action+'" data-watch-kind="'+k+'" data-watch-ticker="'+esc(ticker)+'">'+title+'</button>';
  let html='<p class="watchNote">Lista tallentuu tähän selaimeen. Vain tunnus lähetetään datapalveluun; ei määriä, hankintahintoja tai tilejä.</p>';
@@ -2315,7 +2315,7 @@ function editWatch(k,action,x){
  const pref=next[k],known=watchUniverse(k).some(y=>tickerCode(y.ticker)===t);
  if(action==="add"){
   if(known)pref.hidden=pref.hidden.filter(y=>y!==t);
-  else if(!pref.added.includes(t)){if(pref.added.length>=30)return false;pref.added.push(t)}
+  if(!pref.added.includes(t)){if(pref.added.length>=30)return false;pref.added.push(t)}
  }else if(action==="hide"){
   if(!known)return false;pref.hidden=[...new Set([...pref.hidden,t])];
  }else if(action==="restore")pref.hidden=pref.hidden.filter(y=>y!==t);
@@ -2341,23 +2341,34 @@ document.addEventListener("click",e=>{
  if(action)editWatch(action.dataset.watchKind,action.dataset.watchAction,action.dataset.watchTicker);
 });
 
+function screenObservationLabel(row){
+  const time=Date.parse(row.observed_at||'');
+  if(!validQuoteTime(time))return 'Havaintopäivä puuttuu';
+  return new Date(time).toLocaleDateString('fi-FI')+(Date.now()-time>72*3600000?' · VANHA DATA':'');
+}
+function validScreenRow(row,kind){
+  const fields=kind==='dividends'?['score','yield_pct','dividend_years','return_12m','max_drawdown']:['score','m1','m3','m6','volume_ratio'];
+  return !!tickerCode(row?.ticker)&&fields.every(key=>typeof row[key]==='number'&&Number.isFinite(row[key]))&&
+    row.score>=0&&row.score<=100&&(kind!=='dividends'||(row.yield_pct>=0&&Number.isInteger(row.dividend_years)&&row.dividend_years>=0&&row.dividend_years<=5&&row.max_drawdown<=0))&&
+    (kind!=='rockets'||row.volume_ratio>=0);
+}
 function renderInsights(){
   const divList=$("dividendList"),rocketList=$("rocketList");
   if(!divList||!rocketList) return;
   divList.innerHTML="";rocketList.innerHTML="";
-  const dividends=(insights?.dividends||[]).filter(x=>!watchPrefs.dividends.hidden.includes(tickerCode(x.ticker)));
-  const rockets=(insights?.rockets||[]).filter(x=>!watchPrefs.rockets.hidden.includes(tickerCode(x.ticker)));
+  const dividends=(Array.isArray(insights?.dividends)?insights.dividends:[]).filter(x=>validScreenRow(x,"dividends")).filter(x=>!watchPrefs.dividends.hidden.includes(tickerCode(x.ticker)));
+  const rockets=(Array.isArray(insights?.rockets)?insights.rockets:[]).filter(x=>validScreenRow(x,"rockets")).filter(x=>!watchPrefs.rockets.hidden.includes(tickerCode(x.ticker)));
   renderWatch("dividends");renderWatch("rockets");
   renderPrivateAnalysis("dividends");renderPrivateAnalysis("rockets");
   $("dividendEmpty").classList.toggle("hidden",dividends.length>0);
   $("rocketEmpty").classList.toggle("hidden",rockets.length>0);
   const updated=insights?.generated_at?ago(Date.parse(insights.generated_at)):"";
-  $("dividendUpdated").textContent=updated?`Analyysi päivitetty ${updated}.`:"";
-  $("rocketUpdated").textContent=updated?`Rajattu seulonta: ${insights?.rocket_universe_count||0} yhtiötä · näkyvissä ${rockets.length} · virheitä ${Object.keys(insights?.errors?.rockets||{}).length} · päivitetty ${updated}${Date.now()-Date.parse(insights.generated_at)>24*3600000?' · VANHA DATA':''}. Ei koko markkina.`:"Rajattu markkinaseulonta ei ole saatavilla.";
+  $("dividendUpdated").textContent=updated?`Seulontahaku: ${dataStatus(screeningFetchStatus)} · osinkoseulonta päivitetty ${updated}${Date.now()-Date.parse(insights.generated_at)>24*3600000?' · VANHA DATA':''}. Virheelliset tai puuttuvat mittarit eivät saa pisteitä.`:"Osinkoseulonnan päiväys puuttuu; tietoja ei ole varmennettu tuoreiksi.";
+  $("rocketUpdated").textContent=updated?`Seulontahaku: ${dataStatus(screeningFetchStatus)} · rajattu seulonta: ${insights?.rocket_universe_count||0} yhtiötä · näkyvissä ${rockets.length} · virheitä ${Object.keys(insights?.errors?.rockets||{}).length} · päivitetty ${updated}${Date.now()-Date.parse(insights.generated_at)>24*3600000?' · VANHA DATA':''}. Ei koko markkina.`:"Rajattu markkinaseulonta ei ole saatavilla.";
 
   dividends.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("dividendScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.label||"")} · ${screenObservationLabel(x)}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("dividendScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
         <div class="metricBox"><span>${metricHelpHtml("yield","Osinkotuotto")}</span><strong>${n(x.yield_pct).toFixed(1)} %</strong></div>
         <div class="metricBox"><span>${metricHelpHtml("years","Osinkovuosia")}</span><strong>${n(x.dividend_years)}/5</strong></div>
@@ -2370,7 +2381,7 @@ function renderInsights(){
 
   rockets.forEach((x,i)=>{
     const d=document.createElement("div");d.className="card";
-    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("radarScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
+    d.innerHTML=`<div class="insightHead"><div><div class="insightTitle"><span class="rank">${i+1}</span>${esc(x.name)}</div><div class="name">${esc(x.ticker)} · ${esc(x.market||"")} · ${screenObservationLabel(x)}</div></div><div class="score ${scoreClass(x.score)}">${metricHelpHtml("radarScore","Pisteet")}<br>${Math.round(n(x.score))}</div></div>
       <div class="metricGrid">
         <div class="metricBox"><span>${metricHelpHtml("momentum","1 kk")}</span><strong class="${n(x.m1)>=0?"pos":"neg"}">${pct(x.m1)}</strong></div>
         <div class="metricBox"><span>${metricHelpHtml("momentum","3 kk")}</span><strong class="${n(x.m3)>=0?"pos":"neg"}">${pct(x.m3)}</strong></div>
@@ -2778,7 +2789,8 @@ async function runMarketRefresh(showErrors=false){
 
   const [workerResult, githubResult]=await Promise.allSettled([
     loadWorkerData(showErrors,2),
-    loadHelsinkiData(2)
+    loadHelsinkiData(2),
+    loadPrivateInstruments(showErrors)
   ]);
 
   if(workerResult.status==="fulfilled") workerData=workerResult.value;
@@ -2857,8 +2869,8 @@ async function runMarketRefresh(showErrors=false){
 
       const wq=workerData?.assets?.[key];
       let workerQuote=null;
-      const wTime=wq?quoteTime(wq.quote_timestamp,workerData?.generated_at):null;
-      if(wq&&validPositive(wq.price)&&quotedCurrencyMatches(wq,h)&&wTime){
+      const wTime=wq&&validQuoteTime(wq.quote_timestamp)?Number(wq.quote_timestamp):null;
+      if(wq&&wq.currency&&validPositive(wq.price)&&quotedCurrencyMatches(wq,h)&&wTime){
         workerQuote={
           price:Number(wq.price),
           timestamp:wTime,
@@ -2871,8 +2883,8 @@ async function runMarketRefresh(showErrors=false){
 
       let fallback=null;
       const gq=marketData?.quotes?.[key];
-      const gTime=gq?quoteTime(gq.timestamp,marketData?.generated_at):null;
-      if(gq&&validPositive(gq.price)&&quotedCurrencyMatches(gq,h)&&gTime){
+      const gTime=gq&&validQuoteTime(gq.timestamp)?Number(gq.timestamp):null;
+      if(gq&&gq.currency&&validPositive(gq.price)&&quotedCurrencyMatches(gq,h)&&gTime){
         fallback={
           price:Number(gq.price),
           timestamp:gTime,
@@ -2884,7 +2896,15 @@ async function runMarketRefresh(showErrors=false){
       }
 
       // Freshest valid quote wins. Worker is primary when timestamps are equal.
-      const candidates=[workerQuote,fallback]
+      const listing=privateListing(h);
+      if(!listing)throw new Error('Instrumentin tunnisteet tai valuutat ovat ristiriidassa; tarkista omistus.');
+      const privateData=await (await getPrivateClient()).lookup(listing,{currency:h.currency});
+      const observation=privateData.quote;
+      const q=observation?.value;
+      const direct=['ok','stale'].includes(observation?.status)&&q?{
+        price:q.price,timestamp:q.observedAt,changePct:null,provider:q.source,
+        realtime:false,source:'INSTRUMENT',status:observation.status}:null;
+      const candidates=[direct,workerQuote,fallback]
         .filter(Boolean)
         .sort((a,b)=>{
           const dt=n(b.timestamp)-n(a.timestamp);
@@ -2895,13 +2915,19 @@ async function runMarketRefresh(showErrors=false){
       const best=candidates[0];
       if(!best) throw new Error(`ei kurssia symbolille ${key}`);
 
+      // A delayed response must not rewind a good stored observation.
+      if(validQuoteTime(h.quoteTimestamp)&&Number(h.quoteTimestamp)>best.timestamp&&validPositive(h.currentPrice)){
+        h.quoteHealth={status:'stale',checkedAt:Date.now(),observedAt:best.timestamp,
+          reason:'Lähde palautti aiempaa vanhemman kurssin; uudempi havainto säilytettiin.'};
+        stockOk++;continue;
+      }
       h.currentPrice=best.price;
       h.quoteTimestamp=best.timestamp;
       h.dayChangePct=best.changePct;
       h.quoteSource=best.source;
       h.quoteProvider=best.provider;
       h.quoteRealtime=best.realtime;
-      h.quoteHealth={status:best.source==="HELSINKI_CACHE"?"fallback":"ok",
+      h.quoteHealth={status:best.status==="stale"?"stale":best.source==="HELSINKI_CACHE"?"fallback":"ok",
         provider:best.provider,checkedAt:Date.now(),observedAt:best.timestamp};
       h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice));
       stockOk++;
@@ -3006,11 +3032,6 @@ async function runMarketRefresh(showErrors=false){
 
   loadSharedStatus(false).catch(()=>{});
   loadRiskData(false).catch(()=>{});
-}
-async function refreshNews(){
-  if(!state.apiKey)return alert("Lisää Finnhub API -avain Asetuksissa.");$("newsBtn").disabled=true;const out=[],seen=new Set();
-  for(const h of state.holdings){try{const arr=await companyNews(h.providerSymbol||h.symbol);for(const x of arr){const k=x.url||x.headline;if(seen.has(k))continue;seen.add(k);out.push({symbol:h.symbol,headline:x.headline||"Uutinen",summary:x.summary||"",source:x.source||"",url:x.url||"",datetime:n(x.datetime)})}}catch{}}
-  state.news=out.sort((a,b)=>b.datetime-a.datetime).slice(0,50);save();renderNews();$("newsBtn").disabled=false
 }
 async function quote(s){
   const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(s)}&token=${encodeURIComponent(state.apiKey)}`);
@@ -3130,9 +3151,6 @@ async function testFinnhub(){
     box.textContent=`Finnhub-testissä ongelma: ${err.message||err}`;
   }
 }
-async function candle(s){const to=Math.floor(Date.now()/1000),from=to-100*86400;const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s)}&resolution=D&from=${from}&to=${to}&token=${encodeURIComponent(state.apiKey)}`);const j=await r.json();if(j.s!=="ok")return[];return j.c.map((c,i)=>({close:n(c),high:n(j.h[i]),low:n(j.l[i])}))}
-function atr(c,p=14){if(c.length<p+1)return null;const tr=[];for(let i=1;i<c.length;i++){const pc=c[i-1].close;tr.push(Math.max(c[i].high-c[i].low,Math.abs(c[i].high-pc),Math.abs(c[i].low-pc)))}const t=tr.slice(-p);return t.length===p?t.reduce((a,b)=>a+b,0)/p:null}
-async function companyNews(s){const to=new Date(),from=new Date(Date.now()-14*86400000),d=x=>x.toISOString().slice(0,10);const r=await fetch(`https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(s)}&from=${d(from)}&to=${d(to)}&token=${encodeURIComponent(state.apiKey)}`);return await r.json()}
 async function fxRate(from,to){
   const src=String(from||"").trim().toUpperCase();
   const dst=String(to||"").trim().toUpperCase();

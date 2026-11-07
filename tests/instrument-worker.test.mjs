@@ -25,3 +25,7 @@ test('old upstream status responses do not acquire fabricated dates or identitie
   const data=await response.json();assert.equal(data.quote.status,'unavailable');assert.equal(data.news.status,'unavailable');
  }finally{globalThis.fetch=original;}
 });
+test('unknown route does not silently return the fixed legacy ticker list',async()=>{
+ const response=await worker.fetch(new Request('https://worker.test/wrong-route'),{},{waitUntil(){}});
+ assert.equal(response.status,404);
+});

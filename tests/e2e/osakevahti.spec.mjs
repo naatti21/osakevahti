@@ -167,14 +167,14 @@ test('@smoke stale shared snapshot cannot overwrite a fresher Worker quote', asy
     network: {
       marketGeneratedAt: '2026-10-12T07:59:00Z',
       workerAssets: {
-        FORTUM: { price: 24.50, quote_timestamp: mon1059, day_change_pct: 1.2, source: 'Yahoo Finland', delayed: false }
+        FORTUM: { currency: 'EUR', price: 24.50, quote_timestamp: mon1059, day_change_pct: 1.2, source: 'Yahoo Finland', delayed: false }
       },
       marketQuotes: {
-        FORTUM: { price: 24.30, timestamp: ms('2026-10-12T10:58:00+03:00'), change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
+        FORTUM: { currency: 'EUR', price: 24.30, timestamp: ms('2026-10-12T10:58:00+03:00'), change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
       },
       sharedGeneratedAt: '2026-10-12T07:30:00Z',
       sharedAssets: {
-        FORTUM: { price: 21.00, day_change_pct: -2, quote_timestamp: staleTs, source: 'stale shared' }
+        FORTUM: { currency: 'EUR', price: 21.00, day_change_pct: -2, quote_timestamp: staleTs, source: 'stale shared' }
       }
     }
   });
@@ -265,10 +265,10 @@ test('equal timestamp prefers Worker over GitHub fallback', async ({ page }) => 
     network: {
       marketGeneratedAt: '2026-10-12T07:59:00Z',
       workerAssets: {
-        FORTUM: { price: 24.50, quote_timestamp: mon1059, day_change_pct: 1.2, source: 'Yahoo Finland', delayed: false }
+        FORTUM: { currency: 'EUR', price: 24.50, quote_timestamp: mon1059, day_change_pct: 1.2, source: 'Yahoo Finland', delayed: false }
       },
       marketQuotes: {
-        FORTUM: { price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
+        FORTUM: { currency: 'EUR', price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
       }
     }
   });
@@ -286,7 +286,7 @@ test('GitHub snapshot fills a quote when Worker has no matching symbol', async (
     network: {
       workerAssets: {},
       marketQuotes: {
-        FORTUM: { price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
+        FORTUM: { currency: 'EUR', price: 24.30, timestamp: mon1059, change_pct: 1.1, provider: 'GitHub snapshot', realtime: false }
       }
     }
   });
@@ -304,7 +304,7 @@ test('shared status without a timestamp cannot overwrite an existing quote', asy
     network: {
       sharedGeneratedAt: null,
       sharedAssets: {
-        FORTUM: { price: 21.00, day_change_pct: -4.2, source: 'timestamp missing' }
+        FORTUM: { currency: 'EUR', price: 21.00, day_change_pct: -4.2, source: 'timestamp missing' }
       }
     }
   });
@@ -321,7 +321,7 @@ test('newer shared status may fill a missing quote', async ({ page }) => {
     network: {
       sharedGeneratedAt: '2026-10-12T07:59:00Z',
       sharedAssets: {
-        FORTUM: { price: 23.80, day_change_pct: 0.7, quote_timestamp: mon1059, source: 'shared status' }
+        FORTUM: { currency: 'EUR', price: 23.80, day_change_pct: 0.7, quote_timestamp: mon1059, source: 'shared status' }
       }
     }
   });
@@ -1738,4 +1738,21 @@ test('IQM: digit-initial OCR 1QM stays in manual review with source text unchang
   await expect(dlg).toContainText('IQMX.HE');
   await expect(page.locator('#confirmImportReview')).toBeDisabled();
   expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings,KEY)).toHaveLength(0);
+});
+
+// Valid-response fixtures above now declare their actual quote currency.
+// Assertions are unchanged; missing metadata has its own negative oracle.
+test('stock fallback rejects absent currency and generated-time substitution', async ({page})=>{
+  await openApp(page, {
+    time:'2026-10-12T11:00:00+03:00',
+    state:appState([stock({id:'f',symbol:'FORTUM',currentPrice:22,quoteTimestamp:friClose})]),
+    network:{marketGeneratedAt:'2026-10-12T07:59:00Z',sharedGeneratedAt:'2026-10-12T07:59:00Z',
+      workerAssets:{FORTUM:{price:99,quote_timestamp:mon1059,source:'missing currency'}},
+      marketQuotes:{FORTUM:{price:98,currency:'EUR',provider:'missing actual date'}},
+      sharedAssets:{FORTUM:{price:97,currency:'EUR',source:'missing actual date'}}}
+  });
+  await page.evaluate(async()=>{await refreshMarket(false);await loadSharedStatus(false);});
+  const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),KEY);
+  expect(saved.holdings[0].currentPrice).toBe(22);
+  expect(saved.holdings[0].quoteTimestamp).toBe(friClose);
 });

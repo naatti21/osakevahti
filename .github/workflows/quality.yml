@@ -2,7 +2,7 @@ name: Quality gate
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "refactor/private-market-data-contract", "refactor/private-watch-news-flow", "refactor/private-quote-safety"]
   pull_request:
   workflow_dispatch:
 
@@ -35,6 +35,12 @@ jobs:
       - name: Verify Alpha public NAV ISIN fallback and privacy
         run: npm run test:alpha-public-nav
 
+      - name: Deterministic contracts, package and import safety
+        run: |
+          node scripts/build-alpha-pages.mjs
+          node --test tests/*.test.mjs
+          npm run test:qa-import
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
@@ -51,3 +57,16 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  external-connectivity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Live provider connectivity (distinct from deterministic safety)
+        run: npm run test:live
