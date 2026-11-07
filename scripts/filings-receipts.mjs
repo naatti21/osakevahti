@@ -22,9 +22,22 @@ export function createFilingsReceipt({sourceUrl,body,format,issuerId,issuerName}
    const allIdentifiers=[...new Set(facts.map(f=>f?.dimensions?.entity))];
    r.dimensionFactCount=facts.length;
    r.entityDimensions=allIdentifiers.slice(0,12).map(x=>typeof x==='string'?x:'(missing)');
+   // xBRL-JSON entity is an SQName. The *prefix* is arbitrary ("scheme",
+   // "lei", etc.); its canonical URI defines the identifier scheme.
+   // Never accept a prefix alone without consulting documentInfo.namespaces.
+   const namespaces=doc.documentInfo?.namespaces||{};
+   const LEI_NS=new Set(['http://standards.iso.org/iso/17442',
+      'http://standard.iso.org/iso/17442']);
+   const tokens=allIdentifiers.map(value=>{
+    if(typeof value!=='string')return {prefix:null,id:null,namespace:null};
+    const m=value.match(/^([A-Za-z][\\w.-]*):([A-Z0-9]{20})$/);
+    return m?{prefix:m[1],id:m[2],namespace:namespaces[m[1]]||null}:
+     {prefix:null,id:null,namespace:null};
+   });
+   r.entityNamespacesUsed=tokens.map(t=>({prefix:t.prefix,namespace:t.namespace}));
    r.identityMethod='xbrl-entity-dimension';
-   r.entityMatched=facts.length>0&&allIdentifiers.length===1&&
-     String(allIdentifiers[0]).toUpperCase()==='LEI:'+lei;
+   r.entityMatched=facts.length>0&&allIdentifiers.length>=1&&
+    tokens.every(t=>t.id===lei&&LEI_NS.has(t.namespace));
   }
  }else{
   const normalizedBody=body.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').toLowerCase();
