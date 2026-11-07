@@ -4,6 +4,8 @@ on:
     paths:
       - "scripts/run-out-of-sample-filings.mjs"
       - "tests/out-of-sample-filings.test.mjs"
+      - "engine/generic-statement-tables.mjs"
+      - "tests/generic-statement-tables.test.mjs"
       - ".github/workflows/out-of-sample-filings.yml"
   workflow_dispatch:
 
@@ -20,7 +22,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify existing parser contracts without new issuer aliases
-        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs tests/out-of-sample-filings.test.mjs
+        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs tests/out-of-sample-filings.test.mjs tests/generic-statement-tables.test.mjs
       - name: Read original filings, record each datum and any missing values
         run: node scripts/run-out-of-sample-filings.mjs
       - name: Keep source evidence (not a PWA deploy)

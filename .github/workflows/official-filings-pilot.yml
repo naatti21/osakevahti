@@ -7,6 +7,8 @@ on:
       - "tests/official-filings-pilot.test.mjs"
       - "engine/issuer-ir-tables-pilot.mjs"
       - "tests/issuer-ir-tables-pilot.test.mjs"
+      - "engine/generic-statement-tables.mjs"
+      - "tests/generic-statement-tables.test.mjs"
       - ".github/workflows/official-filings-pilot.yml"
   workflow_dispatch:
 
@@ -23,6 +25,6 @@ jobs:
         with:
           node-version: 22
       - name: Generic-source contract tests
-        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs
+        run: node --test tests/official-filings-pilot.test.mjs tests/issuer-ir-tables-pilot.test.mjs tests/generic-statement-tables.test.mjs
       - name: Read-only SEC and ESEF source evidence
         run: node scripts/run-official-filings-pilot.mjs
