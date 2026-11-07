@@ -72,3 +72,27 @@ test('repeated new-fund hook is safe for already bound holding or for a stock',a
  await expect(page.locator('#navLinkDlg')).not.toBeVisible();
  expect(reads()).toBe(0);
 });
+
+test('Storebrand Japan A EUR gets exact identity-only notice; no fake auto NAV consent or SEK price',async({page})=>{
+ const reads=await prepare(page);
+ const h={...newFund(),id:'storebrand-new',name:'Storebrand Japan A EUR',
+   currentPrice:209.34,manualPrice:209.34,
+   instrument:{isin:'',identification:'unverified',currency:'EUR',assetType:'fund'}};
+ await page.evaluate(h=>{state.holdings.push(h);save();render();onNewFundsSaved([h.id])},h);
+ await expect(page.locator('#navLinkStatus')).toContainText('1/1 rahastolle löytyi ehdokkaita',{timeout:18000});
+ await expect(page.locator('#navLinkList')).toContainText('SE0013801479');
+ await expect(page.locator('#navLinkList')).toContainText('automaattinen EUR-NAV puuttuu');
+ await page.locator('#navLinkList button').click();
+ await expect(page.locator('#navLinkDlg')).toBeVisible();
+ await expect(page.locator('#navLinkSearchStatus')).toContainText('Älä hyväksy SEK-hintaa euroarvoksi');
+ const identity=page.locator('#navLinkCandidates button').first();
+ await expect(identity).toBeDisabled();
+ await expect(page.locator('#navLinkCandidates')).toContainText('Ei automaattista EUR NAV-lähdettä');
+ await expect(page.locator('#navLinkCandidates')).toContainText('Syötä tai tarkista NAV käsin');
+ const stored=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).holdings[0],KEY);
+ expect(stored.navBinding).toBeUndefined();
+ expect(stored.navOptIn).toBeUndefined();
+ expect(stored.quantity).toBe(.37);expect(stored.buyPrice).toBe(200.25);
+ expect(stored.manualPrice).toBe(209.34);
+ expect(reads()).toBe(1);
+});
