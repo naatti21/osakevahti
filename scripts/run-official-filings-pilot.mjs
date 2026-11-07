@@ -1,6 +1,7 @@
 import {normalizeSecCompanyFacts,normalizeEsefXbrlJson,combineEsefYears,coverage,PILOT_YEARS} from '../engine/official-filings-pilot.mjs';
 import {normalizeIssuerIrTables,combineIrReports} from '../engine/issuer-ir-tables-pilot.mjs';
 import {normalizeGenericStatementHtml} from '../engine/generic-statement-tables.mjs';
+import {normalizeSourceScaledStatementHtml} from '../engine/html-statement-unit-evidence.mjs';
 import {auditFilingEvidence} from '../engine/filings-evidence-gate.mjs';
 import {createFilingsReceipt} from './filings-receipts.mjs';
 import {appendFile} from 'node:fs/promises';
@@ -77,9 +78,10 @@ async function pullMicrosoftIrProbe(){
    const focus=rows.filter(a=>/^(total revenue|net income|net cash from operations|short-term debt|current portion of long-term debt|long-term debt)$/i.test(a[0]||''))
     .slice(0,40);
    const report=normalizeIssuerIrTables(html,{sourceUrl:url,reportYear:year});
-   const generic=normalizeGenericStatementHtml(html,{sourceUrl:url,reportYear:year});
+   const unproven=normalizeGenericStatementHtml(html,{sourceUrl:url,reportYear:year});
+   const generic=normalizeSourceScaledStatementHtml(html,{sourceUrl:url,reportYear:year});
    result.push({year,status:'retrieved',url,byteCount:html.length,tableRows:rows.length,
-    focusRows:focus,report,generic,receipt});
+    focusRows:focus,report,unproven,generic,receipt});
   }catch(e){result.push({year,status:'blocked',url,error:String(e?.message||e)})}
  }
  return result;
@@ -105,6 +107,7 @@ const [sec,esefArr,microsoftIrProbe]=await Promise.all([pullSec(),Promise.all(PI
 const esefDocs=Object.fromEntries(esefArr.filter(r=>r.status==='retrieved').map(r=>[r.year,r.report]));
 const microsoftIr=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.report));
 const microsoftGeneric=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.generic));
+const microsoftUnproven=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.unproven));
 const esef=combineEsefYears(esefDocs,{lei:ESEF_LEI});
 const auditedAt=new Date().toISOString();
 const nokiaAudit=auditFilingEvidence(esef,{identity:'LEI:'+ESEF_LEI,currency:'EUR',
@@ -118,10 +121,12 @@ const report={
  receiptDiagnostics:esefArr.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
  count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
- microsoftSemantic:{coverage:coverage(microsoftGeneric),years:summarizeReport(microsoftGeneric),
+ microsoftSemantic:{coverage:coverage(microsoftGeneric),previousUnprovenCoverage:coverage(microsoftUnproven),
+   years:summarizeReport(microsoftGeneric),
    sourceTier:'issuer-html-not-xbrl',
    tableSelection:microsoftIrProbe.map(({year,generic})=>({year,statementSelection:generic?.statementSelection,
-     candidateCounts:generic?.candidateCounts,yearLists:generic?.yearLists}))},
+     candidateCounts:generic?.candidateCounts,yearLists:generic?.yearLists,
+     statementScales:generic?.statementScales}))},
  microsoftIr:{
    sources:microsoftIrProbe.map(({year,url,status,error,tableRows,report})=>({
      year,url,status,error:error||null,tableRows,
