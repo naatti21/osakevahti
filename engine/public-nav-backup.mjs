@@ -128,6 +128,28 @@ export function shouldTryFundBackup(holding,now=Date.now()){
     return true;
   return days>MAX_AGE_DAYS||!info; // incl. yearless NAV source day
 }
+// Identity-only reference, from the issuer's official fund documents.
+// This is *not* a NAV quote or an accepted price feed. Never link this to the
+// public Rahastoraportti price provider, which lacks this share class.
+const EXTRA_IDENTITY_ONLY=Object.freeze([{
+  name:"Storebrand Japan A EUR",isin:"SE0013801479",shareClass:"A EUR",
+  currency:"EUR",issuerUrl:"https://storebrand.fondlista.se/details/SE0013801479/2",
+  note:"EUR-osuuslaji on tunnistettu, mutta päivätty automaattinen EUR-NAV-lähde puuttuu. "+
+    "Liikkeeseenlaskijan sivu näyttää SEK-merkityn hinnan; sitä ei käytetä EUR-arvostukseen."
+}]);
+export function missingNavIdentityCandidate(holding){
+  if(holding?.assetType!=="fund")return null;
+  const existing=up(holding?.instrument?.isin||holding?.isin);
+  const name=searchNorm(holding.name);
+  const currency=up(holding.currency);
+  const row=EXTRA_IDENTITY_ONLY.find(x=>currency===x.currency&&
+    name===searchNorm(x.name)&&(!existing||existing===x.isin));
+  if(!row||!validIsin(row.isin))return null;
+  return {isin:row.isin,name:row.name,shareClass:row.shareClass,
+    currency:row.currency,issuerUrl:row.issuerUrl,
+    price:null,navDate:null,sourceStatus:"identity-only",score:100,
+    evidence:"issuer-share-class-identity-only",source:row.note};
+}
 // A *proposal* is never a user-accepted NAV binding. All matching happens
 // against the downloaded public catalog, never by sending holdings to a server.
 export function proposeFundMatches(holding,snapshot,{limit=4}={}){
@@ -174,7 +196,12 @@ export function proposeFundMatches(holding,snapshot,{limit=4}={}){
   candidates.sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name,"fi")||
     a.isin.localeCompare(b.isin));
   const picked=candidates.slice(0,Math.max(1,Math.min(12,Number(limit)||4)));
-  if(!picked.length)return missing;
+  if(!picked.length){
+    const known=missingNavIdentityCandidate(holding);
+    return known?{status:"no_nav_source",candidates:[known],ambiguous:false,
+      reason:"Tunnus ja osuuslaji löytyivät liikkeeseenlaskijan tiedoista, "+
+        "mutta turvallista automaattista EUR-NAV-lähdettä ei löytynyt"}:missing;
+  }
   const exactIdentity=hasIsin&&picked[0].isin===existingIsin;
   const strongName=!hasIsin&&picked[0].score>=92&&
     (picked.length===1||picked[0].score-picked[1].score>=12);
