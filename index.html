@@ -448,6 +448,9 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 <form id="form">
   <div class="row"><h2 id="dlgTitle">Lisää omistus</h2><button type="button" id="closeDlg">×</button></div>
   <input id="id" type="hidden">
+  <div id="newHoldingTypeBox"><label class="txt" for="newHoldingType">Lisättävä omistus</label>
+  <select id="newHoldingType"><option value="stock">Osake tai ETF</option><option value="fund">Rahasto</option></select>
+  <p class="muted small">Rahasto: täytä nimi, määrä, keskihankintahinta ja tili. Sovellus etsii ISIN- ja NAV-ehdokkaat tallennuksen jälkeen.</p></div>
   <div id="holdingTickerSection"><label class="txt" for="symbol">Tikkeri *</label><input id="symbol" required placeholder="Esim. AMD"><p class="muted small" style="margin:5px 0 0">Tähän vain pörssitunnus, esim. AMD tai FORTUM.HE.</p></div><div id="fundEditInfo" class="statusBox muted hidden">Muokkaat rahastoa. Pörssitikkeriä ei tarvita keskihinnan päivittämiseen. Rahaston aiemmat tunnisteet ja NAV-kurssi säilyvät ennallaan.</div>
   <label class="txt">Nimi</label><input id="name" placeholder="Esim. Advanced Micro Devices"><p class="muted small" style="margin:5px 0 0">Yhtiön nimi on vapaaehtoinen. Määrä, keskihinta ja trailing syötetään alempiin omiin kenttiinsä.</p>
   <div class="actions" id="instrumentLookupAction"><button type="button" id="openInstrumentLookup">🔎 Etsi osake nimellä tai tunnuksella</button></div>
@@ -627,6 +630,7 @@ $("confirmAccountReview").onclick=confirmAccountReview;
 $("closeImportReview").onclick=$("cancelImportReview").onclick=()=>{pendingImport=null;$("importReviewDlg").close()};
 $("confirmImportReview").onclick=commitPendingImport;
 $("form").onsubmit=e=>{e.preventDefault();saveHolding()};
+$("newHoldingType").onchange=()=>updateNewHoldingTypeView();
 $("deleteBtn").onclick=deleteHolding;
 $("refreshBtn").onclick=()=>refreshMarket(true).catch(err=>{
   const feedback=$("refreshFeedback");
@@ -2333,6 +2337,24 @@ function renderInsights(){
     rocketList.appendChild(d);
   });
 }
+function updateNewHoldingTypeView(){
+  const id=$("id").value,old=state.holdings.find(x=>x.id===id);
+  const fundEdit=!!old&&old.assetType==="fund";
+  const isFund=fundEdit||(!id&&$("newHoldingType").value==="fund");
+  $("newHoldingTypeBox").classList.toggle("hidden",!!id);
+  $("holdingTickerSection").classList.toggle("hidden",isFund);
+  $("instrumentLookupAction").classList.toggle("hidden",isFund);
+  $("providerSymbolSection").classList.toggle("hidden",isFund);
+  $("fundEditInfo").classList.toggle("hidden",!isFund);
+  $("fundEditInfo").textContent=fundEdit?
+    "Muokkaat rahastoa. Vanha hankintahinta, tili ja NAV-tunnisteet säilyvät, ellei niitä itse muuteta.":
+    "Uusi rahasto: ISIN on valinnainen. Sovellus ehdottaa tunnistusta ja NAV-lähdettä tallennuksen jälkeen; mitään ei hyväksytä automaattisesti.";
+  $("fundPriceSourceSection").classList.toggle("hidden",!fundEdit);
+  $("fundIsinEditor").classList.toggle("hidden",!isFund);
+  $("symbol").required=!isFund;
+  $("name").required=isFund;
+  if(!id&&isFund&&$("accountType").value==="")$("accountType").value="FUND";
+}
 function openDlg(id=null){
   manualInstrumentChoice=null;
   alphaSearchSeq++;
@@ -2341,6 +2363,7 @@ function openDlg(id=null){
   $("instrumentSearchStatus").textContent="Etsi nimi, ticker tai ISIN. Mikään valinta ei tallennu ilman vahvistusta.";
   $("form").reset();
   $("id").value="";
+  $("newHoldingType").value="stock";
   $("trailing").value=12;
   $("riskClass").value="medium";
   $("currency").value=state.baseCurrency;
@@ -2351,18 +2374,11 @@ function openDlg(id=null){
   $("deleteBtn").classList.add("hidden");
   $("dlgTitle").textContent=id?"Muokkaa omistusta":"Lisää omistus";
   const fundEdit=!!id&&state.holdings.some(x=>x.id===id&&x.assetType==="fund");
-  // Legacy funds may carry long synthetic internal identifiers; those are not
-  // exchange tickers. Hide stock-only fields without erasing their values.
-  $("holdingTickerSection").classList.toggle("hidden",fundEdit);
-  $("instrumentLookupAction").classList.toggle("hidden",fundEdit);
-  $("providerSymbolSection").classList.toggle("hidden",fundEdit);
-  $("fundEditInfo").classList.toggle("hidden",!fundEdit);
-  $("fundPriceSourceSection").classList.toggle("hidden",!fundEdit);
-  $("fundIsinEditor").classList.toggle("hidden",!fundEdit);
+  // Preserve historical fund identifiers; this selector applies to new
+  // holdings only and must never change an existing holding's asset type.
   $("fundIsin").value="";
   $("fundPriceSource").value="";
-  $("symbol").required=!fundEdit;
-  $("name").required=fundEdit;
+  updateNewHoldingTypeView();
   if(id){
     const h=state.holdings.find(x=>x.id===id);
     if(!h)return;
@@ -2453,17 +2469,19 @@ function saveHolding(){
   if(!supportedHoldingCurrency($("currency").value)){alert("Vahvista omistuksen valuutta ennen tallennusta. Mitään ei muutettu.");return}
   const id=$("id").value||uid(),old=state.holdings.find(x=>x.id===id)||{};
   const fundEdit=old.id&&old.assetType==="fund";
+  const fundCreate=!old.id&&$("newHoldingType").value==="fund";
+  const fundForm=fundEdit||fundCreate;
   // Funds have no exchange ticker requirement. Preserve even historical,
   // overlong placeholder symbols exactly; never rewrite them into fake listings.
-  const rawSymbol=fundEdit?String(old.symbol||""):$("symbol").value.trim().toUpperCase();
-  const rawProvider=fundEdit?String(old.providerSymbol||""):$("providerSymbol").value.trim().toUpperCase();
+  const rawSymbol=fundForm?String(old.symbol||""):$("symbol").value.trim().toUpperCase();
+  const rawProvider=fundForm?String(old.providerSymbol||""):$("providerSymbol").value.trim().toUpperCase();
   const valid=/^[A-Z0-9.^:=_-]{1,24}$/;
-  if(!fundEdit&&!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
-  if(!fundEdit&&rawProvider&&!valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
-  if(fundEdit&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
-  const editedFundIsin=fundEdit?normalizedIdText($("fundIsin").value):"";
+  if(!fundForm&&!valid.test(rawSymbol)){alert("Tikkeriin vain pörssitunnus, esim. AMD tai FORTUM.HE. Älä kirjoita siihen määrää, hintaa tai muuta tekstiä.");return}
+  if(!fundForm&&rawProvider&&!valid.test(rawProvider)){alert("Markkinadatan tunnus näyttää virheelliseltä.");return}
+  if(fundForm&&!$("name").value.trim()){alert("Rahaston nimi ei saa olla tyhjä.");return}
+  const editedFundIsin=fundForm?normalizedIdText($("fundIsin").value):"";
   const oldFundIsin=fundEdit?normalizedIdText(old.instrument?.isin||old.isin):"";
-  if(fundEdit&&editedFundIsin&&!validImportIsin(editedFundIsin)){
+  if(fundForm&&editedFundIsin&&!validImportIsin(editedFundIsin)){
     alert("Rahaston ISIN on virheellinen. Tarkista kaikki 12 merkkiä ja tarkistenumero.");return;
   }
   if(fundEdit&&editedFundIsin!==oldFundIsin &&
@@ -2503,7 +2521,7 @@ function saveHolding(){
     return;
   }
   const fields=complete?accountFormFields("accountType","brokerSelect","brokerOther","accountLabel"):null;
-  if(old.assetType==="fund"&&fields?.accountType==="OST"){
+  if(fundForm&&fields?.accountType==="OST"){
     alert("Rahasto-osuuksia ei voi pitää osakesäästötilillä. Valitse rahastotili, AOT tai Muu.");
     return;
   }
@@ -2518,6 +2536,7 @@ function saveHolding(){
       })
     : String(old.account||"");
   const h={...old,id,symbol:rawSymbol,name:$("name").value.trim(),providerSymbol:rawProvider,
+    ...(fundCreate?{assetType:"fund"}:{}),
     ...(fundEdit?{fundQuoteKey:savedFundSource}:{}),
     quantity:n($("qty").value),buyPrice:n($("buy").value),currency:$("currency").value,account,
     accountType:fields?.accountType||type||old.accountType||"",
@@ -2544,6 +2563,14 @@ function saveHolding(){
     };
   }else{
     const ident=ensureInstrumentIdentity(h,old.instrument?.source||"manual");
+    if(fundCreate){
+      ident.isin=editedFundIsin;
+      ident.assetType="fund";
+      ident.currency=h.currency;
+      ident.listingTicker="";
+      ident.providerSymbol="";
+      h.isin=editedFundIsin;
+    }
     if(fundEdit && editedFundIsin!==oldFundIsin){
       ident.isin=editedFundIsin;
       h.isin=editedFundIsin;
@@ -2552,7 +2579,7 @@ function saveHolding(){
     }
     ident.companyName=h.name;
     ident.currency=h.currency;
-    if(!fundEdit){
+    if(!fundForm){
       ident.listingTicker=rawSymbol;
       ident.providerSymbol=rawProvider;
       ident.dataKey=legacyDataKey(rawSymbol);
