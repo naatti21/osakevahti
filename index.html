@@ -370,7 +370,7 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
 
   <details id="navLinkPanel" class="navLinkPanel">
     <summary><strong>Rahastojen NAV-seuranta · vahvista vanhat omistukset</strong></summary>
-    <p class="muted small" style="margin:9px 0">Sovellus hakee kaikkien vanhojen rahastojen nimelle, ISINille ja valuutalle ehdokkaat yhdellä julkisella lähdelatauksella. Vahvista osuuslaji kerran, minkä jälkeen NAV päivittyy kurssipäivitysten yhteydessä. Vanhat omistustiedot ja hinnat säilyvät.</p>
+    <p class="muted small" style="margin:9px 0">Myös uudet rahastot tunnistetaan automaattisesti tallennuksen jälkeen. Vahvista oikea ISIN ja osuuslaji kerran; tämän jälkeen NAV päivittyy kurssipäivityksissä. Vanha hinta ja omistustiedot säilyvät. Jos julkista NAV-lähdettä ei ole, näytetään lähteen puuttuminen — hintaa ei arvata.</p>
     <div class="actions"><button type="button" class="primary" id="navLinkAutoScan">Tunnista kaikki rahastot automaattisesti</button><button type="button" id="navLinkBackup">Vie nykyisen salkun JSON ennen NAV-vahvistuksia</button></div>
     <div id="navLinkStatus" class="statusBox muted">Yhtään olemassa olevaa rahastoa ei yhdistetä automaattisesti.</div>
     <div id="navLinkList" class="navLinkList"></div>
@@ -1398,6 +1398,38 @@ async function scanLegacyFundNav(){
     }
   })();
   return navConsentScanInFlight;
+}
+// New fund positions enter the same proven NAV confirmation workflow as legacy
+// funds. The only automatic action is local candidate discovery; acceptance is
+// still explicit. No purchase/quantity/cost/account field is ever rewritten.
+function onNewFundsSaved(newIds){
+  const ids=[...new Set((newIds||[]).map(String))];
+  if(!ids.length)return;
+  const unlinked=ids.filter(id=>state.holdings.some(h=>
+    String(h.id)===id&&h.assetType==="fund"&&!h.navBinding));
+  if(!unlinked.length)return;
+  navConsentScanDone=false;
+  navConsentScanStatus="Uusia rahastoja lisätty: "+unlinked.length+
+    ". Haetaan ISIN- ja NAV-ehdotukset automaattisesti…";
+  for(const id of unlinked)navConsentProposals.delete(id);
+  renderNavConsentList();
+  // Display the results inside the app, without forcing the user to manually
+  // open Settings. Do not interrupt a pending import confirmation.
+  Promise.resolve().then(async()=>{
+    const nav=[...document.querySelectorAll(".nav")]
+      .find(x=>x.dataset.view==="settingsView");
+    if(nav)nav.click();
+    const panel=$("navLinkPanel");
+    if(panel)panel.open=true;
+    if(navConsentScanInFlight)await navConsentScanInFlight;
+    navConsentScanDone=false;
+    await scanLegacyFundNav();
+    if(panel)panel.scrollIntoView({block:"start",behavior:"smooth"});
+  }).catch(e=>{
+    navConsentScanStatus="NAV-ehdotusten automaattihaku ei onnistunut: "+
+      String(e?.message||e)+". Rahasto tallennettiin, muut tiedot säilyivät.";
+    renderNavConsentList();
+  });
 }
 function renderNavConsentList(){
   const list=$("navLinkList"),status=$("navLinkStatus"),quick=$("navQuickLink");
@@ -2527,7 +2559,8 @@ function saveHolding(){
      (editedFundIsin&&editedFundIsin!==normalizedIdText(h.navBinding.isin)))){
     delete h.navBinding;delete h.navOptIn;delete h.navObservation;delete h.navDiagnostic;
   }
-  if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close()
+  if(!h.currentPrice&&h.manualPrice)h.currentPrice=h.manualPrice;h.highWatermark=Math.max(n(h.highWatermark),n(h.currentPrice),n(h.manualPrice));const i=state.holdings.findIndex(x=>x.id===id);if(i>=0)state.holdings[i]=h;else state.holdings.push(h);save();render();$("dlg").close();
+  if(i<0&&h.assetType==="fund")onNewFundsSaved([h.id]);
 }
 
 function openAccountReview(){
@@ -3503,6 +3536,7 @@ function commitPendingImport(){
   // A previous observation cannot be overwritten by a different unverified ISIN.
   if(pendingImport.rows.some(r=>state.holdings.some(old=>simpleListingKey(old) && simpleListingKey(old)===simpleListingKey(r.holding) && !distinctKnownMic(old,r.holding) && sourceIsinConflict(old,r.holding))))return;
   const incoming=pendingImport.rows.map(x=>x.holding);
+  const beforeIds=new Set(state.holdings.map(x=>String(x.id)));
   const merged=mergeImportedHoldings(state.holdings,incoming);
   if(merged.conflict)return;
   // Stage the full result. A quota/serialization/validation failure must not
@@ -3523,6 +3557,7 @@ function commitPendingImport(){
   const count=incoming.length;
   pendingImport=null;$("importReviewDlg").close();
   alert("Käsitelty "+count+" omistusta: "+merged.added+" lisätty, "+merged.updated+" päivitetty."+(unresolved?" "+unresolved+" jäi tarkoituksella tunnistamatta.":""));
+  onNewFundsSaved(state.holdings.filter(h=>h.assetType==="fund"&&!beforeIds.has(String(h.id))).map(h=>h.id));
 }
 
 function exportBackup(){const {apiKey,...backupState}=state;const b=new Blob([JSON.stringify(backupState,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`osakevahti-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
@@ -4298,6 +4333,7 @@ function commitFundTrial(){
     $("fundTrialStatus").textContent="Tallennus epäonnistui. Alpha jätettiin ennalleen: "+String(error?.message||error);return;
   }
   render();fundTrialRows=[];renderFundTrial();
+  if(additions.length)onNewFundsSaved(additions.map(h=>h.id));
   $("fundTrialStatus").className="statusBox statusOk";
   $("fundTrialStatus").textContent="Lisätty "+additions.length+" uutta rahastoa ja päivitetty "+updates.size+
     " nykyistä omistusta. Tarkista salkusta ja ota tarvittaessa uusi varmuuskopio.";
