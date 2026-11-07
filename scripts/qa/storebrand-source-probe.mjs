@@ -19,6 +19,12 @@ for(const [name,url] of endpoints){
     const area=content.slice(Math.max(0,idAt-14000),idAt+12000);
     const tagText=area.replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ")
       .replace(/\s+/g," ").trim();
+    const pricePos=content.lastIndexOf("Fondkurs (2026-11-05)");
+    const rawPriceSection=content.slice(Math.max(0,pricePos-600),pricePos+900);
+    const visiblePriceSection=rawPriceSection.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+    console.log("STOREBRAND_PUBLISHED_NAV_CONTEXT",JSON.stringify({
+      pricePos,visiblePriceSection:visiblePriceSection.slice(0,700)
+    }));
     const loc=tagText.indexOf("Fondkurs");
     console.log("STOREBRAND_OFFICIAL_LOCAL_CONTEXT",JSON.stringify({
       isinPosition:idAt,
