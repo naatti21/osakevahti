@@ -32,7 +32,9 @@ export function createInstrumentClient({origin,fetchImpl=globalThis.fetch,now=Da
       }
       data=await inflight.get(symbol);
     }
-    const quote=data.quote?.value?validateStockQuote(data.quote.value,{symbol,currency},now()):data.quote;
+    const declaredCurrency=typeof data.currency==='string'?data.currency:'';
+    const expectedCurrency=currency||declaredCurrency;
+    const quote=data.quote?.value?validateStockQuote(data.quote.value,{symbol,currency:expectedCurrency},now()):data.quote;
     const valid=['ok','stale'].includes(quote?.status);
     const metric=(value,keys)=>valid&&['ok','stale'].includes(value?.status)&&observationTime(value.observedAt,now())&&
       keys.every(key=>typeof value[key]==='number'&&Number.isFinite(value[key]))
@@ -45,7 +47,9 @@ export function createInstrumentClient({origin,fetchImpl=globalThis.fetch,now=Da
       if(item.symbol!==symbol||!observationTime(item.datetime*1000,now())||!item.headline)return false;
       try{return ['https:','http:'].includes(new URL(item.url).protocol)}catch{return false}
     }):[];
-    return {symbol,quote:quote||{status:'unavailable'},momentum:metric(data.momentum,['m1','m3','m6']),dividends,
+    return {symbol,name:typeof data.name==='string'?data.name.slice(0,120):'',
+      instrumentType:['EQUITY','ETF'].includes(data.instrumentType)?data.instrumentType:undefined,
+      quote:quote||{status:'unavailable'},momentum:metric(data.momentum,['m1','m3','m6']),dividends,
       news:{status:news?.status==='ok'&&items.length&&now()-Math.max(...items.map(x=>x.datetime))*1000>7*86400000?'stale':['ok','stale','error','unavailable'].includes(news?.status)?news.status:'unavailable',items},checkedAt:data.checkedAt};
   }};
 }

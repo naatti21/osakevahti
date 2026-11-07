@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-fi-evidence3";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-inspection4";
 const SHELL = [
   "./",
   "./index.html",
@@ -15,6 +15,7 @@ const SHELL = [
   "./engine/instrument-client.mjs",
   "./engine/account-tax.mjs",
   "./engine/fi-dividend-decisions.mjs",
+  "./engine/stock-inspection.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"
