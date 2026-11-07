@@ -1454,13 +1454,18 @@ function renderNavConsentList(){
     const current=navConsentCore?.usableNavObservation(h);
     meta.textContent=h.navBinding?
       "ISIN "+h.navBinding.isin+" · "+(current?"≈ NAV "+current.price+" "+h.currency+" · "+current.navDate:"Vanha hinta käytössä / NAV odottaa"):
+      suggestion?.sourceStatus==="identity-only"?
+        "ISIN "+suggestion.isin+" · "+suggestion.shareClass+
+        " tunnistettu · automaattinen EUR-NAV puuttuu, vanha hinta säilyy":
       suggestion?
         "Ehdotus: "+suggestion.name+" · "+suggestion.isin+" · "+suggestion.currency+
           " · "+(proposal?.ambiguous?"useita samankaltaisia osumia":"tarkista osuuslaji"):
         (navConsentScanDone?"Ei varmaa nimiosumaa · voi hakea käsin":"Odottaa tunnistusta · "+h.currency);
     left.append(name,meta);
     const action=document.createElement("button");action.type="button";
-    action.textContent=h.navBinding?"Poista NAV":suggestion?"Tarkista ehdotus":"Hae / tarkista";
+    action.textContent=h.navBinding?"Poista NAV":
+      suggestion?.sourceStatus==="identity-only"?"Tarkista / NAV käsin":
+      suggestion?"Tarkista ehdotus":"Hae / tarkista";
     action.onclick=()=>h.navBinding?removeLegacyNavConsent(h.id):openLegacyNavConsent(h.id);
     row.append(left,action);list.append(row);
   }
@@ -1478,7 +1483,11 @@ function openLegacyNavConsent(id){
   $("navLinkDlg").showModal();
   const proposal=navConsentProposals.get(String(id));
   if(proposal?.candidates?.length){
-    $("navLinkSearchStatus").textContent="Löytyi "+proposal.candidates.length+
+    const missingSource=proposal.status==="no_nav_source";
+    $("navLinkSearchStatus").textContent=missingSource?
+      "Tunnus on tunnistettu, mutta Storebrand Japan A EUR:n automaattinen EUR-NAV-lähde puuttuu. "+
+      "Älä hyväksy SEK-hintaa euroarvoksi. Voit päivittää vanhan hinnan käsin.":
+      "Löytyi "+proposal.candidates.length+
       " ehdotusta. Tarkista oikea osuuslaji pankista, ei vain nimen perusteella.";
     showLegacyNavCandidates(proposal.candidates,h);
   }else{
@@ -1497,14 +1506,29 @@ function showLegacyNavCandidates(rows,h){
       const title=document.createElement("strong");title.textContent=c.name||"Nimi puuttuu";
       const detail=document.createElement("small");detail.textContent=[
         c.isin,c.currency,"Osuuslaji: "+(c.shareClass||"ei ilmoitettu"),
+        c.sourceStatus==="identity-only"?"Ei automaattista EUR NAV-lähdettä":
         c.navDate?"≈ NAV "+c.price+" · "+c.navDate:"NAV puuttuu"
       ].join(" · ");
       b.append(title,detail);
       const existing=normalizedIdText(h.instrument?.isin||h.isin);
-      if(c.currency!==h.currency||(existing&&existing!==c.isin)){
-        b.disabled=true;b.title="Valuutta tai aiempi ISIN on ristiriidassa ehdotuksen kanssa";
-      }else b.onclick=()=>acceptLegacyNavConsent(c);
-      box.insertBefore(b,more);
+      if(c.sourceStatus==="identity-only"){
+        b.disabled=true;
+        b.title="Tiedossa on vain osuuslajin identiteetti. Päivitetty automaattinen EUR-NAV puuttuu.";
+        const manual=document.createElement("button");
+        manual.type="button";
+        manual.textContent="Syötä tai tarkista NAV käsin · "+c.name;
+        manual.onclick=()=>{$("navLinkDlg").close();openDlg(h.id)};
+        box.insertBefore(b,more);box.insertBefore(manual,more);
+        const anchor=document.createElement("a");
+        anchor.href=c.issuerUrl;anchor.target="_blank";anchor.rel="noopener noreferrer";
+        anchor.textContent="Liikkeeseenlaskijan rahastosivu – huom. SEK-merkintä";
+        box.insertBefore(anchor,more);
+      }else{
+        if(c.currency!==h.currency||(existing&&existing!==c.isin)){
+          b.disabled=true;b.title="Valuutta tai aiempi ISIN on ristiriidassa ehdotuksen kanssa";
+        }else b.onclick=()=>acceptLegacyNavConsent(c);
+        box.insertBefore(b,more);
+      }
     }
     shown=top;
     more.textContent="Näytä lisää ("+(rows.length-shown)+" jäljellä)";
@@ -1532,6 +1556,9 @@ async function searchLegacyFundNav(){
   finally{btn.disabled=false}
 }
 async function acceptLegacyNavConsent(c){
+  // Fail closed even if a stale DOM event attempts to treat an identity-only
+  // Storebrand reference as a valid automatic Rahastoraportti NAV provider.
+  if(c?.sourceStatus==="identity-only")return;
   const h=state.holdings.find(x=>x.id===navConsentCurrentId&&x.assetType==="fund");
   if(!h)return;
   const status=$("navLinkSearchStatus");
