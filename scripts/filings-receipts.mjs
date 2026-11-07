@@ -30,7 +30,7 @@ export function createFilingsReceipt({sourceUrl,body,format,issuerId,issuerName}
       'http://standard.iso.org/iso/17442']);
    const tokens=allIdentifiers.map(value=>{
     if(typeof value!=='string')return {prefix:null,id:null,namespace:null};
-    const m=value.match(/^([A-Za-z][\\w.-]*):([A-Z0-9]{20})$/);
+    const m=value.match(/^([A-Za-z][\w.-]*):([A-Z0-9]{20})$/);
     return m?{prefix:m[1],id:m[2],namespace:namespaces[m[1]]||null}:
      {prefix:null,id:null,namespace:null};
    });
