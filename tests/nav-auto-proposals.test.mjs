@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseFundBackupSnapshot,proposeFundMatches,createFundBackup,FUND_BACKUP_URL}
+import {parseFundBackupSnapshot,proposeFundMatches,missingNavIdentityCandidate,createFundBackup,FUND_BACKUP_URL}
   from '../engine/public-nav-backup.mjs';
 const NOW=Date.parse('2026-11-06T12:00:00Z');
 const A='IE00B03HD191',B='SE0013801453',C='SE0005993102';
@@ -70,4 +70,24 @@ test('Nordea Pohjoismaat Indeksi Select A matches verified Nordic alias and not 
  assert.equal(match.candidates[0].isin,'FI4000602453');
  assert.equal(match.candidates.length,1);
  assert.equal(old.navBinding,undefined);
+});
+
+test('Storebrand Japan A EUR is an identity-only candidate: NEVER a price or accepted NAV feed',()=>{
+  const original=h('Storebrand Japan A EUR');
+  const preserved=JSON.stringify(original);
+  const result=proposeFundMatches(original,parsed);
+  assert.equal(result.status,'no_nav_source');
+  assert.equal(result.candidates.length,1);
+  const candidate=result.candidates[0];
+  assert.equal(candidate.isin,'SE0013801479');
+  assert.equal(candidate.currency,'EUR');
+  assert.equal(candidate.shareClass,'A EUR');
+  assert.equal(candidate.sourceStatus,'identity-only');
+  assert.equal(candidate.price,null);
+  assert.equal(candidate.navDate,null);
+  assert.equal(original.navBinding,undefined);
+  assert.equal(JSON.stringify(original),preserved);
+  assert.equal(missingNavIdentityCandidate(h('Storebrand Japan C EUR')),null);
+  assert.equal(missingNavIdentityCandidate(h('Storebrand Japan A EUR',{currency:'SEK'})),null);
+  assert.equal(missingNavIdentityCandidate(h('Storebrand Japan A EUR',{instrument:{isin:'SE0013801487'}})),null);
 });
