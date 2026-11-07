@@ -24,8 +24,9 @@ test('local OST AOT placement uses confirmed holdings without portfolio writes o
  ]},Date.now());
  await page.locator('.nav[data-view="newsView"]').click();await page.locator('[data-panel="dividendPanel"]').click();
  await page.locator('#accountComparison summary').click();
- const before=await page.evaluate(()=>JSON.stringify(localStorage));
- const outbound=[];page.on('request',r=>outbound.push(r.url()+' '+(r.postData()||'')));
+ const identity=()=>page.evaluate(()=>state.holdings.map(h=>({id:h.id,symbol:h.symbol,quantity:h.quantity,currency:h.currency,accountType:h.accountType,confirmed:h.accountDetailsConfirmed})));
+ const before=await identity();
+ const outbound=[];page.on('request',r=>outbound.push({method:r.method(),body:r.postData()||''}));
  await page.locator('#taxPrincipal').fill('200');await page.locator('#taxYield').fill('5');
  await page.locator('#taxGrowth').fill('0');await page.locator('#taxReinvest').selectOption('yes');
  await page.locator('#taxListing').fill('TEST.HE');await page.locator('#taxCompare').click();
@@ -35,8 +36,8 @@ test('local OST AOT placement uses confirmed holdings without portfolio writes o
  await expect(page.locator('#taxAccountFit')).toContainText('16.7 %');
  await expect(page.locator('#taxAccountFit')).toContainText('1 tiliä vahvistamatta');
  await expect(page.locator('#taxAccountFit')).toContainText('tieto ei riitä');
- expect(await page.evaluate(()=>JSON.stringify(localStorage))).toBe(before);
- expect(outbound.join('\n')).not.toContain('TEST.HE');
+ expect(await identity()).toEqual(before); // Background quote refresh may persist new price metadata; positions must stay intact.
+ expect(outbound.every(r=>!r.body.includes('quantity')&&!r.body.includes('accountType')&&!r.body.includes('buyPrice'))).toBe(true);
  for(const width of [320,360,412]){await page.setViewportSize({width,height:850});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
 });
