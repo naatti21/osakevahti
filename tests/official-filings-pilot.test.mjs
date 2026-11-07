@@ -35,7 +35,7 @@ function esefDoc(year){
  const tags=['Revenue','ProfitLoss','CashFlowsFromUsedInOperatingActivities','CurrentBorrowings','NoncurrentBorrowings'];
  const facts={};
  for(const [idx,tag] of tags.entries()){
-  const period=idx<3?(year+'-01-01T00:00:00/'+year+'-12-31T00:00:00'):year+'-12-31T00:00:00';
+  const period=idx<3?(year+'-01-01T00:00:00/'+(year+1)+'-01-01T00:00:00'):year+'-12-31T00:00:00';
   facts['f'+idx]={value:String((idx+1)*100+year),dimensions:{concept:'ifrs-full:'+tag,
    entity:'lei:'+lei,period,unit:'iso4217:EUR'}};
  }
@@ -61,4 +61,13 @@ test('no cross-taxonomy debt guess: missing current debt gives missing, not tota
  const d=esefDoc(2025);delete d.facts.f3;
  const row=normalizeEsefXbrlJson(d,{lei,year:2025,sourceUrl:url});
  assert.equal(row.fields.interestBearingDebt.status,'missing');
+});
+
+test('ESEF annual duration end is EXCLUSIVE; last year must not be shifted to next FY',()=>{
+ const wrong=esefDoc(2024),right=esefDoc(2025);
+ const a=normalizeEsefXbrlJson(wrong,{lei,year:2025,sourceUrl:url});
+ const b=normalizeEsefXbrlJson(right,{lei,year:2025,sourceUrl:url});
+ assert.equal(a.fields.revenue.status,'missing');
+ assert.equal(b.fields.revenue.status,'ok');
+ assert.equal(b.fields.revenue.period,'2025-01-01/2025-12-31');
 });

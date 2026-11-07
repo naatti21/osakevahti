@@ -88,8 +88,12 @@ function parseXbrlPeriod(dim,isDuration){
  const v=String(dim||'');const parts=v.split('/');
  if(isDuration){
   if(parts.length!==2)return null;
-  const start=parts[0].slice(0,10),end=parts[1].slice(0,10);
-  if(!validDate(start)||!validDate(end))return null;
+  const start=parts[0].slice(0,10),exclusiveEnd=parts[1].slice(0,10);
+  if(!validDate(start)||!validDate(exclusiveEnd))return null;
+  // xBRL-JSON represents duration as [start,end), i.e. the end is exclusive.
+  // FY2025 is 2025-01-01/2026-01-01, NOT 2024-01-01/2025-01-01.
+  const end=new Date(Date.parse(exclusiveEnd)-86400000).toISOString().slice(0,10);
+  if(!validDate(end)||end<start)return null;
   return {start,end};
  }
  if(parts.length!==1)return null;

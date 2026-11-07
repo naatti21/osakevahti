@@ -42,7 +42,12 @@ async function pullOneEsef(year){
   if(!url)throw new Error('ESEF xBRL-JSON link absent in official filing index');
   const raw=JSON.parse(await get(url.href,{maxBytes:55000000}));
   const report=normalizeEsefXbrlJson(raw,{lei:ESEF_LEI,year,sourceUrl:url.href});
-  return {status:'retrieved',year,source:url.href,report};
+  // Non-invasive taxonomy diagnostic: which standard debt concepts are actually
+  // present at the filing-period balance-sheet instant? No inferred debt amounts.
+  const debtConcepts=[...new Set(Object.values(raw.facts||{}).map(x=>x?.dimensions?.concept)
+    .filter(x=>typeof x==='string'&&x.startsWith('ifrs-full:')&&
+      /(borrow|debt|loan|lease|financialliabilit)/i.test(x)))].sort().slice(0,80);
+  return {status:'retrieved',year,source:url.href,report,debtConcepts};
  }catch(e){return {status:'blocked',year,source:page,error:String(e?.message||e)}}
 }
 function mini(x){
@@ -69,7 +74,8 @@ const report={
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
  esef:{source:'https://filings.xbrl.org/',lei:ESEF_LEI,
-  sources:esefArr.map(({year,status,source,error})=>({year,status,source,error:error||null})),
+  sources:esefArr.map(({year,status,source,error,debtConcepts})=>({year,status,source,error:error||null,
+   debtConcepts:year===2025?debtConcepts:undefined})),
   coverage:coverage(esef),years:summarizeReport(esef)},
  result:(sec.status==='retrieved'&&coverage(sec.report).complete&&coverage(esef).complete)
    ?'FULL_COVERAGE_EVIDENCE_PROBE':'PARTIAL_OR_BLOCKED_NO_GO'
