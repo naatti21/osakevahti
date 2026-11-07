@@ -45,7 +45,9 @@ export function createInstrumentClient({origin,fetchImpl=globalThis.fetch,now=Da
       if(item.symbol!==symbol||!observationTime(item.datetime*1000,now())||!item.headline)return false;
       try{return ['https:','http:'].includes(new URL(item.url).protocol)}catch{return false}
     }):[];
-    return {symbol,quote:quote||{status:'unavailable'},momentum:metric(data.momentum,['m1','m3','m6']),dividends,
+    return {symbol,name:typeof data.name==='string'?data.name.slice(0,120):'',
+      instrumentType:['EQUITY','ETF'].includes(data.instrumentType)?data.instrumentType:undefined,
+      quote:quote||{status:'unavailable'},momentum:metric(data.momentum,['m1','m3','m6']),dividends,
       news:{status:news?.status==='ok'&&items.length&&now()-Math.max(...items.map(x=>x.datetime))*1000>7*86400000?'stale':['ok','stale','error','unavailable'].includes(news?.status)?news.status:'unavailable',items},checkedAt:data.checkedAt};
   }};
 }

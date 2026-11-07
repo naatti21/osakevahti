@@ -29,7 +29,7 @@ export function chartInstrumentData(symbol,payload,now=Date.now()) {
     observedAt:typeof meta.regularMarketTime==='number'?meta.regularMarketTime*1000:null,
     source:'Yahoo Finance chart',exchange:meta.exchangeName||'',delayed:true}, {symbol},now);
   if(!['ok','stale'].includes(quote.status))return {...empty,quote};
-  const output={...empty,quote,name:meta.longName||meta.shortName||symbol,currency:meta.currency};
+  const output={...empty,quote,name:meta.longName||meta.shortName||symbol,currency:meta.currency,instrumentType:meta.instrumentType};
   const timestamps=result.timestamp,closes=result.indicators?.quote?.[0]?.close;
   // Do not bridge gaps or silently coerce null bars into zero.
   const historyValid=Array.isArray(timestamps)&&Array.isArray(closes)&&timestamps.length===closes.length&&
