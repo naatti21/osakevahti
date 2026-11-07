@@ -81,3 +81,23 @@ test('contradictory saved identity is not silently resolved by precedence',async
  ]);
  expect(values).toEqual(['','']);
 });
+test('user adds an unregistered company through the real form and receives dated quote, analyses and news',async({page})=>{
+ await setup(page);
+ await page.locator('#addBtn').click();
+ await page.locator('#symbol').fill(symbol);
+ await page.locator('#name').fill('Fictional Novel Company');
+ await page.locator('#qty').fill('2');await page.locator('#buy').fill('100');
+ await page.locator('#currency').selectOption('EUR');
+ await page.locator('#accountType').selectOption('AOT');await page.locator('#brokerSelect').selectOption('OTHER');
+ await page.locator('#form button[type="submit"]').click();
+ await expect(page.locator('#dlg')).not.toBeVisible();
+ await expect(page.locator('#refreshBtn')).toBeEnabled();await page.locator('#refreshBtn').click();
+ await expect.poll(()=>page.evaluate(()=>state.holdings[0]?.quoteSource)).toBe('INSTRUMENT');
+ const holding=await page.evaluate(()=>state.holdings[0]);
+ expect(holding.currentPrice).toBe(140);expect(holding.quoteTimestamp).toBe(Math.floor(now/1000)*1000);
+ expect(holding.quantity).toBe(2);expect(holding.buyPrice).toBe(100);expect(holding.currency).toBe('EUR');
+ await page.locator('.nav[data-view="newsView"]').click();
+ await expect(page.locator('#news')).toContainText('Synthetic company results');
+ await page.locator('[data-panel="rocketPanel"]').click();await expect(page.locator('#rocketPrivate')).toContainText('1 kk');
+ await page.locator('[data-panel="dividendPanel"]').click();await expect(page.locator('#dividendPrivate')).toContainText('2.00 EUR');
+});
