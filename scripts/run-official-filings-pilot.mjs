@@ -109,6 +109,17 @@ const microsoftIr=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrie
 const microsoftGeneric=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.generic));
 const microsoftUnproven=combineIrReports(microsoftIrProbe.filter(r=>r.status==='retrieved').map(r=>r.unproven));
 const esef=combineEsefYears(esefDocs,{lei:ESEF_LEI});
+function htmlScaleCounts(audit){
+ let proven=0,unproven=0;
+ for(const fields of Object.values(audit.cells)){
+  for(const cell of Object.values(fields)){
+   if(cell.status!=='needs-review')continue;
+   if(cell.scaleEvidence?.status==='ok')proven++;
+   else unproven++;
+  }
+ }
+ return {proven,unproven,stillNeedsIndependentAudit:proven+unproven};
+}
 const auditedAt=new Date().toISOString();
 const nokiaAudit=auditFilingEvidence(esef,{identity:'LEI:'+ESEF_LEI,currency:'EUR',
  asOf:auditedAt,receipts:esefArr.flatMap(r=>r.receipt?[r.receipt]:[])});
@@ -118,6 +129,7 @@ const report={
  checkedAt:new Date().toISOString(),
  policy:'Research-only: real source facts, no synthetic fallbacks, no portfolio or deployment changes',
  sourceAudit:{nokia:nokiaAudit,microsoft:microsoftAudit},
+ htmlSourceScale:htmlScaleCounts(microsoftAudit),
  receiptDiagnostics:esefArr.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
  count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  sec:{status:sec.status,source:sec.source,error:sec.error||null,coverage:coverage(sec.report),years:summarizeReport(sec.report)},
@@ -154,6 +166,7 @@ if(process.env.GITHUB_STEP_SUMMARY){
   'Microsoft / semanttinen yleislukija: '+c4.ok+'/'+c4.total+' lukua',
   'Nokia evidence: '+nokiaAudit.counts.sourceConsistent+' structurally consistent, '+nokiaAudit.counts.blocked+' blocked',
   'Microsoft evidence: '+microsoftAudit.counts.needsReview+' HTML facts awaiting review, '+microsoftAudit.counts.blocked+' blocked',
+  'Microsoft HTML monetary scale backed by statement declaration: '+report.htmlSourceScale.proven+'/'+report.htmlSourceScale.stillNeedsIndependentAudit,
   'Datan lähde ja jokaisen kentän tila ovat työajon lokissa.',
   'Tämä ei ole käyttöönotto- eikä sijoituspäätös.'];
  await appendFile(process.env.GITHUB_STEP_SUMMARY,lines.join('\n\n')+'\n');

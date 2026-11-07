@@ -63,3 +63,15 @@ test('a scale on cash-flow table cannot be borrowed by income or balance',()=>{
  assert.equal(out.years[2025].operatingCashflow.status,'ok');
  assert.equal(out.years[2025].interestBearingDebt.status,'missing');
 });
+
+test('derived debt retains the actual balance-sheet table index in its scale proof',()=>{
+ const html=wrap({incomeHead:'<h2>INCOME STATEMENTS</h2><p>(In millions)</p>',
+  cashHead:'<h2>CASH FLOWS STATEMENTS</h2><p>(In millions)</p>',
+  balanceHead:'<h2>BALANCE SHEETS</h2><p>(In millions)</p>'});
+ const o=normalizeSourceScaledStatementHtml(html,{sourceUrl:url,reportYear:2025});
+ const debt=o.years[2025].interestBearingDebt;
+ assert.equal(debt.status,'ok');
+ assert.equal(debt.tableIndex,o.statementSelection.balance);
+ assert.equal(debt.scaleEvidence.tableIndex,o.statementSelection.balance);
+ assert.equal(debt.scaleEvidence.multiplier,1_000_000);
+});

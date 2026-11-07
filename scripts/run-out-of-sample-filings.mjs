@@ -82,6 +82,17 @@ const us=combineIrReports(ar.filter(r=>r.status==='retrieved').map(r=>r.report))
 const appleLegacy=combineIrReports(ar.filter(r=>r.status==='retrieved').map(r=>r.legacy));
 const appleUnproven=combineIrReports(ar.filter(r=>r.status==='retrieved').map(r=>r.unproven));
 const ec=coverage(eu),ac=coverage(us);
+function htmlScaleCounts(audit){
+ let proven=0,unproven=0;
+ for(const fields of Object.values(audit.cells)){
+  for(const cell of Object.values(fields)){
+   if(cell.status!=='needs-review')continue;
+   if(cell.scaleEvidence?.status==='ok')proven++;
+   else unproven++;
+  }
+ }
+ return {proven,unproven,stillNeedsIndependentAudit:proven+unproven};
+}
 const auditedAt=new Date().toISOString();
 const elisaAudit=auditFilingEvidence(eu,{identity:'LEI:'+LEI,currency:'EUR',
  asOf:auditedAt,receipts:er.flatMap(r=>r.receipt?[r.receipt]:[])});
@@ -90,6 +101,7 @@ const appleAudit=auditFilingEvidence(us,{identity:'CIK:0000320193',currency:'USD
 const output={checkedAt:new Date().toISOString(),
  methodology:'IFRS + semantic HTML source evidence; original out-of-sample baseline retained; missing is not zero',
  sourceAudit:{elisa:elisaAudit,apple:appleAudit},
+ htmlSourceScale:htmlScaleCounts(appleAudit),
  receiptDiagnostics:er.map(x=>({year:x.year,entities:x.receipt?.entityDimensions,
  count:x.receipt?.dimensionFactCount,matched:x.receipt?.entityMatched})),
  elisa:{identity:'LEI:'+LEI,coverage:ec,runs:er.map(({report,receipt,...x})=>x),years:facts(eu)},
@@ -109,5 +121,6 @@ if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMM
  'Total '+output.total.ok+'/40. Research execution success is not publication approval.',
  'Elisa evidence: '+elisaAudit.counts.sourceConsistent+' source-consistent, '+elisaAudit.counts.blocked+' blocked.',
  'Apple evidence: '+appleAudit.counts.needsReview+' HTML facts need review, '+appleAudit.counts.blocked+' blocked.',
+ 'Apple HTML monetary scale backed by statement declaration: '+output.htmlSourceScale.proven+'/'+output.htmlSourceScale.stillNeedsIndependentAudit,
  'All evidence and missing fields available in out-of-sample-pilot-report artifact.'
 ].join('\n\n')+'\n');
