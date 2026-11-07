@@ -16,6 +16,7 @@ async function prepare(page,handler){
  await page.route('**/*.workers.dev/**',r=>r.fulfill({json:{assets:{}}}));
  await page.route('**/instrument?symbol=*',handler);
  await page.goto('/index.html');
+ await page.locator('.nav[data-view="newsView"]').click();
  await page.locator('#stockInspectionPanel summary').click();
 }
 test('never-coded ticker gets source-dated price, trend, TTM events and honest missing fundamentals',async({page})=>{
