@@ -286,6 +286,17 @@ details{border:1px solid var(--line);border-radius:16px;background:var(--panel);
       <div id="dividendWatchList" class="watchList"></div>
     </div></details>
     <details class="learnHelp"><summary>Selitä Osinkokoneiden luvut</summary><div class="detailsBody"><p><strong>TTM</strong> tarkoittaa viimeisiä 12 kuukautta. <strong>Osinkotuotto</strong> vertaa viimeisen 365 päivän aikana maksettuja osinkoja käytettyyn kurssiin. Tuleva osinko voi muuttua.</p><p><strong>Osinkovuosia</strong> kertoo, monenako viidestä tarkastellusta kalenterivuodesta osinkoa maksettiin.</p><p><strong>12 kk</strong> kuvaa osakekurssin muutosta, ei osingot sisältävää kokonaistuottoa.</p><p><strong>Max pudotus</strong> kertoo suurimman historiallisen huipusta pohjaan -laskun tarkastelujaksolla. Ei tulevan tappion ylärajaa.</p><p><strong>Pisteet</strong> ovat säännöillä laskettu seulontaluku, eivät nousutodennäköisyys tai arvio osingon kestävyydestä. Lista koskee ennalta valittuja yhtiöitä.</p></div></details>
+    <details class="learnHelp" id="accountComparison"><summary>OST / AOT — vertaa oletuksia</summary><div class="detailsBody">
+      <p>Uuden suomalaisen listayhtiösijoituksen havainnollistava vertailu. Ei henkilökohtainen vero- tai tilisuositus. Oletukset eivät ole ennusteita.</p>
+      <label>Sijoitus (€)<input id="taxPrincipal" type="number" min="1" max="100000" inputmode="decimal"></label>
+      <label>Vuotuinen osinko-oletus (%)<input id="taxYield" type="number" min="0" max="30" step="0.1" inputmode="decimal"></label>
+      <label>Vuotuinen kurssimuutosoletus (%)<input id="taxGrowth" type="number" min="-89" max="100" step="0.1" inputmode="decimal"></label>
+      <label>Aikahorisontti<select id="taxYears"><option value="3">3 vuotta</option><option value="5">5 vuotta</option><option value="10">10 vuotta</option></select></label>
+      <label>Osingot<select id="taxReinvest"><option value="">Valitse</option><option value="yes">Sijoitan uudelleen</option><option value="no">Nostan käyttöön</option></select></label>
+      <button id="taxCompare" type="button">Vertaa molemmat verokannat</button>
+      <div id="taxResult" role="status"></div>
+      <p>Vertailu olettaa uuden erillisen OST:n, ei kuluja eikä väliaikaisia myyntejä. Lopussa sijoitus myydään ja varat nostetaan. Todellinen OST-nostovero riippuu koko tilistä. Ulkomainen lähdevero ja tappioiden vähennykset eivät sisälly. Tilille sopivuus: tieto ei riitä.</p>
+    </div></details>
     <div id="dividendPrivate" class="stack"></div>
     <div id="dividendUpdated" class="insightUpdated"></div>
     <div id="dividendList" class="stack"></div>
@@ -4503,6 +4514,18 @@ if("serviceWorker" in navigator){
 updateInstallStatus();
 render();
 loadInsights(false).catch(()=>{});
+$("taxCompare").addEventListener("click",async()=>{
+  const out=$("taxResult");out.textContent="";
+  try {
+    if(["taxPrincipal","taxYield","taxGrowth","taxReinvest"].some(id=>!$(id).value.trim()))throw Error("missing");
+    const {compareScenario}=await import("./engine/account-tax.mjs");
+    const input={principal:Number($("taxPrincipal").value),years:Number($("taxYears").value),dividendYield:Number($("taxYield").value)/100,priceGrowth:Number($("taxGrowth").value)/100,reinvest:$("taxReinvest").value==='yes'};
+    for(const rate of [.30,.34]){
+      const r=compareScenario({...input,rate});const p=document.createElement("p");
+      p.textContent=`${rate*100} % skenaario: AOT ≈ ${Math.round(r.aot)} € · OST ≈ ${Math.round(r.ost)} €. Verot: AOT osingot ${Math.round(r.aotDividendTaxes)} €, myynti ${Math.round(r.aotSaleTax)} €; OST nostot ${Math.round(r.ostTax)} €.`;out.append(p);
+    }
+  } catch {out.textContent="Täydennä kelvolliset oletukset. Sijoitus 1–100 000 €, osinko 0–30 %, kurssimuutos −89–100 %.";}
+});
 loadPortfolioNews(false).catch(()=>{});
 loadMarketContext(false).catch(()=>{});
 loadSharedStatus(false).catch(()=>{});

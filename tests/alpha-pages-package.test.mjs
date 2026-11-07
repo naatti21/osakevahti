@@ -8,7 +8,7 @@ const paths=[
   'index.html','image-reader.js','alpha-import-engine.mjs',
   'engine/acceptance.mjs','engine/numbers.mjs','engine/csv.mjs','engine/holdings.mjs',
   'engine/public-nav-backup.mjs','engine/nav-consent.mjs',
-  'engine/instrument-data.mjs','engine/instrument-client.mjs',
+  'engine/instrument-data.mjs','engine/instrument-client.mjs','engine/account-tax.mjs',
   'sw.js','manifest.webmanifest',
   'icon-192.png','icon-512.png'
 ];
@@ -49,7 +49,7 @@ test('Alpha deployment headers discourage indexing and do not copy user data',as
   assert.match(sw,/startsWith\("osakevahti-shell-"\)/);
   assert.match(sw,/caches\.match\(/);
   assert.doesNotMatch(sw,/await cache\.put\(/);
-  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-private-data1"/);
+  assert.match(sw,/const CACHE = "osakevahti-shell-v2\.17\.9-alpha-local-tax1"/);
   assert.ok(!(await readdir(root)).some(f=>/\.(json|zip|env|bak)$/i.test(f)));
 });
 

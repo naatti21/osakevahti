@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 test.use({ serviceWorkers: 'allow' });
 
 const KEY = 'osakevahti.single.v1';
-const CACHE = 'osakevahti-shell-v2.17.9-alpha-private-data1';
+const CACHE = 'osakevahti-shell-v2.17.9-alpha-local-tax1';
 const assetTypes = {
   'sw.js': 'text/javascript; charset=utf-8',
   'index.html': 'text/html; charset=utf-8',
@@ -22,6 +22,7 @@ const assetTypes = {
   'engine/public-nav-backup.mjs': 'text/javascript; charset=utf-8',
   'engine/instrument-data.mjs': 'text/javascript; charset=utf-8',
   'engine/instrument-client.mjs': 'text/javascript; charset=utf-8',
+  'engine/account-tax.mjs': 'text/javascript; charset=utf-8',
   'engine/nav-consent.mjs': 'text/javascript; charset=utf-8',
   'manifest.webmanifest': 'application/manifest+json',
   'icon-192.png': 'image/png',

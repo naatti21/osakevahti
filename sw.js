@@ -1,4 +1,4 @@
-const CACHE = "osakevahti-shell-v2.17.9-alpha-private-data1";
+const CACHE = "osakevahti-shell-v2.17.9-alpha-local-tax1";
 const SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ const SHELL = [
   "./engine/nav-consent.mjs",
   "./engine/instrument-data.mjs",
   "./engine/instrument-client.mjs",
+  "./engine/account-tax.mjs",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png"

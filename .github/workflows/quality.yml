@@ -2,7 +2,7 @@ name: Quality gate
 
 on:
   push:
-    branches: ["main", "refactor/private-market-data-contract", "refactor/private-watch-news-flow", "refactor/private-quote-safety"]
+    branches: ["main", "refactor/private-market-data-contract", "refactor/private-watch-news-flow", "refactor/private-quote-safety", "feature/radar-v02-evidence-contracts", "feature/local-ost-aot-scenarios"]
   pull_request:
   workflow_dispatch:
 
