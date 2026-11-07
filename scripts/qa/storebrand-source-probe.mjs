@@ -32,6 +32,17 @@ for(const [name,url] of endpoints){
       priceAround:tagText.slice(Math.max(0,loc-120),loc+260)
     }));
   }
+  if(name==="nordnet-fund"){
+    const navCandidates=[...content.matchAll(/NAV[\\s(]{0,10}(?:\\d{1,2}\\.\\d{1,2}\\.)?[^<\\n]{0,100}/gi)]
+      .slice(0,5).map(m=>m[0].slice(0,120));
+    const maybe=content.toLowerCase().indexOf("nav (");
+    console.log("STOREBRAND_NORDNET_NAV_SNIPPET",JSON.stringify({
+      navCandidates,
+      nearNav:maybe>=0?content.slice(Math.max(0,maybe-400),maybe+600).replace(/<[^>]+>/g," "):"",
+      eurPage:content.includes("Storebrand Japan A EUR"),
+      hasIsin:content.includes("SE0013801479")
+    }));
+  }
   console.log("STOREBRAND_CANDIDATE_PROBE",JSON.stringify({
    name,status:r.status,type,cors,htmlBytes:content.length,hasExactISIN:strictIsin,
    datedText:match?.[0]||null,containsPriceCandidate:content.includes("209.34"),
