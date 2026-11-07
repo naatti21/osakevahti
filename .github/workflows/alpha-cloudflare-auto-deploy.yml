@@ -101,7 +101,7 @@ jobs:
           const files=fs.readdirSync(dir).sort();
           if(JSON.stringify(files)!==JSON.stringify(allow)) throw Error('Unexpected Alpha upload files');
           const engine=fs.readdirSync(dir+'/engine').sort();
-          const pinned=['acceptance.mjs','csv.mjs','holdings.mjs','numbers.mjs'];
+          const pinned=['acceptance.mjs','csv.mjs','holdings.mjs','nav-consent.mjs','numbers.mjs','public-nav-backup.mjs'];
           if(JSON.stringify(engine)!==JSON.stringify(pinned)) throw Error('Unexpected Engine module in Alpha upload');
           const manifest=JSON.parse(fs.readFileSync(dir+'/manifest.webmanifest','utf8'));
           if(manifest.id!=='./?channel=alpha' || manifest.name!=='Osakevahti Alpha' ||
@@ -112,7 +112,9 @@ jobs:
           if(!/ALPHA · v\d+\.\d+\.\d+/.test(html) ||
              !html.includes('https://naatti21.github.io/osakevahti/') ||
              !/const CACHE = "osakevahti-shell-[^"]+";/.test(sw) ||
-             !sw.includes('if (res.ok)') ||
+             !sw.includes('caches.match(') ||
+             sw.includes('await cache.put(') ||
+             !sw.includes('osakevahti-shell-v2.17.9-alpha-fund-onboard1') ||
              !sw.includes('k.startsWith("osakevahti-shell-")')) {
             throw Error('Missing Alpha release marker, live feed URL or service-worker safety guards');
           }
