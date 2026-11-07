@@ -2412,6 +2412,9 @@ function openDlg(id=null){
         ". Vanha sovellus saattoi arvata tilityypin väärin. Voit tallentaa muut kentät ilman tilivahvistusta. Vahvista tilitiedot erikseen toiminnolla Tarkista tilit.";
     }
   }
+  // The existing holding id is assigned above. Re-evaluate the view *after*
+  // loading the holding so legacy fund edit fields never become stock-only.
+  updateNewHoldingTypeView();
   $("dlg").showModal();
 }
 
