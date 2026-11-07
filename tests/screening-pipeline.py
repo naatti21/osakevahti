@@ -34,4 +34,12 @@ class Screening(unittest.TestCase):
    result=scope['dividend_score']('SYNTH','Synthetic','test')
    self.assertGreater(result['yield_pct'],0);self.assertIn('observed_at',result)
   finally:scope['yahoo_history']=old
+ def test_exact_year_boundary_uses_252_observations(self):
+  old=scope['yahoo_history'];now=int(time.time())
+  rows=[(now-(252-i)*2*86400,100+i,1000) for i in range(253)]
+  try:
+   scope['yahoo_history']=lambda *args:(rows,[(now-10000,2)])
+   result=scope['dividend_score']('SYNTH','Synthetic','test')
+   self.assertEqual(result['return_12m'],252.0)
+  finally:scope['yahoo_history']=old
 unittest.main()

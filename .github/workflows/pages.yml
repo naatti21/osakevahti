@@ -546,9 +546,9 @@ jobs:
               if not recent: raise RuntimeError("no reported trailing-year dividend; not proof of zero")
               ttm=sum(recent)
               yld=(ttm/closes[-1]*100) if closes[-1] else 0
-              current_year=datetime.now(timezone.utc).year
+              current_year=datetime.fromtimestamp(now,timezone.utc).year
               years=set(datetime.fromtimestamp(t,timezone.utc).year for t,a in divs if a>0 and current_year-4<=datetime.fromtimestamp(t,timezone.utc).year<=current_year)
-              r12=ret(closes,252 if len(closes)>253 else min(200,len(closes)-1))
+              r12=ret(closes,252)
               dd=max_drawdown(closes[-252:])
               yield_score=clamp(yld/7)*35
               if yld>10: yield_score=max(0,yield_score-10)
