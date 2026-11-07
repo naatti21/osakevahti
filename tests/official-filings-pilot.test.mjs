@@ -35,7 +35,7 @@ function esefDoc(year){
  const tags=['Revenue','ProfitLoss','CashFlowsFromUsedInOperatingActivities','CurrentBorrowings','NoncurrentBorrowings'];
  const facts={};
  for(const [idx,tag] of tags.entries()){
-  const period=idx<3?(year+'-01-01T00:00:00/'+(year+1)+'-01-01T00:00:00'):year+'-12-31T00:00:00';
+  const period=idx<3?(year+'-01-01T00:00:00/'+(year+1)+'-01-01T00:00:00'):(year+1)+'-01-01T00:00:00';
   facts['f'+idx]={value:String((idx+1)*100+year),dimensions:{concept:'ifrs-full:'+tag,
    entity:'lei:'+lei,period,unit:'iso4217:EUR'}};
  }
@@ -80,4 +80,16 @@ test('generic ShorttermBorrowings plus LongtermBorrowings without issuer-specifi
  assert.equal(row.fields.interestBearingDebt.status,'ok');
  assert.equal(row.fields.interestBearingDebt.value,2425+2525);
  assert.match(row.fields.interestBearingDebt.concept,/ShorttermBorrowings.*LongtermBorrowings/);
+});
+
+test('ESEF instant is EXCLUSIVE midnight, 2026-01-01 belongs to FY2025 not FY2026',()=>{
+ const next=esefDoc(2025);
+ const out=normalizeEsefXbrlJson(next,{lei,year:2025,sourceUrl:url});
+ const wrong=normalizeEsefXbrlJson(next,{lei,year:2026,sourceUrl:url});
+ assert.equal(out.fields.interestBearingDebt.status,'ok');
+ assert.equal(out.fields.interestBearingDebt.period,'2025-12-31');
+ assert.equal(wrong.fields.interestBearingDebt.status,'missing');
+ const malformed=esefDoc(2025);
+ malformed.facts.f3.dimensions.period='2025-12-31';
+ assert.equal(normalizeEsefXbrlJson(malformed,{lei,year:2025,sourceUrl:url}).fields.interestBearingDebt.status,'missing');
 });

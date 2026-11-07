@@ -116,7 +116,8 @@ function accountingDebt(balance,year,opt){
  const noncurrentTable={...balance,rows:balance.rows.slice(noncurrStart+1)};
  // Synthetic section retains the same parent table's year headings.
  const lookup=(part,aliases)=>{
-  const augmented={...balance,rows:[...balance.rows.slice(0,12),...part.rows]};
+  const yearHeader=balance.rows.find(r=>yearList({rows:[r]}).length>=2);
+  const augmented={...balance,rows:[...(yearHeader?[yearHeader]:[]),...part.rows]};
   return read(augmented,aliases,year,opt);
  };
  const commercial=lookup(currentTable,labelAliases.commercialPaper);

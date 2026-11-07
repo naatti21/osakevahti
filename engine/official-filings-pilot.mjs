@@ -97,7 +97,13 @@ function parseXbrlPeriod(dim,isDuration){
   return {start,end};
  }
  if(parts.length!==1)return null;
- const end=parts[0].slice(0,10);
+ // xBRL-JSON instant is a precise boundary. End-of-day balance-sheet facts
+ // use midnight of the following day (e.g. FY2025 => 2026-01-01T00:00:00).
+ // Reject ambiguous bare dates or unusual times rather than shifting silently.
+ if(!/^\d{4}-\d{2}-\d{2}T00:00:00(?:Z)?$/.test(parts[0]))return null;
+ const exclusiveInstant=parts[0].slice(0,10);
+ if(!validDate(exclusiveInstant))return null;
+ const end=new Date(Date.parse(exclusiveInstant)-86400000).toISOString().slice(0,10);
  return validDate(end)?{end}:null;
 }
 function xbrlFacts(doc,tag,year,isDuration,unit,url){
