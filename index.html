@@ -4548,7 +4548,7 @@ async function renderFiIssuerDividends(){
      item.history.map(x=>x.year+" "+eur(x.amount)+" €").join(" · ")+
      (item.changeSince2024===null?"":" · 2025 vs 2024 "+(item.changeSince2024>0?"+":"")+eur(item.changeSince2024)+" €");
    card.append(history);
-   const detail=document.createElement("details");detail.className="learnHelp";
+   const detail=document.createElement("details");detail.className="fiIssuerDetails";
    const summary=document.createElement("summary");summary.textContent="Maksuerät ja alkuperäislähteet";detail.append(summary);
    const body=document.createElement("div");body.className="detailsBody";
    for(const event of item.installments){
@@ -4561,6 +4561,13 @@ async function renderFiIssuerDividends(){
     body.append(text);
     const a=document.createElement("a");a.href=event.paidProofUrl||event.sourceUrl;
     a.target="_blank";a.rel="noopener noreferrer";a.textContent="Avaa yhtiön lähdetiedote";body.append(a);
+   }
+   const historyHeader=document.createElement("p");historyHeader.className="muted small";
+   historyHeader.textContent="Tilikausihistorian alkuperäiset vuosilähteet:";body.append(historyHeader);
+   for(const old of item.history){
+    const line=document.createElement("p");line.className="muted small";const link=document.createElement("a");
+    link.href=old.sourceUrl;link.target="_blank";link.rel="noopener noreferrer";
+    link.textContent=old.year+" · yhtiön oma lähde";line.append(link);body.append(line);
    }
    const sourceLine=document.createElement("p");const sourceLink=document.createElement("a");
    sourceLink.href=item.decision.sourceUrl;sourceLink.target="_blank";sourceLink.rel="noopener noreferrer";
