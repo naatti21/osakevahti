@@ -75,7 +75,8 @@ export function normalizeSourceScaledStatementHtml(html,{sourceUrl,reportYear,ye
     continue;
    }
    output[year][metric]={...fact,value:fact.value*proof.multiplier,
-    scaleEvidence:{...proof,sourceUrl}};
+    // Derived debts inherit the unique balance sheet table's source identity.
+    tableIndex:proof.tableIndex,scaleEvidence:{...proof,sourceUrl}};
   }
  }
  return {...extracted,provider:'Source-anchored generic issuer HTML statement',
