@@ -7,7 +7,7 @@ const current=source.match(/const CACHE = "([^"]+)"/)[1];
 function harness(){
  const handlers={},stores=new Map(),waits=[];let release;
  const cache=()=>{const entries=new Map();return {async put(k,v){entries.set(typeof k==='string'?k:k.url,v)},async match(k){return entries.get(typeof k==='string'?k:k.url)}}};
- const caches={async open(k){if(!stores.has(k))stores.set(k,cache());return stores.get(k)},async keys(){return [...stores.keys()]},async delete(k){return stores.delete(k)},async match(k){for(const c of stores.values()){const r=await c.match(k);if(r)return r}}};
+ const caches={async open(k){if(!stores.has(k))stores.set(k,cache());return stores.get(k)},async keys(){return [...stores.keys()]},async delete(k){return stores.delete(k)},async match(k,{cacheName}={}){if(cacheName)return stores.get(cacheName)?.match(k);for(const c of stores.values()){const r=await c.match(k);if(r)return r}}};
  const network=new Promise(resolve=>{release=resolve});
  const fetch=()=>network;
  vm.runInNewContext(source,{self:{location:{origin:'https://synthetic.test'},addEventListener:(n,f)=>handlers[n]=f},caches,fetch,URL,Response,console});
