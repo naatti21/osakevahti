@@ -76,9 +76,9 @@ test('currency symbols do not count as numbers; percentage/growth columns do not
 });
 test('generic parser restatement differences are detected via existing cross-report contract',()=>{
  const a=normalizeGenericStatementHtml(appleStyle(),{sourceUrl:url,reportYear:2025});
- const b=normalizeGenericStatementHtml(appleStyle().replace('111,482','111,982'),
+ const b=normalizeGenericStatementHtml(appleStyle().replace('118,254','118,754'),
   {sourceUrl:url.replace('2025.html','2024.html'),reportYear:2024});
  const c=combineIrReports([a,b]);
- assert.equal(c.years[2025].operatingCashflow.status,'conflict');
- assert.equal(c.years[2025].revenue.status,'ok');
+ assert.equal(c.years[2024].operatingCashflow.status,'conflict');
+ assert.equal(c.years[2024].revenue.status,'ok');
 });
