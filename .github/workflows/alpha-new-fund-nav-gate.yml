@@ -1,0 +1,54 @@
+name: Alpha new-fund NAV onboarding and Storebrand source validation (no deploy)
+on:
+  push:
+    branches: ["feat/alpha-new-fund-nav-and-storebrand-20261107"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: alpha-new-fund-nav-gate
+  cancel-in-progress: true
+jobs:
+  new-fund-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install testing dependencies
+        run: npm install --no-audit --no-fund --package-lock=false
+      - name: Test JS syntax in existing Alpha
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import {parse} from 'acorn';
+          const html=readFileSync('index.html','utf8');
+          const s=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!s)throw Error('Missing embedded script');
+          parse(s[1],{ecmaVersion:'latest',sourceType:'script'});
+          NODE
+      - name: Existing NAV+import+source guard tests
+        run: |
+          node --test tests/nav-consent.test.mjs tests/nav-auto-proposals.test.mjs tests/public-nav-alpha.test.mjs tests/alpha-import-engine.test.mjs tests/new-fund-nav-hook.test.mjs
+          node tests/import-qa/qa8-guards.mjs
+      - name: Read-only exact-ISIN Storebrand source availability probes
+        continue-on-error: true
+        run: node scripts/qa/storebrand-source-probe.mjs
+      - name: Build unchanged Alpha brand and validate SW/cache allowlist
+        run: |
+          node scripts/build-alpha-pages.mjs
+          node --test tests/alpha-pages-package.test.mjs
+      - name: Browser integration (new position → suggestions → consent)
+        run: |
+          npx playwright install chromium
+          npx playwright test tests/e2e/alpha-new-fund-nav.spec.mjs tests/e2e/alpha-nav-confirm.spec.mjs --workers=1 --retries=0
+      - name: Full Chromium regression
+        run: npx playwright test --workers=2 --retries=0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: alpha-new-fund-nav-failures
+          path: test-results/
+          if-no-files-found: ignore
