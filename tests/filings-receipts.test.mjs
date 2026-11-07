@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {createFilingsReceipt} from '../scripts/filings-receipts.mjs';
 const lei='549300A0JPRWG1KI7U06';
 const url='https://filings.xbrl.org/'+lei+'/2025-12-31/ESEF/FI/0/report.json';
-const raw=JSON.stringify({facts:{a:{value:'10',dimensions:{concept:'ifrs-full:Revenue',
+const raw=JSON.stringify({documentInfo:{namespaces:{lei:'http://standards.iso.org/iso/17442'}},
+ facts:{a:{value:'10',dimensions:{concept:'ifrs-full:Revenue',
   entity:'lei:'+lei,unit:'iso4217:EUR',period:'2025-01-01T00:00:00/2026-01-01T00:00:00'}}}});
 test('fingerprint refers to raw downloaded source, issuer dimensions and exact URL',()=>{
  const receipt=createFilingsReceipt({sourceUrl:url,body:raw,format:'xbrl-json',issuerId:'LEI:'+lei});
@@ -29,4 +30,18 @@ test('HTML publisher CIK URL + issuer text is a weaker receipt, not audit',()=>{
  assert.equal(receipt.identityMethod,'cik-in-publisher-path');
  assert.equal(createFilingsReceipt({sourceUrl,body:text,format:'issuer-html',
    issuerId:'CIK:0000320193',issuerName:'Different issuer'}).entityMatched,false);
+});
+
+test('namespace prefix is arbitrary; scheme maps to ISO LEI, fake scheme is rejected',()=>{
+ const doc=JSON.parse(raw);
+ doc.documentInfo.namespaces={scheme:'http://standards.iso.org/iso/17442'};
+ doc.facts.a.dimensions.entity='scheme:'+lei;
+ const good=createFilingsReceipt({sourceUrl:url,body:JSON.stringify(doc),
+  format:'xbrl-json',issuerId:'LEI:'+lei});
+ assert.equal(good.entityMatched,true);
+ assert.equal(good.entityNamespacesUsed[0].namespace,'http://standards.iso.org/iso/17442');
+ doc.documentInfo.namespaces.scheme='https://evil.example/iso/17442';
+ const spoof=createFilingsReceipt({sourceUrl:url,body:JSON.stringify(doc),
+  format:'xbrl-json',issuerId:'LEI:'+lei});
+ assert.equal(spoof.entityMatched,false);
 });
