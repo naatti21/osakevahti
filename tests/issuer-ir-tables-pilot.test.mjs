@@ -30,8 +30,8 @@ test('unreported short-term borrowing cannot be assumed zero',()=>{
 });
 test('multiple contradictory annual reports produce restatement conflict, not silent overwrite',()=>{
  const a=normalizeIssuerIrTables(body(300),{sourceUrl:url,reportYear:2025});
- const b=normalizeIssuerIrTables(body(301),{sourceUrl:url,reportYear:2024});
+ const b=normalizeIssuerIrTables(body(300).replace('<td>200</td>','<td>201</td>'),{sourceUrl:url,reportYear:2024});
  const c=combineIrReports([a,b]);
- assert.equal(c.years[2025].operatingCashflow.status,'conflict');
- assert.equal(c.years[2025].revenue.status,'ok');
+ assert.equal(c.years[2024].operatingCashflow.status,'conflict');
+ assert.equal(c.years[2024].revenue.status,'ok');
 });

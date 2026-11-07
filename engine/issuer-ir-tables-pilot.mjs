@@ -55,7 +55,7 @@ function debt(t,year,multiplier,url){
  return missing('interest-bearing-debt-components-incomplete');
 }
 export function normalizeIssuerIrTables(html,{sourceUrl,reportYear,years,multiplier=1000000}={}){
- if(typeof html!=='string'||!Number.isInteger(reportYear)||!/^https:\/\/www\.microsoft\.com\/investor\/reports\/ar\d{2}\/$/.test(sourceUrl||''))
+ if(typeof html!=='string'||!Number.isInteger(reportYear)||!/^https:\/\/[a-z0-9.-]+\/[^\s]+$/i.test(sourceUrl||''))
   throw new Error('Official IR source metadata invalid for pilot');
  const tables=[...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map(m=>({rows:readRows(m[1])}));
  const income=findTable(tables,['total revenue','net income']);

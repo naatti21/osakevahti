@@ -28,3 +28,20 @@ Ajossa on erillinen \`result\`, joka on \`PARTIAL_OR_BLOCKED_NO_GO\`, jos 40/40 
 - Mitään yhtiön osinkolaatu- tai ostosuositusta ei johdeta.
 
 NO-GO: ei yhdistämistä tai julkaisua ennen testejä, oikeiden lukujen manuaalista pistotarkistusta ja lähdeoikeuksien arviointia.
+
+
+## Microsoftin virallinen vaihtoehtoreitti
+SEC Company Facts vastasi GitHub Actionsin ulosmenevälle verkolle HTTP 403. Estoa ei kierretä.
+Tutkimus varareitillä: Microsoftin omat HTML-vuosikertomukset 2025, 2023 ja 2021,
+jotka antavat myös välivuosien vertailuluvut.
+
+- https://www.microsoft.com/investor/reports/ar25/
+- https://www.microsoft.com/investor/reports/ar23/
+- https://www.microsoft.com/investor/reports/ar21/
+
+\`engine/issuer-ir-tables-pilot.mjs\` tunnistaa vain eksplisiittiset
+tulos-/kassavirta-/tase-taulukon otsikot ja rivit. Se ei oleta puuttuvaa
+lyhytaikaista velkaa nollaksi. Eri vuosikertomusten kesken muuttuneet
+vertailuluvut saavat \`conflict\`-tilan.
+Tästä varareitistä ei tehdä automaattista yleistettävää
+tilinpäätössyötettä ennen riippumatonta testausta eri yhtiöillä.
